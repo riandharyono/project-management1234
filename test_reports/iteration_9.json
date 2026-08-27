@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 9: verified the 4 new features (team progress %, chat emoji reactions over WS, notification pagination/load-more, shared-label cascade rename/delete) plus an iteration_8 regression pass and auth-playbook checks. Backend: new pytest suite /app/backend/tests/test_iteration9_newfeatures.py — 19/19 passing (reactions add/toggle/aggregate/persist, notification skip/limit/has_more/unread/mark-read/read-all, label PATCH/DELETE cascade + admin-only guards, progress data, bcrypt $2b$ hash, httpOnly cookie, brute-force lockout on 6th attempt, CORS credentials). Frontend (Playwright, 2 browser contexts admin+member1): progress bar 50%(1/2) -> 100%(2/2) live; reactions realtime both directions, aggregate to 2, persist after reload, toggle-off removes pill on both clients; notifications 20 -> 40 -> 55 via 'Muat lebih banyak', unread badge 3 correct, mark-all-read clears badge; label applied to 2 cards, rename cascaded to both chips, delete removed chips from both cards; notification bell opened the correct task; admin column drag-reorder works and persists. One real bug found: every chat message is rendered TWICE on all clients (duplicate WS connections + no dedupe by id).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/notifications", "issue": "skip/limit have no upper bound or validation (limit=100000 or negative skip accepted) — add Query(ge=0, le=100) to avoid unbounded reads"},
+      {"endpoint": "GET /api/teams/{id}/chat", "issue": "returns up to 500 messages unpaginated; will not scale (notifications were paginated, chat was not)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ChatGroup.jsx", "issue": "Every new chat message is appended twice, so each message renders as two identical bubbles (each with its own reaction row) for BOTH sender and receiver. Disappears after reload (DB has one copy) => pure client-side duplication. Backend log confirms 2 accepted WS connections per page.", "selector": "[data-testid^='chat-message-']", "priority": "HIGH"},
+      {"component": "TaskDetailModal.jsx toggleComplete", "issue": "'task-complete-toggle' is one-way: when the task is already in 'Selesai', clicking again re-sets the same list, so a task can never be un-completed from the UI (overview progress can only go up).", "selector": "[data-testid='task-complete-toggle']", "priority": "MEDIUM"},
+      {"component": "App.js loadNotif", "issue": "After mark-as-read / mark-all-read the dropdown reloads only page 1, so previously loaded pages (40-55 items) collapse back to 20 and the user loses scroll position.", "selector": "[data-testid='mark-all-read-button']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Task detail > Label panel", "issues": ["Label rename uses native window.prompt and delete uses native window.confirm instead of an in-app modal/dialog — inconsistent with the rest of the UI and untestable without dialog handlers"]},
+      {"screen": "Chat Grup", "issues": ["Duplicate bubbles make the transcript look corrupted (see it9_chat_reactions.png)", "Reaction '+' button is only ~11px and low-contrast grey on white; hard to hit/see"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration9_newfeatures.py",
+    "/app/backend/tests/cleanup_iteration9.py",
+    "/app/test_reports/pytest/iteration9_results.xml"
+  ],
+  "action_items": [
+    "ChatGroup.jsx: fix duplicate messages — (a) guard reconnect with a per-connection generation token so a stale socket's onclose cannot spawn an extra socket after StrictMode remount, and (b) dedupe in onmessage: setMessages(m => m.some(x => x.id === data.id) ? m : [...m, data]).",
+    "TaskDetailModal.jsx: make task-complete-toggle bidirectional (move back to the previous/first list when already done).",
+    "TeamOverview.jsx / TaskDetailModal.jsx: stop hardcoding the list name 'Selesai' for done detection — use a persisted done flag on the list, otherwise renaming/deleting that list silently breaks progress % and completion.",
+    "App.js: preserve loaded notification pages after mark-read (refetch limit = items.length or patch item locally).",
+    "Add Query(ge=0, le=100) validation on GET /api/notifications skip/limit; consider paginating GET /teams/{id}/chat.",
+    "Data note: member1@northstar.team has team_role 'admin' in Tim B although /app/memory/test_credentials.md calls it a regular member — either demote it or document it; tests had to register a temporary user for 403 checks."
+  ],
+  "critical_code_review_comments": [
+    "ChatGroup.jsx reconnect logic shares one closedRef across effect runs; the stale socket's onclose fires after closedRef is reset to false, so it schedules an extra connect() — root cause of the duplicated messages and of double WS connections in the backend log.",
+    "Done/completed state is derived from the literal list name 'Selesai' in two places (TeamOverview.jsx:14, TaskDetailModal.jsx:41,91) — fragile coupling to user-editable data.",
+    "TaskDetailModal.jsx is 256 lines with inline async handlers containing window.prompt/confirm in JSX — extract label management into its own component/hook."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration9_newfeatures.py",
+    "/app/backend/tests/cleanup_iteration9.py"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "85% (all 4 new features work; 1 high + 2 minor UI bugs)"},
+  "seed_data_creation": "Created and removed: 25+ TEST_notif_* announcements & their notifications, TEST_ chat messages, TEST_CASCADE/TEST_RENAMED label, TEST_label_* labels, TEST_progress_/TEST_labeltask_/TEST_assign_ tasks, one temporary non-admin user test_plain_*@example.com. cleanup_iteration9.py executed — DB back to 2 tasks, 0 labels, 0 announcements, default list order restored, member1 unassigned from 'Test Task'.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@northstar.team / Northstar123! (team admin), member1@northstar.team / Member123! (also team admin of Tim B despite the doc)",
+  "context_for_next_testing_agent": "Run `python /app/backend/tests/cleanup_iteration9.py` after any run of test_iteration9_newfeatures.py (it seeds 25 announcements/notifications and restores list order). Browser contexts sometimes keep the session cookie, so Playwright scripts must handle 'already logged in' (check for [data-testid=auth-form] before filling). Both provided accounts are team admins; register a temp user via /api/auth/register + POST /teams/{id}/members for non-admin 403 checks. Verified working this round: reactions (WS realtime, aggregate, persistence, toggle-off), notification pagination + badge + mark read/all, label cascade rename/delete via UI, overview progress live update, admin column drag-reorder persistence, notification->task deep link. Not yet retested: duplicate-chat-message fix (main bug), documents/schedule/questions tabs.",
+  "rca_of_the_issue": "Duplicate chat messages: ChatGroup's useEffect sets closedRef.current=false on every run. Under React StrictMode the effect runs twice; the cleanup of run #1 closes socket A, but socket A's onclose callback fires asynchronously AFTER run #2 has reset closedRef to false, so the reconnect branch schedules an extra connect(). The client therefore holds two live sockets (backend log shows two 'WebSocket /api/ws/chat/...' accepts per page), and because onmessage does `setMessages(m => [...m, data])` with no id dedupe, each broadcast is appended twice. Reactions are unaffected because they are applied by message_id mapping. Fix: capture a generation/epoch value per effect run and ignore onclose from stale sockets, plus dedupe appended messages by id."
+}

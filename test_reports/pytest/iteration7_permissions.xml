@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="15" time="5.039" timestamp="2026-08-26T11:39:21.957377+00:00" hostname="agent-env-3dcc844b-3d9c-4034-88e1-e92207b0a4d1"><testcase classname="tests.test_iteration7_permissions.TestSmoke" name="test_member_can_comment_with_mention_on_public_task" time="2.422" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_admin_sees_private_task_in_board" time="2.064" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_member_board_hides_private_task" time="0.092" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_member_search_hides_private_task" time="0.049" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_admin_search_shows_private_task" time="0.044" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_member_direct_get_returns_403" time="0.043" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_assigned_member_can_see_private_task" time="0.374" /><testcase classname="tests.test_iteration7_permissions.TestSmoke" name="test_member_can_move_task_between_lists" time="0.203" /><testcase classname="tests.test_iteration7_permissions.TestSmoke" name="test_chat_group_post_and_fetch" time="0.080" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_private_task_comments_not_readable_by_nonassigned_member" time="0.083"><failure message="AssertionError: comments of private task readable (status 200)&#10;assert 200 == 403&#10; +  where 200 = &lt;Response [200]&gt;.status_code">self = &lt;test_iteration7_permissions.TestPrivateTaskVisibility object at 0xfa28eeaf3350&gt;
+sessions = {'admin': (&lt;requests.sessions.Session object at 0xfa28ef471290&gt;, {'id': 'fe1f0951-c5c0-4494-909a-77bd76b01c5d', 'email... '768efaa7-58ee-4801-882e-bf93f8a07c76', 'email': 'member1@northstar.team', 'name': 'Member1', 'role': 'member', ...})}
+private_task = {'title': 'TEST_PRIVATEONLY_admin_secret', 'description': 'TEST_PRIVATEONLY secret body', 'list_id': '877aa9aa-fcd6-4692-a63e-e23bad700e8e', 'priority': 'Medium', ...}
+
+    def test_private_task_comments_not_readable_by_nonassigned_member(self, sessions, private_task):
+        """Secondary leak check: comments endpoint should also respect task_visible."""
+        member_s, _ = sessions["member"]
+        r = member_s.get(f"{API}/tasks/{private_task['id']}/comments")
+&gt;       assert r.status_code == 403, f"comments of private task readable (status {r.status_code})"
+E       AssertionError: comments of private task readable (status 200)
+E       assert 200 == 403
+E        +  where 200 = &lt;Response [200]&gt;.status_code
+
+tests/test_iteration7_permissions.py:137: AssertionError</failure></testcase><testcase classname="tests.test_iteration7_permissions.TestSmoke" name="test_no_mongo_object_ids_leaked" time="0.355" /><testcase classname="tests.test_iteration7_permissions.TestPrivateTaskVisibility" name="test_private_task_not_writable_by_nonassigned_member" time="0.215"><failure message="AssertionError: private task editable by non-assigned member (status 200)&#10;assert 200 == 403&#10; +  where 200 = &lt;Response [200]&gt;.status_code">self = &lt;test_iteration7_permissions.TestPrivateTaskVisibility object at 0xfa28eeaf3910&gt;
+sessions = {'admin': (&lt;requests.sessions.Session object at 0xfa28ef471290&gt;, {'id': 'fe1f0951-c5c0-4494-909a-77bd76b01c5d', 'email... '768efaa7-58ee-4801-882e-bf93f8a07c76', 'email': 'member1@northstar.team', 'name': 'Member1', 'role': 'member', ...})}
+private_task = {'title': 'TEST_PRIVATEONLY_admin_secret', 'description': 'TEST_PRIVATEONLY secret body', 'list_id': '877aa9aa-fcd6-4692-a63e-e23bad700e8e', 'priority': 'Medium', ...}
+
+    def test_private_task_not_writable_by_nonassigned_member(self, sessions, private_task):
+        """Secondary leak check: PATCH should also respect task_visible."""
+        member_s, _ = sessions["member"]
+        r = member_s.patch(f"{API}/tasks/{private_task['id']}", json={"title": "TEST_HIJACK"})
+        if r.status_code == 200:
+            # restore title so board state stays clean
+            sessions["admin"][0].patch(f"{API}/tasks/{private_task['id']}", json={"title": private_task["title"]})
+&gt;       assert r.status_code == 403, f"private task editable by non-assigned member (status {r.status_code})"
+E       AssertionError: private task editable by non-assigned member (status 200)
+E       assert 200 == 403
+E        +  where 200 = &lt;Response [200]&gt;.status_code
+
+tests/test_iteration7_permissions.py:146: AssertionError</failure></testcase><testcase classname="tests.test_iteration7_permissions.TestListPermissions" name="test_member_cannot_create_list" time="0.039" /><testcase classname="tests.test_iteration7_permissions.TestListPermissions" name="test_member_cannot_rename_archive_or_delete_list" time="0.263" /><testcase classname="tests.test_iteration7_permissions.TestListPermissions" name="test_admin_full_list_lifecycle" time="0.695" /></testsuite></testsuites>

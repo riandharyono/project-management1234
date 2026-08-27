@@ -1,0 +1,40 @@
+{
+  "summary": "Final regression pass (iteration 7) on Northstar Workspace focused on is_private enforcement, admin-only list permissions (create/rename/archive/delete) in both API and UI, TopBar role gating, and a smoke pass of core flows. Backend: new pytest suite tests/test_iteration7_permissions.py -> 13/15 passed. Frontend: Playwright runs as member1 and admin -> all scoped permission/visibility assertions passed with zero console errors. Two residual private-task authorization holes found (comments read + task write by non-assigned member).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/tasks/{task_id}/comments", "issue": "task_visible() is not applied. A non-admin, non-assigned member can read all comments of a task marked is_private (returned 200 with full comment thread). Private task content leaks via comments endpoint.", "priority": "HIGH"},
+      {"endpoint": "PATCH /api/tasks/{task_id}", "issue": "task_visible() is not applied. A non-admin, non-assigned member can modify a private task (title change returned 200). Same gap exists on DELETE /api/tasks/{id}, POST /api/tasks/{id}/duplicate, DELETE /api/tasks/{id}/attachments/{file_id}, and POST /api/tasks/{id}/comments.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "OPTIONS /api/* (preflight)", "issue": "Unconfigured origin preflight returns 204 instead of 403 - known infra-level ingress override, not app code (ignored per request)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Team workspace", "issues": ["After a full page reload the active tab resets to 'Ringkasan' instead of staying on 'Tugas' (tab state not persisted in URL/localStorage). Minor UX only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_permissions.py",
+    "/app/test_reports/pytest/iteration7_permissions.xml",
+    "/app/test_reports/pytest/iteration7_security.xml"
+  ],
+  "action_items": [
+    "Apply task_visible() (or a shared load_visible_task() dependency) in GET/POST /api/tasks/{id}/comments, PATCH /api/tasks/{id}, DELETE /api/tasks/{id}, POST /api/tasks/{id}/duplicate and DELETE /api/tasks/{id}/attachments/{file_id} so private tasks are fully protected, not just readable-by-id.",
+    "Optional UX: persist the active team tab across reloads."
+  ],
+  "critical_code_review_comments": [
+    "task_or_404 + require_member is repeated in every task/comment endpoint; extract a FastAPI dependency that returns (task, role) and enforces task_visible() to remove the current partial-enforcement bug class.",
+    "server.py at 576 lines is still one module; splitting routers (auth/teams/tasks/social) would make permission rules auditable."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration7_permissions.py"],
+  "success_rate": {"backend": "87% (13/15)", "frontend": "100% of scoped checks"},
+  "seed_data_creation": "Created and then deleted TEST_PRIVATEONLY_admin_secret / TEST_public_smoke / TEST_drag_smoke tasks, TEST_admin_list & TEST_UI_List7 lists. Residual test content left in team 'Tim B': one comment 'TEST_it7_member_comment @Workspace Admin' on 'Test Task' and chat message 'TEST_it7_member_chat'. 'Test Task' was moved from Dikerjakan to Selesai by the drag-drop test.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@northstar.team / Northstar123! ; member1@northstar.team / Member123! (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Verified PASSING this iteration: (1) is_private - admin-created private task hidden from member1 board (GET /api/teams/{id}/tasks), hidden from /api/search, direct GET /api/tasks/{id} -> 403; visible to admin and to member1 once assigned (board + search + detail). (2) List permissions - member1 gets 403 on POST /teams/{id}/lists, PATCH /lists/{id} (name and archived) and DELETE /lists/{id}; admin full lifecycle create->rename->archive->appears in archived list->restore->delete all 200 and persisted. (3) UI as member1: create-list-button, archive-lists-button, list-menu-*, add-member-button, team-settings-button all absent; archive-tasks-button and access-button present; no private task card; search returns nothing for the private title. UI as admin: all six controls present and functional end-to-end via testids. (4) Smoke: member1 opened task detail, posted comment with @mention (mention dropdown works), sent chat group message; admin keyboard drag-drop moved a task between lists and it persisted after reload. Zero console/page errors on both roles. Remaining open: comments-read and task-write on private tasks by non-assigned members.",
+  "rca_of_the_issue": "task_visible() was added only to list_tasks, get_task and search. All other task-scoped endpoints still authorize with require_member() alone, so the privacy flag is enforced on read-by-collection/read-by-id but not on comments retrieval or any write path - a member who learns the task id (e.g. from a notification, a duplicate, or a documents entry) can read its comments and edit/delete it."
+}

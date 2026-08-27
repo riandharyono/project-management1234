@@ -1,0 +1,43 @@
+{
+  "summary": "Completed iteration 4 backend and browser regression testing, including monthly calendar rendering, navigation, due-date marker/reminder integration, desktop/mobile layout, auth, task views, navigation, and logout.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "OPTIONS /api/auth/login",
+        "issue": "Public preview ingress still returns 204 with Access-Control-Allow-Origin: * for both the trusted preview origin and https://evil.example, contrary to the explicit credentialed CORS policy.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_northstar_api.py",
+    "/app/backend/tests/test_security_hardening.py",
+    "/app/test_reports/pytest/iteration4_results.xml"
+  ],
+  "action_items": [
+    "Fix the public ingress/preflight layer so untrusted origins are rejected and trusted origins receive an explicit origin; never emit wildcard CORS with credentialed JWT cookies.",
+    "Investigate the browser console React markup error reporting a span nested inside an option during member-option rendering; rerun console-clean browser regression after the fix."
+  ],
+  "critical_code_review_comments": [
+    "TaskModal comment loading still has no loading/error state, so a persisted comment list can briefly appear empty and fetch failures are silent.",
+    "Calendar task markers are rendered as button elements without an onClick action, so the marker affordance does not open the corresponding task for editing."
+  ],
+  "updated_files": [
+    "/app/test_reports/iteration_4.json"
+  ],
+  "success_rate": {
+    "backend": "87.5% (7/8; only public CORS preflight failed)",
+    "frontend": "100% of exercised functional flows; console-clean requirement not met due observed 401 resource logs and React option markup error"
+  },
+  "seed_data_creation": "Created and deleted TEST_calendar_iteration4 through the API; created TEST_calendar_ui_marker through the UI and left it because the product has no cleanup flow.",
+  "retest_needed": true,
+  "should_call_test_agent_after_fix": true,
+  "context_for_next_testing_agent": "Use admin@northstar.team / Northstar123!. Calendar passed August 2026 rendering, weekday grid, current-day highlight, previous/next navigation, due marker, sorted reminder integration, and mobile no-overflow. Recheck ingress CORS and console output; existing comment loading race remains from prior iteration.",
+  "rca of the issue": "External OPTIONS responses are answered or rewritten upstream of FastAPI and return wildcard CORS for trusted and evil origins. The browser markup error originates while dynamically rendering member names/roles inside option elements (the preview instrumentation reports a span child of option); initial unauthenticated auth/me 401s are also logged as failed resources by the browser even though they are expected route-protection behavior."
+}

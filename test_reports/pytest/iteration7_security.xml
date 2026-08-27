@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="3" time="2.902" timestamp="2026-08-26T11:39:38.189993+00:00" hostname="agent-env-3dcc844b-3d9c-4034-88e1-e92207b0a4d1"><testcase classname="tests.test_security_hardening" name="test_cors_preflight_restricts_unconfigured_origin" time="0.165"><failure message="assert 204 == 400&#10; +  where 204 = &lt;Response [204]&gt;.status_code">def test_cors_preflight_restricts_unconfigured_origin():
+        response = requests.options(
+            f"{BASE_URL}/api/auth/login",
+            headers={
+                "Origin": "https://evil.example",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+&gt;       assert response.status_code == 400
+E       assert 204 == 400
+E        +  where 204 = &lt;Response [204]&gt;.status_code
+
+tests/test_security_hardening.py:25: AssertionError</failure></testcase><testcase classname="tests.test_security_hardening" name="test_login_locks_after_five_failures_without_locking_admin" time="1.214" /><testcase classname="tests.test_security_hardening" name="test_missing_task_delete_and_member_update_return_404" time="0.581" /></testsuite></testsuites>

@@ -1,0 +1,79 @@
+{
+  "summary": "Iteration 10 = fix-verification round for the 7 items in the review request. Backend: new pytest suite /app/backend/tests/test_iteration10_fixes.py (35 tests, 33 pass). Verified notifications Query bounds (limit=999 -> 422, limit=0 -> 422, skip=-5 -> 422, limit=100 OK, default <=20), chat limit param (default <=200, limit=2 honoured, limit=5000 -> 422, limit=0 -> 422), lists now expose boolean is_done with >=1 done list and new lists defaulting to false, member1 team_role == 'member' (my_role='member') with 403 on create/rename/archive/delete list, PATCH/DELETE team label and PATCH list order (=UI column reorder), bidirectional task list move + GET persistence, and a smoke pass on all team/global endpoints (_id never leaked). Auth playbook re-checked: password_hash starts with $2b$, login cookie is HttpOnly+Secure+SameSite=None, brute-force lockout triggers 429 on the 6th failed attempt (lockout table cleared afterwards). Frontend (Playwright, 2 browser contexts): (1) chat duplicate bug FIXED - each message from admin and member1 renders exactly once in BOTH views, zero duplicate data-testids, and reactions still work end-to-end (realtime both directions, aggregate 1->2, persist across reload, toggle-off back to 1); (2) task-complete-toggle is now bidirectional - Selesai->To Do List and back, overview progress moved 100%(2/2) -> 50%(1/2) -> 100%(2/2); (3) notification pagination preserved - 20 -> 40 -> 48 items via 'Muat lebih banyak', still 48 after mark-all-read, unread badge 45 -> cleared, 0 unread-styled rows; (5) label rename/delete now fully inline (no window.prompt/confirm captured by the dialog listener), rename cascaded to both task cards, cancel keeps the label, confirm deletes it and removes chips from all cards; (6) member1 UI correctly hides Buat List, list (...) menus, column drag handles, Arsip List, Tambah Anggota, and label rename/delete icons; (7) regression PASS - login, all 7 tabs, task drag-and-drop across columns with persistence after reload, global search -> task detail, notification bell -> correct task detail, assignees, notes, checklist add/toggle/remove, attachments, due date, comments. One real discrepancy found: creating team labels is NOT admin-only on the backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/teams/{team_id}/labels",
+        "issue": "Uses require_member, not require_admin, so member1 (team_role='member') successfully creates team labels (200 instead of the 403 stated in the review request). The Task Detail > Label panel also still shows the 'Buat label baru untuk tim' input + colour swatches to non-admins, so this is reachable from the UI. PATCH/DELETE /api/labels/{id} ARE correctly admin-only. Decide whether label creation should be member-level (then update the spec) or admin-only (then add require_admin + hide the create input when myRole !== 'admin')."
+      },
+      {
+        "endpoint": "OPTIONS (any /api route)",
+        "issue": "Known non-blocking infra quirk: ingress answers CORS preflight for an unconfigured Origin with 204/wildcard, so tests/test_security_hardening.py::test_cors_preflight_restricts_unconfigured_origin fails (expects 400). Application-level CORS with credentials + explicit origin works. No action needed."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "TaskDetailModal",
+        "issue": "Escape key does not close the task detail modal; only the X button works. The .modal-backdrop also swallows clicks on the top bar, so a user who presses Escape stays trapped in the modal.",
+        "selector": "[data-testid=\"task-detail-modal\"]",
+        "priority": "LOW"
+      },
+      {
+        "component": "TaskDetailModal > Label panel (non-admin)",
+        "issue": "Regular members still see the label-create input and colour swatches (matches the backend gap above). Should be hidden if label creation becomes admin-only.",
+        "selector": "[data-testid=\"label-name-input\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Task detail > Tanggal panel",
+        "issues": [
+          "Due date still uses the raw browser picker (<input type=\"date\">) instead of the shadcn calendar component used elsewhere; it renders as MM/DD/YYYY which conflicts with the Indonesian UI locale."
+        ]
+      },
+      {
+        "screen": "Kanban task card label chips",
+        "issues": [
+          "Label chip text is rendered in the label colour at ~22% opacity background and a very small font size, giving low contrast (e.g. light blue on light blue) and being hard to read."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_fixes.py",
+    "/app/backend/tests/cleanup_iteration10.py",
+    "/app/test_reports/pytest/iteration10.xml"
+  ],
+  "action_items": [
+    "Decide + fix team-label creation permission: either add require_admin to POST /api/teams/{team_id}/labels and gate the create input behind myRole === 'admin', or update the spec (currently members can create team labels).",
+    "Bind Escape (and keep backdrop click) to close TaskDetailModal.",
+    "Replace the native <input type=\"date\"> due-date picker with the shadcn calendar / localised date format.",
+    "Increase contrast / font size of Kanban label chips."
+  ],
+  "critical_code_review_comments": [
+    "ChatGroup.jsx: the initial `client.get(/teams/{id}/chat).then(r => setMessages(r.data))` can resolve AFTER a WS message arrives and would then wipe that message. Merge instead of replace (e.g. setMessages(prev => dedupeById([...r.data, ...prev]))) to close the remaining race.",
+    "ChatGroup.jsx: `const generation = (wsRef.current?.generation || 0) + 1` is computed once per effect run, so a socket created by the retry timer inherits the same generation - works today but is fragile; a useRef counter incremented inside connect() would be clearer.",
+    "TaskDetailModal.jsx toggleComplete falls back to `lists[0]` when no non-done list exists; if lists[0] is itself the done list the toggle silently no-ops. Guard and surface an error instead.",
+    "App.js markNotifRead/markAllNotifRead fire the PATCH without awaiting or catching - a failed request leaves the optimistic local state out of sync with the server. Add a catch that reverts or refetches."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/TopBar.jsx (added missing data-testid=\"notif-unread-badge\" on the unread count)",
+    "/app/backend/tests/test_iteration10_fixes.py (new)",
+    "/app/backend/tests/cleanup_iteration10.py (new)"
+  ],
+  "success_rate": {
+    "backend": "94% (33/35; 1 real permission mismatch + 1 known ingress CORS quirk)",
+    "frontend": "100% of the 7 review items verified (2 LOW UI + 2 design nits reported)"
+  },
+  "seed_data_creation": "Seeded 45 TEST_notif_seed_* notifications for admin (needed to exercise notification pagination, DB only had 3). Created a TEST_lbl_ui/TEST_lbl_renamed team label, a TEST_isdone_list, a TEST_toggle_task, TEST_admin_*/TEST_member_* chat messages, a TEST_comment_regression comment and a TEST_check_item checklist entry. ALL cleaned up via /app/backend/tests/cleanup_iteration10.py (45 notifications, 2 chat messages, 1 comment deleted; notes/due_date/checklist edits reverted). login_attempts collection cleared after the brute-force check so admin login is not locked.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@northstar.team / Northstar123! (admin of Tim B); member1@northstar.team / Member123! (confirmed team_role='member')",
+  "context_for_next_testing_agent": "All 5 bugs + 1 data issue from iteration_9 are confirmed FIXED (chat duplicates, one-way complete toggle, notif page collapse, unbounded notifications/chat pagination, native prompt/confirm dialogs, member1 role). Remaining open items are the 4 action_items above. Re-runnable suites: tests/test_iteration10_fixes.py (expect only test_member_create_team_label_permission to fail until the label-permission decision is made) and tests/test_security_hardening.py (expect only the CORS preflight test to fail - ingress quirk). If you exercise the brute-force lockout, remember to clear the login_attempts collection afterwards or admin login returns 429 for 15 minutes. Team 'Tim B' has 4 lists (To Do List, Dikerjakan, Selesai[is_done=true], Batal) and 2 tasks ('Test Task', 'tes').",
+  "rca_of_the_issue": "Chat duplication root cause (fixed): the WS effect re-ran and the stale socket's onclose scheduled a reconnect, leaving two live sockets; the new generation token on the socket plus an id-based dedupe in onmessage (`m.some(x => x.id === data.id) ? m : [...m, data]`) now guarantees a single bubble per message. Complete-toggle root cause (fixed): toggleComplete previously always targeted the list named 'Selesai'; it now branches on list.is_done and moves back to the first non-done list, and TeamOverview/KanbanBoard read is_done instead of matching the hardcoded name. Notification collapse root cause (fixed): markNotifRead/markAllNotifRead refetched page 1; they now patch local state in place. Remaining open defect: POST /teams/{id}/labels was never switched from require_member to require_admin, so the 'member cannot create team labels' expectation is not met."
+}

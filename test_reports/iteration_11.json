@@ -1,0 +1,51 @@
+{
+  "summary": "Iteration 11 = focused verification of the 4 polish fixes + light smoke regression. Backend: new suite /app/backend/tests/test_iteration11_fixes.py (17 tests, 17 PASS) - POST /api/teams/{team_id}/labels is now admin-only (member1 -> 403, anonymous -> 401/403, admin create->GET persist->DELETE->GET gone all OK), member1 my_role='member', members can still GET labels, and a smoke pass on /api/auth/me, /api/teams, /api/notifications and all team sub-resources (lists, tasks, labels, members, announcements, questions, documents, chat) with no _id leakage and unique chat message ids. Login cookies re-checked: access_token + refresh_token are HttpOnly, Secure, SameSite=None. Frontend (Playwright, admin + member1 contexts): (1) label create UI is HIDDEN for member1 (create input 0, swatches 0, rename/delete icons 0) while existing label toggles remain usable; admin still sees input + 7 swatches and can create/attach/delete a label end-to-end. (2) Escape now closes TaskDetailModal for BOTH admin and member (modal detached within 8s). (3) Kanban label chip contrast improved - computed style font-weight 700, 10px, bg rgba(40,121,237,0.15), 1px border rgba(...,0.33), text rgb(40,121,237); legible in screenshot, though still ~3.5:1 contrast at 10px (below WCAG AA 4.5:1) - cosmetic nit only. (4) Chat merge-by-id fix verified in 2 contexts: admin message renders exactly 1 bubble in both views; member reloaded the page and sent a message IMMEDIATELY after load (the race window) -> exactly 1 bubble in both views, and the earlier admin message survived the reload merge (still 1); 6 bubbles total in each view with 0 duplicate data-testids; counts stay 1/1 after a further admin reload. (5) Regression PASS: login (both roles), all 7 tabs load with no error elements, kanban drag-and-drop column1->column2 with persistence after reload and drag back, task detail members panel, checklist add, notes edit persisted, notifications bell dropdown (3 rows), member1 still correctly denied create-list/list-menu/add-member controls. No backend errors in supervisor logs (only expected WS open/close lines).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Kanban card label chip",
+        "issues": [
+          "Contrast improved but still ~3.5:1 (label colour on 15%-alpha background) at font-size 10px, under WCAG AA 4.5:1 for small text. Optional: darken the text colour or drop background alpha further."
+        ]
+      },
+      {
+        "screen": "Task detail > Tanggal panel",
+        "issues": [
+          "Still uses native <input type=\"date\"> (MM/DD/YYYY) instead of the shadcn calendar - carried over from iteration_10, not part of this round's scope."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration11_fixes.py",
+    "/app/backend/tests/cleanup_iteration11.py",
+    "/app/test_reports/pytest/iteration11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TaskDetailModal.jsx: the Escape keydown effect has an empty dep array, so it captures the first-render `close` (and therefore the first-render onClose/onReload props). It works today because those props are stable, but if App.js ever recreates them the handler would call a stale closure - add [close] or use a ref.",
+    "TaskDetailModal.jsx: the Escape listener is global (window) and not gated on 'is this the topmost overlay', so a nested confirm/label sub-panel is skipped and the whole modal closes on the first Escape. Acceptable UX, but consider closing the open sub-panel first.",
+    "ChatGroup.jsx merge-by-id is correct, but the sort uses `a.created_at.localeCompare(b.created_at)`; it will throw if a message ever arrives without created_at. Guard with (a.created_at || '').",
+    "Still open from iteration_10 (not in this round's scope): TaskDetailModal.toggleComplete falls back to lists[0] which may itself be the done list; App.js markNotifRead/markAllNotifRead do not catch PATCH failures."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration11_fixes.py (new)",
+    "/app/backend/tests/cleanup_iteration11.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "100% - all 4 fixes + smoke regression verified"
+  },
+  "seed_data_creation": "Created label TEST_it11_chip (attached to 'Test Task'), chat messages TEST_it11_admin_755718 / TEST_it11_member_755718, checklist item TEST_it11_check, notes 'TEST_it11_notes'. ALL removed/reverted via /app/backend/tests/cleanup_iteration11.py (1 label detached+deleted, 2 chat messages deleted, checklist item pulled, notes reset to empty). Board state restored: 'Test Task' back in 'To Do List'.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@northstar.team / Northstar123! ; member1@northstar.team / Member123!",
+  "context_for_next_testing_agent": "All 4 iteration_10 action items except the native date picker are now fixed and verified (label admin-only backend+UI, Escape close, chip contrast, chat race). Re-runnable suites: tests/test_iteration11_fixes.py (all pass), tests/test_iteration10_fixes.py (test_member_create_team_label_permission should now pass too), tests/test_security_hardening.py (only the ingress CORS-preflight test fails - known infra quirk). Note there is no /api/teams/{id}/schedules or /overview endpoint; the Schedule and Overview tabs derive from /api/teams/{id}/tasks. Do not trigger the brute-force lockout without clearing login_attempts afterwards.",
+  "rca_of_the_issue": "No new defects found. Chat race fix confirmed: the initial REST fetch now merges by id (server list + local-only ids, sorted by created_at) so a WS message that arrives before the fetch resolves is preserved instead of wiped; sending immediately after reload produced exactly one bubble per message in both contexts."
+}

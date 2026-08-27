@@ -1,0 +1,72 @@
+{
+  "summary": "Iteration 5: full regression of the rebuilt multi-team Northstar Workspace (Cicle-style). Backend: new pytest suite (23 cases) covering auth/cookies/bcrypt, teams+default lists, list CRUD/archive/restore, member add/role/remove + RBAC, task CRUD/move(order)/duplicate/archive/restore/delete, comments+mention notifications, assignment notifications, real file upload/download/delete via Emergent Object Storage, documents, chat, announcements, questions/answers, notifications read/read-all, and search -> 22/23 passed. Frontend: Playwright e2e on the public URL covering login (admin + member1), sidebar/HQ/team cards, Ringkasan cards, Kanban (create task, drag-and-drop To Do -> Dikerjakan with persistence after reload, filters, kanban/list toggle, create/rename/archive/restore/delete list, Arsip Tugas & Arsip List restore), full Task Detail Modal (title, catatan, anggota, ceklis, label, tanggal, ulangi, attachment upload/remove, cover upload, pindahkan, salin, rahasiakan, arsipkan, hapus, comment with @mention dropdown + highlight), chat with mention, pengumuman, pertanyaan+jawaban, dokumen upload, jadwal calendar + month nav + reminders, global search, Akses modal (members/role change/add tab), notifications bell as member1 (badge, list, mark-all-read), logout, and mobile viewport. All core flows work; main problems are mobile responsiveness and a few UX/business-logic gaps.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/tasks/{id}", "issue": "Null values are stripped from the update payload, so due_date and cover can never be cleared once set (sending due_date:null keeps the old date). Same applies to cover/description reset."},
+      {"endpoint": "GET /api/teams/{id}/tasks", "issue": "is_private ('Rahasiakan') has no server-side effect: private tasks are returned to every team member, so the feature is cosmetic (lock icon only)."},
+      {"endpoint": "DELETE /api/lists/{id} & POST /api/teams/{id}/lists", "issue": "Only require_member, not require_admin. Any regular member can permanently delete a list together with all of its tasks (no archive/undo)."},
+      {"endpoint": "GET /api/search", "issue": "User query is passed straight into a Mongo $regex without escaping (regex injection / ReDoS) and an empty q returns every task of all my teams."},
+      {"endpoint": "GET /api/members, GET /api/teams/{id}/available-members", "issue": "Return every workspace user incl. e-mail addresses to any authenticated member (no role check)."},
+      {"endpoint": "announcements / chat / questions / documents", "issue": "No DELETE endpoints exist, so content created by mistake (or test data) can never be removed from the UI."},
+      {"endpoint": "OPTIONS /api/* (infra)", "issue": "Public ingress/Cloudflare answers preflight and rewrites CORS to 'Access-Control-Allow-Origin: *' for both trusted and evil origins (also on the actual POST). Known pre-existing infra override, FastAPI strict_cors middleware itself is correct."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Global layout (App.css media queries)", "issue": "Mobile (390x844) has horizontal document overflow: document.scrollWidth=553 vs innerWidth=390 on HQ, Tugas and Chat pages. The @media rules still target old MVP classes (.board, .stats, .focus-card) and were not updated for the new .kanban/.tabbar/.td-* layout.", "selector": "body / [data-testid=\"kanban-board\"]", "priority": "HIGH"},
+      {"component": "Sidebar (mobile)", "issue": "Collapsed sidebar clips labels ('HQ' renders as 'H(' , team name 'Tim B' wraps and is cut) and overlaps the main column.", "selector": "[data-testid=\"sidebar-hq-item\"], [data-testid^=\"sidebar-team-\"]", "priority": "MEDIUM"},
+      {"component": "TopBar tab bar (mobile)", "issue": "Tab row overflows off screen without scrolling affordance: 'Pengumuman' is cut and the '3 lagi…' dropdown ([data-testid=\"tab-more-button\"]) is unreachable on a 390px viewport.", "selector": "[data-testid=\"tab-more-button\"]", "priority": "HIGH"},
+      {"component": "Team action row (mobile)", "issue": "'Tambah Anggota' / member avatars / 'Akses' / settings row overlaps the page heading eyebrow text ('TUGAS'/'RINGKASAN'), producing overlapping text.", "selector": "[data-testid=\"access-button\"], [data-testid=\"team-settings-button\"]", "priority": "MEDIUM"},
+      {"component": "TaskDetailModal date/repeat", "issue": "Uses the browser native <input type=\"date\"> although shadcn calendar + react-day-picker are already installed; inconsistent with the rest of the design system.", "selector": "[data-testid=\"task-due-date-input\"], [data-testid=\"new-task-due-date-input\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Global search -> task", "issue": "Clicking a search result only switches team + 'Tugas' tab; the matching task is neither opened in the detail modal nor highlighted/scrolled to, so on a large board the user cannot find it.", "affected_selectors": ["[data-testid^=\"search-result-\"]"]},
+      {"flow": "Notification click", "issue": "openNotification only sets the team and (when task_id exists) the 'tasks' tab. Announcement/chat/answer notifications do not navigate to Pengumuman/Chat/Pertanyaan, and mention notifications do not open the referenced task detail modal.", "affected_selectors": ["[data-testid^=\"notification-\"]"]},
+      {"flow": "Page reload / deep link", "issue": "No URL routing: reloading while on Tugas/Chat resets the app to HQ/Ringkasan, and no state is shareable via URL.", "affected_selectors": ["[data-testid=\"tab-tasks\"]"]},
+      {"flow": "TaskDetailModal comments", "issue": "Comment fetch has no loading/error state (carried over from iteration 4) - list can flash empty and failures are silent.", "affected_selectors": ["[data-testid=\"task-comments\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Mobile Tugas/Ringkasan/Chat (390px)", "issues": ["Whole page scrolls horizontally (553px content in 390px viewport)", "Sidebar labels clipped", "Tab bar items cut off, '3 lagi…' unreachable", "Header action row overlaps heading eyebrow"]},
+      {"screen": "Desktop", "issues": ["No blocking issues: navy primary + playful colored feature icons render correctly, contrast and spacing look good, Kanban/task modal/chat bubbles align well"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_northstar_v2.py",
+    "/app/backend/tests/test_security_hardening.py",
+    "/app/backend/tests/cleanup_ui_test_data.py",
+    "/app/test_reports/pytest/iteration5_results.xml",
+    "/app/test_reports/pytest/iteration5_security.xml"
+  ],
+  "action_items": [
+    "Rewrite the App.css @media rules for the new layout: remove the horizontal document overflow on mobile, make the tab bar horizontally scrollable (keep '3 lagi…' reachable), fix the clipped sidebar labels and the header action row overlapping the page heading.",
+    "Allow clearing nullable task fields (due_date, cover) in PATCH /api/tasks/{id} - use model_dump(exclude_unset=True) instead of dropping None.",
+    "Enforce is_private server-side (filter private tasks to creator/assignees) or rename the feature, since today it only shows a lock icon.",
+    "Require team admin for list creation/deletion, or replace hard delete with archive to prevent a member from wiping a list plus all its tasks.",
+    "Escape the search regex and reject/short-circuit empty q in GET /api/search.",
+    "Make notification clicks route to the relevant tab (announcement/chat/questions) and open the task detail modal for task/mention notifications; make global search results open the task.",
+    "Add basic URL routing (team/tab) so reload and deep links keep context.",
+    "Add loading/error states around the task comment fetch."
+  ],
+  "critical_code_review_comments": [
+    "App.css mobile breakpoints still describe the removed MVP markup (.board/.stats/.focus-card) - dead CSS while the new components have no mobile rules at all.",
+    "update_task/patch_list build their $set from a dict comprehension that filters None, which silently makes null-clearing impossible; switch to exclude_unset semantics.",
+    "list_tasks ignores is_private, so the 'Rahasiakan' action is not a security control.",
+    "GET /api/search interpolates raw user input into a Mongo regex - escape it (re.escape) to avoid regex injection/ReDoS.",
+    "No indexes on notifications.user_id or chat_messages.team_id although both are polled every few seconds.",
+    "Content collections (announcements/chat/questions/documents) have create+read but no delete, leaving no way to correct mistakes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_northstar_v2.py",
+    "/app/backend/tests/test_security_hardening.py",
+    "/app/backend/tests/cleanup_ui_test_data.py",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {"backend": "95.6% (22/23; only nullable-field clearing failed) + 2/3 security tests (CORS preflight = known infra override)", "frontend": "~92% of exercised flows passed on desktop; mobile layout fails (overflow/overlap/unreachable tabs)"},
+  "seed_data_creation": "Created and then deleted via API/UI: tasks TEST_UI_Task_A(_Edited)(+Salinan), TEST_task_crud, TEST_cleardate, TEST_assign, TEST_mention_task, TEST_searchable_zebra; lists TEST_List_Renamed/TEST_List; teams TEST_Tim_* and TEST_Tim_UI. Left behind (no delete API): announcement 'TEST_Pengumuman_UI', question 'TEST_Pertanyaan_UI'/'TEST_pertanyaan', chat messages 'TEST_chat*', documents TEST_docui.txt / TEST_doc.txt / TEST_ui_attach.txt. Cleanup helper: /app/backend/tests/cleanup_ui_test_data.py.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@northstar.team / Northstar123! and member1@northstar.team / Member123! (both valid, member1 is member of Tim B)",
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_northstar_v2.py` for the full multi-team API regression (single known failure: test_clear_due_date). Frontend selectors are complete; watch out for prefix collisions when using data-testid^= (task-attachment- also matches -dropzone/-file-input, comment- also matches comment-input/comment-input-send, sidebar-team- also matches sidebar-team-search). window.confirm is used for delete list/task/remove member - register page.on('dialog', accept). After reload the app resets to Ringkasan (no routing). Drag-and-drop with 10-step mouse moves works and persists. Priority retest area: mobile responsiveness (document scrollWidth 553 vs 390) and the nullable-field PATCH fix.",
+  "rca_of_the_issue": "Mobile breakage: App.css only contains @media rules for the deleted MVP markup, so the new flex Kanban/tab-bar/action-row have no small-screen rules; the sidebar keeps a fixed width and the kanban flex row plus the header action row push the document to 553px, producing page-level horizontal scroll and overlapping text. Nullable-field bug: update_task filters out None values before $set, so an explicit null is indistinguishable from 'not provided'. is_private gap: the flag is stored but list_tasks has no filter on it."
+}

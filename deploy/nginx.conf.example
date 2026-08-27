@@ -1,0 +1,55 @@
+# Reverse proxy Nginx — satu domain untuk frontend + API, supaya CORS tidak
+# perlu dan cookie sesi bisa pakai SameSite=Lax yang lebih aman.
+#
+# Cara pakai di VPS:
+#   1. Ganti "app.contohdomain.com" di bawah dengan domain aslimu.
+#   2. sudo cp nginx.conf.example /etc/nginx/sites-available/project-mng
+#   3. sudo ln -s /etc/nginx/sites-available/project-mng /etc/nginx/sites-enabled/
+#   4. sudo nginx -t && sudo systemctl reload nginx
+#   5. Pasang TLS: sudo certbot --nginx -d app.contohdomain.com
+#      (certbot akan otomatis menambahkan blok listen 443 ssl + redirect 80→443)
+
+server {
+    listen 80;
+    server_name app.contohdomain.com;
+
+    # Batas ukuran upload — samakan dengan MAX_UPLOAD_MB di backend/.env
+    client_max_body_size 55m;
+
+    # Header keamanan dasar untuk semua respons
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # Aktifkan HSTS HANYA setelah TLS terpasang & terverifikasi jalan:
+    # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    # WebSocket: chat & notifikasi real-time
+    location /api/ws/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+    }
+
+    # REST API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Frontend (hasil `yarn build`)
+    root /var/www/project-mng/frontend/build;
+    index index.html;
+    location / {
+        try_files $uri /index.html;
+    }
+}

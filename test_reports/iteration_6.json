@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 6: focused regression of the 7 fixes from iteration_5 (mobile layout, nullable PATCH, is_private, list RBAC, search hardening, notification routing, search-result click) + auth playbook checks + smoke of core flows. Backend: new suite /app/backend/tests/test_iteration6_fixes.py (24 cases) -> 22 passed, 2 failed (is_private not enforced in GET /api/search and GET /api/tasks/{id}). Previous suites re-run: test_northstar_v2.py + test_security_hardening.py = 25/26 (only the known infra CORS preflight override fails). Frontend (public URL, real 390x844 and 1920x1080 viewports): mobile horizontal overflow is FIXED (documentElement.scrollWidth == 390 on HQ, Ringkasan, Tugas/Kanban, Chat), sidebar collapses to icon-only with no clipped text, tab bar is horizontally scrollable and 'Hapus/3 lagi…' dropdown is reachable+clickable (navigated to Dokumen via it), no heading/action-row overlap. 'Hapus tanggal' clears the due date in UI and persists (GET shows null). Rahasiakan hides the task from member1's Kanban (admin still sees it). member1's 'Buat List' returns 403 and no list is created; member1 'Hapus list' leaves all 4 lists intact. Announcement notification click routes to the Pengumuman tab, mention notification click opens the Task Detail Modal with the right task, global search result click opens the Task Detail Modal directly. Smoke: login (admin+member1), kanban drag-and-drop To Do -> Dikerjakan persisted after reload, task modal edit, chat send, comment with @mention all work.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/search & GET /api/tasks/{task_id}", "issue": "is_private is only enforced in GET /api/teams/{id}/tasks. A private task (created by admin, not assigned to member1) is still returned to member1 by /api/search and by GET /api/tasks/{id}. Because the new UI opens the Task Detail Modal directly from a search result, member1 can fully read/edit a 'Rahasiakan' task by searching its title. Reproduced: test_private_task_not_in_member_search, test_private_task_direct_get_blocked_for_member.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PATCH /api/lists/{list_id}", "issue": "Still only require_member (create/delete were tightened to require_admin). A regular member can rename and archive a list (archiving hides the whole column + its tasks for the entire team). Also still filters out None values (cannot clear nullable list fields)."},
+      {"endpoint": "GET /api/members, GET /api/teams/{id}/available-members", "issue": "Unchanged from iteration 5: returns every workspace user incl. e-mails to any authenticated member."},
+      {"endpoint": "announcements / chat / questions / documents", "issue": "Unchanged: no DELETE endpoints, test content cannot be removed (TEST_it6_ann_*, TEST_it6_chat_smoke left behind)."},
+      {"endpoint": "OPTIONS /api/* (infra)", "issue": "Known pre-existing ingress CORS override (test_cors_preflight_restricts_unconfigured_origin fails with 204 instead of 400). Ignored per request."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KanbanBoard 'Buat List' / list '...' menu (member role)", "issue": "Admin-only actions are still rendered for regular members (Buat List, Hapus list, Tambah Anggota, Akses, team settings). Clicking 'Buat List' as member1 fires the request, gets 403 and the axios rejection is UNHANDLED: no toast/inline error is shown, the inline input stays open, and the CRA dev overlay 'Uncaught runtime errors: Request failed with status code 403' covers the whole screen (in production the user simply gets silent failure).", "selector": "[data-testid=\"create-list-button\"], [data-testid^=\"delete-list-\"]", "priority": "HIGH"},
+      {"component": "TaskDetailModal / NewTaskModal date fields", "issue": "Still uses the browser-native <input type=\"date\"> although shadcn calendar/react-day-picker are installed (unchanged from iteration 5).", "selector": "[data-testid=\"task-due-date-input\"], [data-testid=\"new-task-due-date-input\"]", "priority": "LOW"},
+      {"component": "TopBar (mobile 390px)", "issue": "Cosmetic only: the tab row and the team action row share one horizontal scroller, so 'Tambah Anggota' is cut at the right viewport edge until the user scrolls the row; no scroll affordance (fade/chevron) is visible.", "selector": ".tt-tabs, [data-testid=\"add-member-button\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Global search -> private task (member role)", "issue": "Search dropdown returns and can open a task marked 'Rahasiakan' that is hidden on the member's board (backend leak above), so the new 'open modal from search result' behaviour widens the privacy hole.", "affected_selectors": ["[data-testid=\"global-search-input\"]", "[data-testid^=\"search-result-\"]"]},
+      {"flow": "Page reload / deep link", "issue": "Still no URL routing: after reload the app returns to Ringkasan (verified during drag-drop persistence test).", "affected_selectors": ["[data-testid=\"tab-tasks\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Mobile 390x844 (HQ, Ringkasan, Tugas, Chat, Pengumuman)", "issues": ["FIXED: no page-level horizontal scroll (scrollWidth 390 == innerWidth)", "FIXED: sidebar icon-only, no clipped labels", "FIXED: tab bar scrolls, '3 lagi…' reachable and functional", "FIXED: no heading/action-row overlap", "Remaining nit: no visual scroll hint on the tab/action row"]},
+      {"screen": "Desktop 1920px", "issues": ["No blocking issues; kanban, modal, chat, announcements render well"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration6_fixes.py",
+    "/app/test_reports/pytest/iteration6_fixes.xml",
+    "/app/test_reports/pytest/iteration6_regression.xml"
+  ],
+  "action_items": [
+    "Enforce is_private in GET /api/search and GET /api/tasks/{task_id} with the same rule used in list_tasks (admin OR creator OR assignee), otherwise the 'Rahasiakan' feature is bypassable via search.",
+    "Hide/disable admin-only controls for non-admin members (Buat List, Hapus list, Tambah Anggota, Akses, team settings) AND surface a user-visible error (toast/inline) on 403 instead of an unhandled axios rejection.",
+    "Require admin for PATCH /api/lists/{id} (rename/archive) to match create/delete, and use exclude_unset there as well.",
+    "Optional/backlog (unchanged): URL routing for team+tab, DELETE endpoints for announcements/chat/questions/documents, shadcn calendar instead of native date input, restrict GET /api/members to admins."
+  ],
+  "critical_code_review_comments": [
+    "server.py list_tasks filters is_private but search() and get_task() do not — duplicate the visibility predicate into a shared helper (e.g. visible_to(task, user, role)) and use it in all three places.",
+    "patch_list still uses require_member + a None-stripping dict comprehension; inconsistent with the newly hardened create_list/delete_list.",
+    "KanbanBoard list-create/delete handlers have no .catch()/error state; every 403 becomes an unhandled promise rejection (App-level error boundary/toast missing).",
+    "Still no indexes on notifications.user_id / chat_messages.team_id despite polling."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration6_fixes.py", "/app/test_reports/iteration_6.json"],
+  "success_rate": {"backend": "92% (22/24 iteration-6 fix tests; 25/26 on the older suites, only known infra CORS)", "frontend": "6/7 fixed items fully verified; the 7th (search-result click) works but exposes the is_private leak"},
+  "seed_data_creation": "Created and deleted via API/UI: tasks TEST_it6_cleardate, TEST_it6_partial, TEST_it6_private, TEST_it6_privsearch_zzq, TEST_it6_privget, TEST_it6_mention, TEST_it6_search_*, TEST_it6_ui_private; list TEST_it6_adminlist. Left behind (no delete API): announcements TEST_it6_ann_a3831d / TEST_it6_ann_a094e0, chat message TEST_it6_chat_smoke, comment 'TEST_it6_mention @Member1' on 'Test Task'. 'Test Task' was drag-moved to Dikerjakan and moved back to To Do List.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@northstar.team / Northstar123! (team admin), member1@northstar.team / Member123! (member of Tim B) — both valid; bcrypt hashes are $2b$, login sets httpOnly cookies, lockout returns 429 after 5 failures (verified).",
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_iteration6_fixes.py` for the fix regression (expected failures until fixed: test_private_task_not_in_member_search, test_private_task_direct_get_blocked_for_member) and `pytest tests/test_northstar_v2.py tests/test_security_hardening.py` for the wider suite (CORS preflight test fails by infra design). Correct login selectors are data-testid auth-email-input/auth-password-input/auth-submit-button (NOT login-*). New task modal submit is create-new-task-button; comment send is comment-input-send; chat send is chat-input-send; kanban columns are [data-testid^=kanban-column-]. Drag-and-drop needs a 6px jiggle after mouse.down then ~20 steps of 50ms, otherwise the drop is ignored. window.confirm is used for delete list/task. Mobile regression is green — re-verify only if team.css changes.",
+  "rca_of_the_issue": "is_private was implemented only inside list_tasks; search() and the new get_task() endpoint (added so notification/search clicks can open the modal) query db.tasks directly with no visibility predicate, so the new UX paths bypass the control. The member-403 UI noise comes from KanbanBoard's create/delete list handlers lacking a catch()/error state now that the endpoints return 403 to non-admins."
+}

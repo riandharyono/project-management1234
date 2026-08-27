@@ -1,0 +1,35 @@
+# Systemd unit untuk backend FastAPI — auto-restart kalau crash.
+#
+# Cara pakai di VPS:
+#   1. Sesuaikan User, WorkingDirectory, dan ExecStart di bawah dengan path aslinya.
+#   2. sudo cp project-mng-backend.service /etc/systemd/system/
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now project-mng-backend
+#   5. Cek status: sudo systemctl status project-mng-backend
+#   6. Lihat log: sudo journalctl -u project-mng-backend -f
+#
+# PENTING: tidak memakai --reload (itu untuk development saja) dan memakai
+# beberapa worker untuk menangani lebih banyak request bersamaan.
+
+[Unit]
+Description=Project Management API (FastAPI/Uvicorn)
+After=network.target mongod.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/project-mng/backend
+EnvironmentFile=/var/www/project-mng/backend/.env
+ExecStart=/var/www/project-mng/backend/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Sedikit hardening tambahan
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

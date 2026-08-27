@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 8 focused testing of the 4 new features (URL tab/team persistence, WebSocket real-time chat, admin Kanban column drag-reorder, shared team label registry) plus re-confirmation of the notification popup. Backend: new pytest suite /app/backend/tests/test_iteration8_newfeatures.py - 13/13 passed (labels CRUD + permissions + persistence, list reorder admin/member permissions, WebSocket broadcast + auth rejection, mention notification + read/read-all). Frontend: 5 Playwright flows executed on the public preview URL - all core assertions passed (URL ?team&tab survives full reload; wss://.../api/ws/chat/{team_id} connections open in both browser contexts and messages arrive in ~0.1s in both directions with no duplicates; admin dragged 'Batal' column to first position and order persisted after reload while member1 could not reorder; team label registry created 'TEST_Urgent' on one task and it was reusable/toggleable on another task and shown as a chip on the card; member1 bell badge=1, dropdown listed correct mention text, clicking notification opened the task detail modal, 'Tandai semua dibaca' cleared the badge). Task-card drag (TASK dnd) verified as non-regressed after the new COLUMN droppable. Playbook auth checks verified: bcrypt hash $2b$12$, httpOnly+secure+samesite=none cookies, 5-fail/15-min lockout, idempotent seed_admin with password update, explicit CORS origins with credentials.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/teams/{id}/labels", "issue": "No duplicate-name guard and no name/color validation (any string color accepted); same label name+color can be created repeatedly, polluting the shared registry."},
+      {"endpoint": "GET /api/notifications", "issue": "Returns full history (30 items observed) with no limit/pagination; dropdown will keep growing over time."},
+      {"endpoint": "OPTIONS preflight (any)", "issue": "Pre-existing infra issue confirmed again: ingress answers preflight with 204 and '*' so tests/test_security_hardening.py::test_cors_preflight_restricts_unconfigured_origin fails. Application middleware itself is correct - no action needed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Chat Grup WebSocket", "issue": "No onerror/onclose reconnect logic in ChatGroup.jsx and no polling fallback; if the socket drops (ingress idle timeout, network blip) the chat silently stops receiving messages until the tab is switched/reloaded. Consider reconnect with backoff + connection status indicator.", "affected_selectors": ["[data-testid=\"chat-window\"]"]},
+      {"flow": "Label registry", "issue": "Labels are matched to tasks by (name,color) value pairs rather than by label id, so renaming/deleting a registry label leaves stale copies embedded on tasks (deleting TEST_Urgent from the registry left the chip data on tasks until manually cleared).", "affected_selectors": ["[data-testid^=\"team-label-\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Kanban board (admin)", "issues": ["@hello-pangea/dnd console warning: 'Droppable: unsupported nested scroll container detected' after adding the horizontal COLUMN droppable - drag works but nested scroll parents should be flattened (one scroll parent) to avoid future drop-position glitches.", "Column drag handle is the whole column header, which also contains the rename input and the '...' menu button; clicks still work but a dedicated grip icon would make the affordance discoverable (no visual cue that columns are draggable)."]},
+      {"screen": "Notifications dropdown", "issues": ["Long unbounded list (30 items) with no 'load more'/limit; older read items make the panel very tall."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8_newfeatures.py",
+    "/app/backend/tests/cleanup_iteration8.py",
+    "/app/test_reports/pytest/iteration8_results.xml"
+  ],
+  "action_items": [
+    "Add WebSocket reconnect (onclose/onerror + backoff) and a connection indicator in ChatGroup.jsx",
+    "Reference team labels on tasks by label id (or cascade rename/delete into task.labels) instead of storing name+color copies",
+    "Add duplicate-name guard + color validation on POST /api/teams/{team_id}/labels",
+    "Limit/paginate GET /api/notifications (e.g. latest 30) and cap dropdown height",
+    "Optional: dedicated drag-grip in the Kanban column header and fix the nested-scroll-container dnd warning"
+  ],
+  "critical_code_review_comments": [
+    "KanbanBoard.handleColumnDragEnd / handleTaskDragEnd fire one PATCH per item via Promise.all - with many lists/tasks this is N requests per drag; a single bulk-reorder endpoint would be safer and avoids partial reorders if one PATCH fails (no rollback of optimistic state today).",
+    "App.js URL sync uses window.history.replaceState, so browser back/forward does not restore previous tab/team; pushState (or a router) would make navigation history work.",
+    "ChatGroup builds the ws URL from process.env.REACT_APP_BACKEND_URL without a null guard; if the env var were missing the component would throw instead of degrading gracefully."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8_newfeatures.py",
+    "/app/backend/tests/cleanup_iteration8.py"
+  ],
+  "success_rate": {"backend": "100% (13/13 new-feature tests)", "frontend": "100% of the 5 new-feature flows passed"},
+  "seed_data_creation": "Created and then removed: team label TEST_Urgent, task 'TEST_Label Task 2', a few TEST_realtime/TEST_reply chat messages and one TEST_notif mention comment (chat/comment history has no delete endpoint so those text entries remain). List order and 'Test Task' placement were restored via /app/backend/tests/cleanup_iteration8.py.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin@northstar.team / Northstar123! (admin Tim B), member1@northstar.team / Member123! (member Tim B) - both valid and working",
+  "context_for_next_testing_agent": "All 4 new features + notification popup verified working end-to-end on the public URL. Only one team ('Tim B') exists, so cross-team URL persistence could not be exercised (single-team case verified). Reusable suite: /app/backend/tests/test_iteration8_newfeatures.py (needs the `websockets` package, already installed). Use /app/backend/tests/cleanup_iteration8.py after UI runs to restore list order/labels. Remaining open items are non-blocking polish: WS reconnect, label-by-id references, notification pagination, dnd nested-scroll warning.",
+  "rca_of_the_issue": "No functional defects found in the new features. The one failing pre-existing test (CORS preflight) is caused by the ingress proxy answering OPTIONS itself with Access-Control-Allow-Origin '*', bypassing the app's strict_cors middleware - infrastructure behaviour, not an application bug."
+}
