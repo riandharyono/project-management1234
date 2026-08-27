@@ -135,6 +135,8 @@ def task_visible(task, user, role):
 class Credentials(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
+class ProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
 class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
@@ -347,6 +349,14 @@ async def logout(response: Response, user=Depends(current_user)):
 
 @api.get("/auth/me")
 async def me(user=Depends(current_user)): return public_user(user)
+
+@api.patch("/auth/me")
+async def update_me(data: ProfileUpdate, user=Depends(current_user)):
+    name = data.name.strip()
+    if not name: raise HTTPException(400, "Nama tidak boleh kosong")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"name": name}})
+    user["name"] = name
+    return public_user(user)
 
 # ---------- teams ----------
 @api.get("/teams")

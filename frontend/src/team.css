@@ -40,7 +40,10 @@
 .tt-search-results button:hover { background: var(--paper); }
 .tt-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
 .tt-badge { position: absolute; top: 0; right: 0; background: var(--danger); color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 9px; display: grid; place-items: center; font-weight: bold; }
+.tt-user { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px; border-radius: var(--r-sm); cursor: pointer; }
+.tt-user:hover { background: var(--paper); }
 .tt-user .avatar { width: 30px; height: 30px; border-radius: 50%; }
+.tt-user-name { font-size: 12px; color: var(--ink); font-weight: 500; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tt-row2 { display: flex; align-items: center; justify-content: space-between; padding: 8px 4%; min-height: 48px; border-top: 1px solid var(--line); flex-wrap: wrap; gap: 10px; }
 .tt-tabs { display: flex; align-items: center; gap: 4px; }
 .tt-tabs > button {

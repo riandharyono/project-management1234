@@ -14,7 +14,7 @@ const MORE_TABS = [
   { key: "documents", label: "Dokumen & File", icon: FolderOpen },
 ];
 
-export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, query, setQuery, searchResults, onSelectSearchResult }) {
+export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const activeTabLabel = [...MAIN_TABS, ...MORE_TABS].find(t => t.key === tab)?.label || "Ringkasan";
   return (
@@ -41,7 +41,10 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
             </button>
           )}
           <button className="icon-button" onClick={onToggleNotif} data-testid="notifications-button"><Bell size={18} />{notifUnread > 0 && <i className="tt-badge" data-testid="notif-unread-badge">{notifUnread}</i>}</button>
-          <div className="tt-user"><span className="avatar" style={{ background: avatarColor(user.id) }}>{initials(user.name)}</span></div>
+          <button className="tt-user" onClick={onOpenProfile} data-testid="open-profile-button" title="Edit profil">
+            <span className="avatar" style={{ background: avatarColor(user.id) }}>{initials(user.name)}</span>
+            <span className="tt-user-name">{user.name}</span>
+          </button>
           <button className="secondary tt-logout" onClick={onLogout} data-testid="topbar-logout-button">Keluar</button>
         </div>
       </div>

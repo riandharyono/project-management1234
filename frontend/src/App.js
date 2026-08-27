@@ -15,6 +15,7 @@ import { NewTaskModal } from "./components/NewTaskModal";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { MembersModal } from "./components/MembersModal";
 import { CreateTeamModal } from "./components/CreateTeamModal";
+import { ProfileModal } from "./components/ProfileModal";
 import { NotificationsPanel } from "./components/NotificationsPanel";
 import { UserAdminPage } from "./components/UserAdminPage";
 
@@ -108,10 +109,10 @@ function App() {
   useEffect(() => { client.get("/auth/me").then(r => setUser(r.data)).catch(() => { }).finally(() => setChecking(false)); }, []);
   useEffect(() => { const onExpired = () => setUser(null); window.addEventListener("session-expired", onExpired); return () => window.removeEventListener("session-expired", onExpired); }, []);
   if (checking) return <div className="loading-screen">Memuat workspace…</div>;
-  return user ? <Workspace user={user} onLogout={() => { client.post("/auth/logout"); setUser(null); }} /> : <Auth onLogin={setUser} />;
+  return user ? <Workspace user={user} onLogout={() => { client.post("/auth/logout"); setUser(null); }} onUserUpdate={setUser} /> : <Auth onLogin={setUser} />;
 }
 
-function Workspace({ user, onLogout }) {
+function Workspace({ user, onLogout, onUserUpdate }) {
   const urlParams = new URLSearchParams(window.location.search);
   const [teams, setTeams] = useState([]);
   const [activeTeamId, setActiveTeamId] = useState(urlParams.get("team") || null);
@@ -131,6 +132,7 @@ function Workspace({ user, onLogout }) {
   const [searchResults, setSearchResults] = useState([]);
   const [toast, setToast] = useState("");
   const [userAdminOpen, setUserAdminOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const activeTeam = teams.find(t => t.id === activeTeamId);
 
@@ -240,7 +242,7 @@ function Workspace({ user, onLogout }) {
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
           onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread} chatUnread={chatUnread}
           notifPermission={notifPermission} onEnableNotif={enableNotifications}
-          onToggleNotif={() => setNotifOpen(!notifOpen)} user={user} onLogout={onLogout}
+          onToggleNotif={() => setNotifOpen(!notifOpen)} user={user} onLogout={onLogout} onOpenProfile={() => setProfileOpen(true)}
           query={query} setQuery={setQuery} searchResults={searchResults}
           onSelectSearchResult={async r => { if (r.team_id !== activeTeamId) { setActiveTeamId(r.team_id); await loadTeamData(r.team_id); } setTab("tasks"); setTaskModal({ mode: "detail", task: r }); setQuery(""); setSearchResults([]); }} />
         {notifOpen && <NotificationsPanel items={notif.items} hasMore={notif.has_more} onLoadMore={loadMoreNotif} onRead={markNotifRead} onReadAll={markAllNotifRead} onSelect={openNotification} />}
@@ -299,6 +301,9 @@ function Workspace({ user, onLogout }) {
         )}
         {createTeamOpen && (
           <CreateTeamModal onClose={() => setCreateTeamOpen(false)} onCreated={(team) => { setCreateTeamOpen(false); loadTeams(); setActiveTeamId(team.id); }} />
+        )}
+        {profileOpen && (
+          <ProfileModal user={user} onClose={() => setProfileOpen(false)} onUpdated={onUserUpdate} />
         )}
         {toast && <div className="toast" data-testid="success-toast">{toast}</div>}
       </main>
