@@ -5,12 +5,18 @@ import requests
 from dotenv import dotenv_values
 
 
-_env_url = os.environ.get("REACT_APP_BACKEND_URL") or dotenv_values("/app/frontend/.env").get("REACT_APP_BACKEND_URL")
+_frontend_env = dotenv_values("/app/frontend/.env")
+_backend_env = dotenv_values("/app/backend/.env")
+
+_env_url = os.environ.get("REACT_APP_BACKEND_URL") or _frontend_env.get("REACT_APP_BACKEND_URL")
 if not _env_url:
     raise RuntimeError("REACT_APP_BACKEND_URL is missing from the environment and /app/frontend/.env")
 BASE_URL = _env_url.rstrip("/")
-ADMIN_EMAIL = "admin@northstar.team"
-ADMIN_PASSWORD = "Northstar123!"
+
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL") or _backend_env.get("ADMIN_EMAIL")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or _backend_env.get("ADMIN_PASSWORD")
+if not ADMIN_EMAIL or not ADMIN_PASSWORD:
+    raise RuntimeError("ADMIN_EMAIL/ADMIN_PASSWORD is missing from the environment and /app/backend/.env")
 
 
 def test_cors_preflight_restricts_unconfigured_origin():
