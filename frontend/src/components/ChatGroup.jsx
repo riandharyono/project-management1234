@@ -155,16 +155,19 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
                         onContextMenu={e => { e.preventDefault(); toggleReactionPicker(m.id); }}
                         onTouchStart={() => startPress(m.id)} onTouchEnd={endPress} onTouchMove={cancelPress}>
                         {!grouped && <div className="chat-bubble-head"><b>{m.author}</b></div>}
-                        {m.body && <p><MentionText body={m.body} mentionIds={m.mentions} members={members} /></p>}
-                        {m.attachment && isImageFile(m.attachment.filename) ? (
-                          <a className="chat-image-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
-                            <img src={fileUrl(m.attachment.id)} alt={m.attachment.filename} loading="lazy" />
-                          </a>
-                        ) : m.attachment && (
-                          <a className="chat-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
-                            <FileText size={14} /><span>{m.attachment.filename}</span><Download size={13} />
-                          </a>
-                        )}
+                        <div className="chat-bubble-surface">
+                          {m.body && <p><MentionText body={m.body} mentionIds={m.mentions} members={members} /></p>}
+                          {m.attachment && isImageFile(m.attachment.filename) ? (
+                            <a className="chat-image-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
+                              <img src={fileUrl(m.attachment.id)} alt={m.attachment.filename} loading="lazy" />
+                            </a>
+                          ) : m.attachment && (
+                            <a className="chat-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
+                              <FileText size={14} /><span>{m.attachment.filename}</span><Download size={13} />
+                            </a>
+                          )}
+                          <div className="chat-bubble-meta"><small title={new Date(m.created_at).toLocaleString("id-ID")}>{chatTime(m.created_at)}</small></div>
+                        </div>
                         {Object.entries(m.reactions || {}).some(([, users]) => users.length > 0) && (
                           <div className="chat-reactions" data-testid={`chat-reactions-${m.id}`}>
                             {Object.entries(m.reactions || {}).filter(([, users]) => users.length > 0).map(([emoji, users]) => (
@@ -177,12 +180,9 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
                             {REACTIONS.map(e => <button key={e} onClick={() => react(m.id, e)} data-testid={`reaction-option-${m.id}-${e}`}>{e}</button>)}
                           </div>
                         )}
-                        <div className="chat-bubble-foot">
-                          <small title={new Date(m.created_at).toLocaleString("id-ID")}>{chatTime(m.created_at)}</small>
-                          {(mine || myRole === "admin") && (
-                            <button className="icon-button chat-delete-button" onClick={() => removeMessage(m.id)} data-testid={`delete-chat-message-${m.id}`}><Trash2 size={12} /></button>
-                          )}
-                        </div>
+                        {(mine || myRole === "admin") && (
+                          <button className="icon-button chat-delete-button" onClick={() => removeMessage(m.id)} data-testid={`delete-chat-message-${m.id}`}><Trash2 size={11} /></button>
+                        )}
                       </div>
                     </div>
                   </div>
