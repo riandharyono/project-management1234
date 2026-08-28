@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Users, Search, Paperclip, FileText, Download, Trash2, Eraser, ArrowDown } from "lucide-react";
-import { client, initials, avatarColor, chatTime, dayLabel, isSameDay, isImageFile, fileUrl, apiError } from "../lib/api";
+import { client, chatTime, dayLabel, isSameDay, isImageFile, fileUrl, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
 
@@ -146,11 +147,12 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
                 const grouped = prev && prev.author_id === m.author_id && isSameDay(prev.created_at, m.created_at) && (new Date(m.created_at) - new Date(prev.created_at)) < GROUP_GAP_MS;
                 const showDateSep = !prev || !isSameDay(prev.created_at, m.created_at);
                 const mine = m.author_id === currentUser.id;
+                const author = members.find(x => x.id === m.author_id);
                 return (
                   <div key={m.id} className="chat-msg-wrap">
                     {showDateSep && <div className="chat-date-sep" data-testid={`chat-date-${m.id}`}><span>{dayLabel(m.created_at)}</span></div>}
                     <div className={`chat-bubble ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} data-testid={`chat-message-${m.id}`}>
-                      <span className="avatar" style={{ background: avatarColor(m.author_id), visibility: grouped ? "hidden" : "visible" }}>{!grouped && initials(m.author)}</span>
+                      <Avatar id={m.author_id} name={m.author} photo={author?.avatar} style={{ visibility: grouped ? "hidden" : "visible" }} />
                       <div className="chat-bubble-content"
                         onContextMenu={e => { e.preventDefault(); toggleReactionPicker(m.id); }}
                         onTouchStart={() => startPress(m.id)} onTouchEnd={endPress} onTouchMove={cancelPress}>
@@ -209,7 +211,7 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
             <div className="members-list">
               {filteredMembers.map(m => (
                 <div className="member-row" key={m.id} data-testid={`chat-member-${m.id}`}>
-                  <span className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>
+                  <Avatar id={m.id} name={m.name} photo={m.avatar} />
                   <div><b>{m.name}</b><small>{m.email}</small></div>
                 </div>
               ))}

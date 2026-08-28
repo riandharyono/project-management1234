@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, UserPlus, Trash2 } from "lucide-react";
-import { client, apiError, initials, avatarColor, LABEL_COLORS } from "../lib/api";
+import { client, apiError, LABEL_COLORS } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 export function MembersModal({ team, mode, members, myRole, currentUser, onClose, onChanged, onTeamUpdated, onTeamDeleted }) {
   const [tab, setTab] = useState(mode || "access");
@@ -43,7 +44,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
           <div className="members-list" data-testid="team-members-list">
             {members.map(m => (
               <div className="member-row" key={m.id} data-testid={`team-member-${m.id}`}>
-                <span className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>
+                <Avatar id={m.id} name={m.name} photo={m.avatar} />
                 <div><b>{m.name}</b><small>{m.email}</small></div>
                 {myRole === "admin" ? (
                   <>
@@ -58,7 +59,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
           <div className="members-list" data-testid="available-members-list">
             {available.length ? available.map(u => (
               <div className="member-row" key={u.id} data-testid={`available-member-${u.id}`}>
-                <span className="avatar" style={{ background: avatarColor(u.id) }}>{initials(u.name)}</span>
+                <Avatar id={u.id} name={u.name} photo={u.avatar} />
                 <div><b>{u.name}</b><small>{u.email}</small></div>
                 <button className="secondary" onClick={() => add(u.id)} data-testid={`add-member-${u.id}`}><UserPlus size={13} /> Tambah</button>
               </div>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { initials, avatarColor } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 export function MentionBox({ members, onSend, placeholder, rows = 2, testId }) {
   const [text, setText] = useState("");
@@ -51,7 +51,7 @@ export function MentionBox({ members, onSend, placeholder, rows = 2, testId }) {
         <div className="mention-dropdown" data-testid="mention-dropdown">
           {suggestions.map(m => (
             <button type="button" key={m.id} onClick={() => pick(m)} data-testid={`mention-option-${m.id}`}>
-              <span className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>{m.name}
+              <Avatar id={m.id} name={m.name} photo={m.avatar} />{m.name}
             </button>
           ))}
         </div>

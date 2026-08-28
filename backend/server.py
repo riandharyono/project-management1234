@@ -372,6 +372,30 @@ async def update_password(data: PasswordUpdate, user=Depends(current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(data.new_password)}})
     return {"ok": True}
 
+@api.post("/auth/me/avatar")
+async def upload_avatar(file: UploadFile = File(...), user=Depends(current_user)):
+    if file.content_type not in INLINE_SAFE_TYPES:
+        raise HTTPException(400, "Foto profil harus berformat PNG, JPEG, GIF, atau WEBP")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"Ukuran file melebihi batas maksimum {MAX_UPLOAD_BYTES // (1024 * 1024)}MB")
+    ext = re.sub(r"[^A-Za-z0-9]", "", file.filename.rsplit(".", 1)[-1])[:10] or "bin" if "." in file.filename else "bin"
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
+    result = put_object(path, data, file.content_type)
+    record = {"id": str(uuid.uuid4()), "storage_path": result["path"], "original_filename": file.filename,
+              "content_type": file.content_type, "size": result.get("size", len(data)),
+              "is_deleted": False, "uploaded_by": user["id"], "uploaded_by_name": user["name"], "created_at": now()}
+    await db.files.insert_one(record)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"avatar": record["id"]}})
+    user["avatar"] = record["id"]
+    return public_user(user)
+
+@api.delete("/auth/me/avatar")
+async def remove_avatar(user=Depends(current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"avatar": ""}})
+    user.pop("avatar", None)
+    return public_user(user)
+
 # ---------- teams ----------
 @api.get("/teams")
 async def list_teams(user=Depends(current_user)):

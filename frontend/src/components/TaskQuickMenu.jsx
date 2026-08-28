@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { X, ArrowRightLeft, Copy, MessageCircle, UserPlus, Tag, CalendarClock, Repeat, FileText, Pencil, Paperclip, Lock, Unlock, Archive, Trash2 } from "lucide-react";
-import { client, apiError, initials, avatarColor } from "../lib/api";
+import { client, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { RichTextEditor } from "./RichTextEditor";
 import { CopyMoveModal } from "./CopyMoveModal";
@@ -79,7 +80,7 @@ export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLab
             {members.map(m => (
               <label className="td-panel-row" key={m.id}>
                 <input type="checkbox" checked={(task.assignees || []).includes(m.id)} onChange={() => toggleAssignee(m.id)} data-testid={`quick-assignee-${m.id}`} />
-                <span className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>{m.name}
+                <Avatar id={m.id} name={m.name} photo={m.avatar} />{m.name}
               </label>
             ))}
             {!members.length && <p className="muted small">Belum ada anggota tim.</p>}

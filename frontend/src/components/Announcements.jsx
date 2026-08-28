@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
-import { client, initials, avatarColor, timeAgo, apiError } from "../lib/api";
+import { client, timeAgo, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 
-export function Announcements({ team, currentUser, myRole }) {
+export function Announcements({ team, members, currentUser, myRole }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", body: "" });
@@ -67,7 +68,7 @@ export function Announcements({ team, currentUser, myRole }) {
                   )}
                 </div>
                 <p>{a.body}</p>
-                <div className="announcement-meta"><span className="avatar" style={{ background: avatarColor(a.author_id) }}>{initials(a.author)}</span>{a.author} · {timeAgo(a.created_at)}</div>
+                <div className="announcement-meta"><Avatar id={a.author_id} name={a.author} photo={members?.find(m => m.id === a.author_id)?.avatar} />{a.author} · {timeAgo(a.created_at)}</div>
               </div>
             )}
           </div>

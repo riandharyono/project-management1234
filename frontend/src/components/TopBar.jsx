@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Search, Bell, ChevronDown, Settings, UserPlus, ShieldCheck, Users, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen } from "lucide-react";
-import { initials, avatarColor } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 const MAIN_TABS = [
   { key: "overview", label: "Ringkasan", icon: Users },
@@ -42,7 +42,7 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
           )}
           <button className="icon-button" onClick={onToggleNotif} data-testid="notifications-button"><Bell size={18} />{notifUnread > 0 && <i className="tt-badge" data-testid="notif-unread-badge">{notifUnread}</i>}</button>
           <button className="tt-user" onClick={onOpenProfile} data-testid="open-profile-button" title="Edit profil">
-            <span className="avatar" style={{ background: avatarColor(user.id) }}>{initials(user.name)}</span>
+            <Avatar id={user.id} name={user.name} photo={user.avatar} />
             <span className="tt-user-name">{user.name}</span>
           </button>
           <button className="secondary tt-logout" onClick={onLogout} data-testid="topbar-logout-button">Keluar</button>
@@ -72,7 +72,7 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
           <div className="tt-team-actions">
             {myRole === "admin" && <button className="secondary" onClick={onOpenAddMember} data-testid="add-member-button"><UserPlus size={14} /> Tambah Anggota</button>}
             <div className="tt-avatars">
-              {members.slice(0, 4).map(m => <span key={m.id} className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>)}
+              {members.slice(0, 4).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}
               {members.length > 4 && <span className="avatar more">+{members.length - 4}</span>}
             </div>
             <button className="secondary" onClick={onOpenAccess} data-testid="access-button"><ShieldCheck size={14} /> Akses</button>

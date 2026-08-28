@@ -1,5 +1,6 @@
 import { CalendarDays, Paperclip, CheckSquare, Lock, CheckCircle2, XCircle, Circle, CircleDot, MoreHorizontal } from "lucide-react";
-import { initials, avatarColor, fileUrl, shortDate } from "../lib/api";
+import { fileUrl, shortDate } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 const STAGE_ICON = { done: CheckCircle2, cancelled: XCircle, todo: Circle, progress: CircleDot };
 
@@ -34,7 +35,7 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
         {task.due_date && <span className={`due ${overdue ? "overdue" : done ? "is-done" : ""}`}><CalendarDays size={12} />{shortDate(task.due_date)}</span>}
         {checklistTotal > 0 && <span className="kb-checklist-badge"><CheckSquare size={12} />{checklistDone}/{checklistTotal}</span>}
         {!!(task.attachments || []).length && <span className="kb-attach-badge"><Paperclip size={12} />{task.attachments.length}</span>}
-        <div className="kb-avatars">{assignedMembers.slice(0, 3).map(m => <span key={m.id} className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>)}</div>
+        <div className="kb-avatars">{assignedMembers.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}</div>
       </div>
     </article>
   );

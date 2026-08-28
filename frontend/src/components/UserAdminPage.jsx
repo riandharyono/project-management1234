@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus, Trash2, ShieldCheck } from "lucide-react";
-import { client, initials, avatarColor, apiError } from "../lib/api";
+import { client, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 export function UserAdminPage({ currentUser }) {
   const [items, setItems] = useState([]);
@@ -45,7 +46,7 @@ export function UserAdminPage({ currentUser }) {
       <div className="members-list" data-testid="user-admin-list">
         {items.map(u => (
           <div className="member-row" key={u.id} data-testid={`user-admin-row-${u.id}`}>
-            <span className="avatar" style={{ background: avatarColor(u.id) }}>{initials(u.name)}</span>
+            <Avatar id={u.id} name={u.name} photo={u.avatar} />
             <div><b>{u.name}</b><small>{u.email}</small></div>
             {u.role === "admin" && <ShieldCheck size={14} className="muted" />}
             <select value={u.role} onChange={e => setRole(u.id, e.target.value)} disabled={u.id === currentUser.id} data-testid={`user-admin-role-${u.id}`}>

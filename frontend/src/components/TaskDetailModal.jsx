@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil } from "lucide-react";
-import { client, apiError, initials, avatarColor, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS } from "../lib/api";
+import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS } from "../lib/api";
+import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
 import { RichTextEditor, sanitizeNotesHtml } from "./RichTextEditor";
@@ -191,14 +192,14 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" />
             <p className="td-breadcrumb">di dalam list <b>{list?.name}</b> di <b>{team.name}</b></p>
             <div className="td-creator">
-              <span className="avatar" style={{ background: avatarColor(task.created_by) }}>{initials(task.created_by_name)}</span>
+              <Avatar id={task.created_by} name={task.created_by_name} photo={members.find(m => m.id === task.created_by)?.avatar} />
               <div><b>{task.created_by_name}</b><small>{timeAgo(task.created_at)}</small></div>
             </div>
 
             <div className="td-section">
               <div className="td-section-head"><span>ANGGOTA</span></div>
               <div className="td-avatars">
-                {assignedMembers.map(m => <span key={m.id} className="avatar" style={{ background: avatarColor(m.id) }} title={m.name}>{initials(m.name)}</span>)}
+                {assignedMembers.map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} title={m.name} />)}
                 <button className="td-add-avatar" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="task-add-member-button"><Plus size={13} /></button>
               </div>
               {panel === "members" && (
@@ -206,7 +207,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                   {members.map(m => (
                     <label key={m.id} className="td-panel-row">
                       <input type="checkbox" checked={(task.assignees || []).includes(m.id)} onChange={() => toggleAssignee(m.id)} data-testid={`task-member-toggle-${m.id}`} />
-                      <span className="avatar" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span>{m.name}
+                      <Avatar id={m.id} name={m.name} photo={m.avatar} />{m.name}
                     </label>
                   ))}
                 </div>
@@ -264,7 +265,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                         <span className={c.done ? "done" : ""}>{c.text}</span>
                       )}
                       <div className="td-item-meta">
-                        {itemAssignee && <span className="avatar tiny" title={itemAssignee.name} style={{ background: avatarColor(itemAssignee.id) }}>{initials(itemAssignee.name)}</span>}
+                        {itemAssignee && <Avatar id={itemAssignee.id} name={itemAssignee.name} photo={itemAssignee.avatar} className="tiny" title={itemAssignee.name} />}
                         {c.due_date && <span className={`td-item-due ${itemOverdue ? "overdue" : ""}`}>{shortDate(c.due_date)}</span>}
                         {c.attachment && <a className="td-item-attach" href={fileUrl(c.attachment.id)} target="_blank" rel="noreferrer" title={c.attachment.filename}><Paperclip size={11} /></a>}
                       </div>
@@ -281,7 +282,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                       <div className="td-item-picker" data-testid={`checklist-assign-picker-${c.id}`}>
                         {members.map(m => (
                           <button type="button" key={m.id} onClick={() => setItemAssignee(c.id, m.id)} data-testid={`checklist-assign-option-${c.id}-${m.id}`}>
-                            <span className="avatar tiny" style={{ background: avatarColor(m.id) }}>{initials(m.name)}</span> {m.name}
+                            <Avatar id={m.id} name={m.name} photo={m.avatar} className="tiny" /> {m.name}
                           </button>
                         ))}
                         {c.assignee_id && <button type="button" className="danger" onClick={() => setItemAssignee(c.id, null)} data-testid={`checklist-assign-clear-${c.id}`}>Hapus penugasan</button>}
@@ -324,7 +325,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
               <div className="td-section-head"><MessageCircle size={15} /><span>Komentar & Aktifitas</span><small>{comments.length}</small></div>
               {comments.map(c => (
                 <div className="comment" key={c.id} data-testid={`comment-${c.id}`}>
-                  <span className="avatar" style={{ background: avatarColor(c.author_id) }}>{initials(c.author)}</span>
+                  <Avatar id={c.author_id} name={c.author} photo={members.find(m => m.id === c.author_id)?.avatar} />
                   <p><b>{c.author}</b><MentionText body={c.body} mentionIds={c.mentions} members={members} /><small>{timeAgo(c.created_at)}</small></p>
                 </div>
               ))}

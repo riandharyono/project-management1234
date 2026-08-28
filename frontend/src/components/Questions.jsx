@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { HelpCircle, Plus, ChevronDown, ChevronUp, Clock, Trash2, Pencil } from "lucide-react";
-import { client, initials, avatarColor, timeAgo, apiError } from "../lib/api";
+import { client, initials, avatarColor, fileUrl, timeAgo, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
@@ -87,8 +88,8 @@ export function Questions({ team, members, currentUser, myRole }) {
           <div className="sf-recipients">
             {members.filter(m => m.id !== currentUser.id).map(m => (
               <button type="button" key={m.id} className={`avatar ${schedForm.recipients.includes(m.id) ? "sf-picked" : "sf-unpicked"}`}
-                style={{ background: avatarColor(m.id) }} title={m.name} onClick={() => toggleRecipient(m.id)} data-testid={`schedule-recipient-${m.id}`}>
-                {initials(m.name)}
+                style={m.avatar ? undefined : { background: avatarColor(m.id) }} title={m.name} onClick={() => toggleRecipient(m.id)} data-testid={`schedule-recipient-${m.id}`}>
+                {m.avatar ? <img src={fileUrl(m.avatar)} alt="" style={{ width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover" }} /> : initials(m.name)}
               </button>
             ))}
           </div>
@@ -141,7 +142,7 @@ export function Questions({ team, members, currentUser, myRole }) {
                   </div>
                 ) : <p>{q.body}</p>}
                 {q.answers.map(a => (
-                  <div className="comment" key={a.id}><span className="avatar" style={{ background: avatarColor(a.author_id) }}>{initials(a.author)}</span><p><b>{a.author}</b>{a.body}<small>{timeAgo(a.created_at)}</small></p></div>
+                  <div className="comment" key={a.id}><Avatar id={a.author_id} name={a.author} photo={members.find(m => m.id === a.author_id)?.avatar} /><p><b>{a.author}</b>{a.body}<small>{timeAgo(a.created_at)}</small></p></div>
                 ))}
                 <div className="comment-compose"><input value={answerText} onChange={e => setAnswerText(e.target.value)} placeholder="Tulis jawaban…" data-testid={`answer-input-${q.id}`} /><button className="primary" onClick={() => answer(q.id)} data-testid={`answer-submit-${q.id}`}>Kirim</button></div>
               </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Search, Plus, Home, LogOut, Users } from "lucide-react";
-import { initials } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onCreateTeam, user, onLogout, userAdminOpen, onOpenUserAdmin }) {
   const [q, setQ] = useState("");
@@ -34,7 +34,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onCreat
         {!filtered.length && <p className="ts-empty">Tim tidak ditemukan</p>}
       </nav>
       <div className="ts-bottom">
-        <div className="ts-user"><span className="avatar" style={{ background: "#E8531F" }}>{initials(user.name)}</span><span>{user.name}</span></div>
+        <div className="ts-user"><Avatar id={user.id} name={user.name} photo={user.avatar} /><span>{user.name}</span></div>
         <button onClick={onLogout} data-testid="sidebar-logout-button"><LogOut size={15} /> <span>Keluar</span></button>
       </div>
     </aside>

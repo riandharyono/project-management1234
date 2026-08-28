@@ -275,7 +275,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         ) : tab === "chat" ? (
           <ChatGroup team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "announcements" ? (
-          <Announcements team={activeTeam} currentUser={user} myRole={activeTeam.my_role} />
+          <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (
           <Schedule team={activeTeam} lists={lists} onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "questions" ? (

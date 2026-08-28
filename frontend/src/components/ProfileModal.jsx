@@ -1,10 +1,14 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useRef, useState } from "react";
+import { X, Camera } from "lucide-react";
 import { client, apiError } from "../lib/api";
+import { Avatar } from "./Avatar";
 
 export function ProfileModal({ user, onClose, onUpdated }) {
   const [name, setName] = useState(user.name);
   const [error, setError] = useState("");
+  const [photoError, setPhotoError] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInput = useRef(null);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -16,6 +20,23 @@ export function ProfileModal({ user, onClose, onUpdated }) {
     e.preventDefault();
     try { const r = await client.patch("/auth/me", { name }); onUpdated(r.data); onClose(); }
     catch (x) { setError(apiError(x)); }
+  };
+
+  const uploadPhoto = async file => {
+    if (!file) return;
+    setPhotoError(""); setUploadingPhoto(true);
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const r = await client.post("/auth/me/avatar", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      onUpdated(r.data);
+    } catch (x) { setPhotoError(apiError(x)); }
+    setUploadingPhoto(false);
+  };
+  const removePhoto = async () => {
+    setPhotoError(""); setUploadingPhoto(true);
+    try { const r = await client.delete("/auth/me/avatar"); onUpdated(r.data); }
+    catch (x) { setPhotoError(apiError(x)); }
+    setUploadingPhoto(false);
   };
 
   const submitPassword = async e => {
@@ -32,6 +53,18 @@ export function ProfileModal({ user, onClose, onUpdated }) {
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal" onClick={e => e.stopPropagation()} data-testid="profile-modal">
         <div className="modal-head"><div><span className="eyebrow">PROFIL SAYA</span><h2>Edit profil</h2></div><button className="icon-button" onClick={onClose} data-testid="close-profile-modal"><X size={18} /></button></div>
+
+        <div className="profile-photo-row">
+          <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden
+            onChange={e => uploadPhoto(e.target.files[0])} data-testid="profile-photo-input" />
+          <button type="button" className="profile-photo-button" onClick={() => photoInput.current.click()} disabled={uploadingPhoto} data-testid="change-photo-button">
+            <Avatar id={user.id} name={user.name} photo={user.avatar} className="profile-photo-avatar" />
+            <span className="profile-photo-overlay"><Camera size={16} /></span>
+          </button>
+          {user.avatar && <button type="button" className="danger-link" onClick={removePhoto} disabled={uploadingPhoto} data-testid="remove-photo-button">Hapus foto</button>}
+        </div>
+        {photoError && <div className="error" data-testid="photo-error">{photoError}</div>}
+
         <form onSubmit={submit}>
           <label>Nama<input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Nama Anda" data-testid="profile-name-input" /></label>
           <label>Email<input value={user.email} disabled data-testid="profile-email-input" /></label>
