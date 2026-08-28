@@ -351,6 +351,7 @@
 .chat-bubble-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .chat-bubble.mine .chat-bubble-head { flex-direction: row-reverse; }
 .chat-bubble-head b { font-size: 11px; color: var(--muted); }
+.chat-bubble-content { position: relative; }
 .chat-bubble p { background: var(--paper); border-radius: var(--r-md); padding: 9px 12px; font-size: 13px; color: var(--ink); word-break: break-word; }
 .chat-bubble.mine p { background: var(--accent); color: #fff; }
 .chat-bubble.mine .mention-tag { background: #ffffff33; color: #fff; }
@@ -360,9 +361,6 @@
 .chat-reactions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
 .reaction-pill { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 2px 8px; font-size: 11px; display: flex; align-items: center; gap: 4px; }
 .reaction-pill.mine { background: var(--accent-tint); border-color: var(--accent); color: var(--accent-hover); }
-.reaction-picker-wrap { position: relative; }
-.reaction-add { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #D0D5DD; background: var(--paper); color: var(--muted); display: grid; place-items: center; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
-.reaction-add:hover { background: var(--accent-tint); border-color: var(--accent); color: var(--accent-hover); }
 .reaction-picker {
   position: absolute; bottom: calc(100% + 6px); left: 0; background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r-md); box-shadow: 0 14px 30px #17140f22; padding: 6px; display: flex; gap: 2px; z-index: 20;

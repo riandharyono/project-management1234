@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Users, Search, Paperclip, FileText, Download, Trash2, Eraser, ArrowDown } from "lucide-react";
+import { Users, Search, Paperclip, FileText, Download, Trash2, Eraser, ArrowDown } from "lucide-react";
 import { client, initials, avatarColor, chatTime, dayLabel, isSameDay, isImageFile, fileUrl, apiError } from "../lib/api";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
@@ -16,6 +16,7 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [showJump, setShowJump] = useState(false);
+  const pressTimerRef = useRef(null);
   const attachRef = useRef(null);
   const bottomRef = useRef(null);
   const windowRef = useRef(null);
@@ -80,7 +81,23 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
     else setShowJump(true);
   }, [messages.length]);
 
+  useEffect(() => {
+    if (pickerFor === null) return;
+    const close = () => setPickerFor(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [pickerFor]);
+
   const jumpToBottom = () => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); setShowJump(false); };
+
+  const toggleReactionPicker = id => setPickerFor(cur => cur === id ? null : id);
+  const longPressFiredRef = useRef(false);
+  const startPress = id => {
+    longPressFiredRef.current = false;
+    pressTimerRef.current = setTimeout(() => { longPressFiredRef.current = true; toggleReactionPicker(id); }, 450);
+  };
+  const cancelPress = () => { if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; } };
+  const endPress = e => { if (longPressFiredRef.current) e.preventDefault(); cancelPress(); };
 
   const send = async (body, mentions) => { await client.post(`/teams/${team.id}/chat`, { body, mentions }); };
   const react = async (messageId, emoji) => {
@@ -134,7 +151,9 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
                     {showDateSep && <div className="chat-date-sep" data-testid={`chat-date-${m.id}`}><span>{dayLabel(m.created_at)}</span></div>}
                     <div className={`chat-bubble ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} data-testid={`chat-message-${m.id}`}>
                       <span className="avatar" style={{ background: avatarColor(m.author_id), visibility: grouped ? "hidden" : "visible" }}>{!grouped && initials(m.author)}</span>
-                      <div>
+                      <div className="chat-bubble-content"
+                        onContextMenu={e => { e.preventDefault(); toggleReactionPicker(m.id); }}
+                        onTouchStart={() => startPress(m.id)} onTouchEnd={endPress} onTouchMove={cancelPress}>
                         {!grouped && <div className="chat-bubble-head"><b>{m.author}</b></div>}
                         {m.body && <p><MentionText body={m.body} mentionIds={m.mentions} members={members} /></p>}
                         {m.attachment && isImageFile(m.attachment.filename) ? (
@@ -146,19 +165,18 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
                             <FileText size={14} /><span>{m.attachment.filename}</span><Download size={13} />
                           </a>
                         )}
-                        <div className="chat-reactions" data-testid={`chat-reactions-${m.id}`}>
-                          {Object.entries(m.reactions || {}).filter(([, users]) => users.length > 0).map(([emoji, users]) => (
-                            <button key={emoji} className={`reaction-pill ${users.includes(currentUser.id) ? "mine" : ""}`} onClick={() => react(m.id, emoji)} data-testid={`reaction-${m.id}-${emoji}`}>{emoji} {users.length}</button>
-                          ))}
-                          <div className="reaction-picker-wrap">
-                            <button className="reaction-add" onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} data-testid={`add-reaction-${m.id}`}><Plus size={14} /></button>
-                            {pickerFor === m.id && (
-                              <div className="reaction-picker" data-testid={`reaction-picker-${m.id}`}>
-                                {REACTIONS.map(e => <button key={e} onClick={() => react(m.id, e)} data-testid={`reaction-option-${m.id}-${e}`}>{e}</button>)}
-                              </div>
-                            )}
+                        {Object.entries(m.reactions || {}).some(([, users]) => users.length > 0) && (
+                          <div className="chat-reactions" data-testid={`chat-reactions-${m.id}`}>
+                            {Object.entries(m.reactions || {}).filter(([, users]) => users.length > 0).map(([emoji, users]) => (
+                              <button key={emoji} className={`reaction-pill ${users.includes(currentUser.id) ? "mine" : ""}`} onClick={() => react(m.id, emoji)} data-testid={`reaction-${m.id}-${emoji}`}>{emoji} {users.length}</button>
+                            ))}
                           </div>
-                        </div>
+                        )}
+                        {pickerFor === m.id && (
+                          <div className="reaction-picker" data-testid={`reaction-picker-${m.id}`}>
+                            {REACTIONS.map(e => <button key={e} onClick={() => react(m.id, e)} data-testid={`reaction-option-${m.id}-${e}`}>{e}</button>)}
+                          </div>
+                        )}
                         <div className="chat-bubble-foot">
                           <small title={new Date(m.created_at).toLocaleString("id-ID")}>{chatTime(m.created_at)}</small>
                           {(mine || myRole === "admin") && (
