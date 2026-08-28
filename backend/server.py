@@ -156,7 +156,9 @@ class TaskCreate(BaseModel):
     description: str = ""
     list_id: str
     priority: str = "Medium"
+    start_date: Optional[str] = None
     due_date: Optional[str] = None
+    due_time: Optional[str] = None
     repeat: str = "none"
     assignees: List[str] = []
     labels: List[str] = []
@@ -176,7 +178,9 @@ class TaskUpdate(BaseModel):
     list_id: Optional[str] = None
     order: Optional[int] = None
     priority: Optional[str] = None
+    start_date: Optional[str] = None
     due_date: Optional[str] = None
+    due_time: Optional[str] = None
     repeat: Optional[str] = None
     assignees: Optional[List[str]] = None
     labels: Optional[List[str]] = None

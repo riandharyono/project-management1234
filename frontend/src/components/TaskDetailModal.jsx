@@ -24,6 +24,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [error, setError] = useState("");
   const [assigneePickerFor, setAssigneePickerFor] = useState(null);
   const [datePickerFor, setDatePickerFor] = useState(null);
+  const [dateDraft, setDateDraft] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingItemText, setEditingItemText] = useState("");
   const [attachingItemId, setAttachingItemId] = useState(null);
@@ -49,6 +50,27 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   };
 
   const close = () => { onClose(); if (dirtyRef.current) onReload(); };
+
+  const toggleDatePanel = () => {
+    if (panel === "date") { setPanel(null); return; }
+    setDateDraft({
+      startEnabled: !!task.start_date, start_date: task.start_date || "",
+      dueEnabled: !!task.due_date, due_date: task.due_date || "", due_time: task.due_time || "",
+    });
+    setPanel("date");
+  };
+  const saveDates = async () => {
+    await patch({
+      start_date: dateDraft.startEnabled ? (dateDraft.start_date || null) : null,
+      due_date: dateDraft.dueEnabled ? (dateDraft.due_date || null) : null,
+      due_time: dateDraft.dueEnabled ? (dateDraft.due_time || null) : null,
+    });
+    setPanel(null);
+  };
+  const clearDates = async () => {
+    await patch({ start_date: null, due_date: null, due_time: null });
+    setPanel(null);
+  };
 
   const toggleAssignee = (id) => {
     const current = task.assignees || [];
@@ -315,7 +337,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <p className="td-sidebar-label">KELOLA TUGAS</p>
             <button className="td-sidebar-btn" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="sidebar-anggota-button"><UserPlus size={14} /> Anggota</button>
             <button className="td-sidebar-btn" onClick={() => setPanel(panel === "label" ? null : "label")} data-testid="sidebar-label-button"><Tag size={14} /> Label</button>
-            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "date" ? null : "date")} data-testid="sidebar-tanggal-button"><CalendarClock size={14} /> Tanggal</button>
+            <button className="td-sidebar-btn" onClick={toggleDatePanel} data-testid="sidebar-tanggal-button"><CalendarClock size={14} /> Tanggal</button>
             <button className="td-sidebar-btn" onClick={() => setPanel(panel === "repeat" ? null : "repeat")} data-testid="sidebar-ulangi-button"><Repeat size={14} /> Ulangi</button>
             <button className="td-sidebar-btn" onClick={() => setShowChecklist(true)} data-testid="sidebar-ceklis-button"><CheckSquare size={14} /> Ceklis</button>
             <button className="td-sidebar-btn" onClick={() => attachInput.current.click()} data-testid="sidebar-upload-button"><Paperclip size={14} /> Unggah File</button>
@@ -380,10 +402,30 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 )}
               </div>
             )}
-            {panel === "date" && (
-              <div className="td-panel" data-testid="date-panel">
-                <input type="date" value={task.due_date || ""} onChange={e => patch({ due_date: e.target.value })} data-testid="task-due-date-input" />
-                {task.due_date && <button className="secondary" onClick={() => patch({ due_date: null })} data-testid="clear-due-date-button">Hapus tanggal</button>}
+            {panel === "date" && dateDraft && (
+              <div className="td-panel td-date-panel" data-testid="date-panel">
+                <p className="td-panel-title">Ubah Tanggal</p>
+                <label className="td-panel-row">
+                  <input type="checkbox" checked={dateDraft.startEnabled} onChange={e => setDateDraft(d => ({ ...d, startEnabled: e.target.checked }))} data-testid="start-date-toggle" />
+                  Tanggal Mulai
+                </label>
+                {dateDraft.startEnabled && (
+                  <input type="date" value={dateDraft.start_date} onChange={e => setDateDraft(d => ({ ...d, start_date: e.target.value }))} data-testid="start-date-input" />
+                )}
+                <label className="td-panel-row">
+                  <input type="checkbox" checked={dateDraft.dueEnabled} onChange={e => setDateDraft(d => ({ ...d, dueEnabled: e.target.checked }))} data-testid="due-date-toggle" />
+                  Tenggat
+                </label>
+                {dateDraft.dueEnabled && (
+                  <div className="td-date-fields">
+                    <input type="date" value={dateDraft.due_date} onChange={e => setDateDraft(d => ({ ...d, due_date: e.target.value }))} data-testid="task-due-date-input" />
+                    <input type="time" value={dateDraft.due_time} onChange={e => setDateDraft(d => ({ ...d, due_time: e.target.value }))} data-testid="task-due-time-input" />
+                  </div>
+                )}
+                <div className="td-date-actions">
+                  <button className="primary" onClick={saveDates} data-testid="save-date-button">Simpan</button>
+                  <button className="btn-danger" onClick={clearDates} data-testid="clear-due-date-button">Hapus</button>
+                </div>
               </div>
             )}
             {panel === "repeat" && (
