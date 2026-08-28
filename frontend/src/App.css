@@ -99,6 +99,9 @@ h1, h2, h3, p { margin: 0; }
 .text-button { background: none; border: 0; color: var(--accent); font-size: 13px; font-weight: 700; margin: 24px auto 0; display: block; }
 .fineprint { font-size: 11px; color: #98A2B3; text-align: center; margin-top: 52px; }
 .error { background: var(--danger-tint); color: var(--danger); padding: 10px; border-radius: var(--r-sm); font-size: 12px; }
+.success { background: var(--success-tint); color: var(--success); padding: 10px; border-radius: var(--r-sm); font-size: 12px; }
+.profile-divider { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+.profile-subhead { font-size: 13px; margin: 0 0 12px; }
 .loading-screen { height: 100vh; display: grid; place-items: center; color: var(--accent); font-family: var(--font-mono); }
 
 /* ===== App shell (legacy single-sidebar path) ===== */

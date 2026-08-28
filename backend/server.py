@@ -137,6 +137,9 @@ class Credentials(BaseModel):
     password: str = Field(min_length=6)
 class ProfileUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+class PasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=6)
 class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
@@ -357,6 +360,13 @@ async def update_me(data: ProfileUpdate, user=Depends(current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {"name": name}})
     user["name"] = name
     return public_user(user)
+
+@api.patch("/auth/password")
+async def update_password(data: PasswordUpdate, user=Depends(current_user)):
+    if not verify_password(data.current_password, user["password_hash"]):
+        raise HTTPException(400, "Password saat ini salah")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(data.new_password)}})
+    return {"ok": True}
 
 # ---------- teams ----------
 @api.get("/teams")
