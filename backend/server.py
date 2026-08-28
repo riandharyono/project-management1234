@@ -708,6 +708,13 @@ async def get_chat(team_id: str, limit: int = Query(200, ge=1, le=500), user=Dep
     for m in msgs: m.setdefault("reactions", {})
     return msgs
 
+@api.delete("/teams/{team_id}/chat")
+async def clear_chat(team_id: str, user=Depends(current_user)):
+    await require_admin(team_id, user)
+    await db.chat_messages.delete_many({"team_id": team_id})
+    await broadcast_chat(team_id, {"type": "clear"})
+    return {"ok": True}
+
 @api.post("/teams/{team_id}/chat")
 async def post_chat(team_id: str, data: ChatInput, user=Depends(current_user)):
     await require_member(team_id, user)

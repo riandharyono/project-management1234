@@ -144,6 +144,7 @@ h1, h2, h3, p { margin: 0; }
 /* ===== Page layout ===== */
 .page { max-width: 1440px; margin: auto; padding: 28px 4.5% 48px; }
 .page-heading, .section-head, .recent-strip { display: flex; justify-content: space-between; align-items: end; }
+.chat-heading-actions { display: flex; align-items: center; gap: 10px; }
 .page-heading h1 { font-size: 28px; margin: 10px 0 5px; }
 .page-heading h1 span { color: var(--accent); font-size: 22px; }
 

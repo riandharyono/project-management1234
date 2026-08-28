@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Users, Search, Paperclip, FileText, Download, Trash2 } from "lucide-react";
+import { Plus, Users, Search, Paperclip, FileText, Download, Trash2, Eraser } from "lucide-react";
 import { client, initials, avatarColor, timeAgo, fileUrl, formatSize, apiError } from "../lib/api";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
@@ -41,6 +41,7 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
         const data = JSON.parse(e.data);
         if (data.type === "reaction") setMessages(m => m.map(msg => msg.id === data.message_id ? { ...msg, reactions: data.reactions } : msg));
         else if (data.type === "delete") setMessages(m => m.filter(msg => msg.id !== data.message_id));
+        else if (data.type === "clear") setMessages([]);
         else setMessages(m => m.some(x => x.id === data.id) ? m : [...m, data]);
       };
       ws.onclose = () => {
@@ -79,13 +80,22 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
     setMessages(m => m.filter(msg => msg.id !== id));
     try { await client.delete(`/chat/${id}`); } catch (e) { setError(apiError(e)); }
   };
+  const clearAll = async () => {
+    if (!window.confirm("Hapus SEMUA pesan chat di tim ini? Tindakan ini tidak bisa dibatalkan.")) return;
+    try { await client.delete(`/teams/${team.id}/chat`); setMessages([]); } catch (e) { setError(apiError(e)); }
+  };
   const filteredMembers = members.filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()));
 
   return (
     <div className="page chat-page">
       <div className="page-heading">
         <div><p className="eyebrow">CHAT GRUP</p><h1>{team.name}</h1><p className="muted">Diskusikan pekerjaan tim secara real-time.<span className={`ws-status ${connected ? "online" : "offline"}`} data-testid="chat-connection-status">{connected ? " • Terhubung" : " • Menyambungkan…"}</span></p></div>
-        <button className="secondary" onClick={() => setMembersOpen(!membersOpen)} data-testid="chat-members-toggle"><Users size={14} /> Anggota ({members.length})</button>
+        <div className="chat-heading-actions">
+          {myRole === "admin" && (
+            <button className="danger-link" onClick={clearAll} data-testid="clear-all-chat-button"><Eraser size={14} /> Kosongkan Chat</button>
+          )}
+          <button className="secondary" onClick={() => setMembersOpen(!membersOpen)} data-testid="chat-members-toggle"><Users size={14} /> Anggota ({members.length})</button>
+        </div>
       </div>
       <div className="chat-layout">
         <div className="chat-main">
