@@ -28,6 +28,8 @@ export const initials = name => (name || "?").trim().split(/\s+/).map(w => w[0])
 const PALETTE = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a", "#f4bd59"];
 export const avatarColor = seed => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 
+export const isImageFile = filename => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(filename || "");
+
 export const formatSize = bytes => { if (!bytes) return "0 B"; if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`; return `${(bytes / 1024 / 1024).toFixed(1)} MB`; };
 
 export const timeAgo = iso => {
@@ -41,5 +43,17 @@ export const timeAgo = iso => {
 };
 
 export const shortDate = iso => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "";
+
+export const chatTime = iso => iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
+
+export const isSameDay = (a, b) => a && b && new Date(a).toDateString() === new Date(b).toDateString();
+
+export const dayLabel = iso => {
+  if (!iso) return "";
+  const d = new Date(iso), today = new Date(), yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  if (isSameDay(iso, today)) return "Hari ini";
+  if (isSameDay(iso, yesterday)) return "Kemarin";
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
+};
 
 export const LABEL_COLORS = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a"];

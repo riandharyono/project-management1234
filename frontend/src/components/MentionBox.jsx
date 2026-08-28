@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { initials, avatarColor } from "../lib/api";
 
@@ -7,6 +7,13 @@ export function MentionBox({ members, onSend, placeholder, rows = 2, testId }) {
   const [tags, setTags] = useState([]);
   const [query, setQuery] = useState(null);
   const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }, [text]);
 
   const handleChange = e => {
     const val = e.target.value;

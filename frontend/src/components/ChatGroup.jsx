@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Users, Search, Paperclip, FileText, Download, Trash2, Eraser } from "lucide-react";
-import { client, initials, avatarColor, timeAgo, fileUrl, formatSize, apiError } from "../lib/api";
+import { Plus, Users, Search, Paperclip, FileText, Download, Trash2, Eraser, ArrowDown } from "lucide-react";
+import { client, initials, avatarColor, chatTime, dayLabel, isSameDay, isImageFile, fileUrl, apiError } from "../lib/api";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
 
 const REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "✅"];
+const GROUP_GAP_MS = 5 * 60 * 1000;
 
 export function ChatGroup({ team, members, currentUser, myRole }) {
   const [messages, setMessages] = useState([]);
@@ -14,8 +15,11 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
   const [memberSearch, setMemberSearch] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [showJump, setShowJump] = useState(false);
   const attachRef = useRef(null);
   const bottomRef = useRef(null);
+  const windowRef = useRef(null);
+  const atBottomRef = useRef(true);
   const wsRef = useRef(null);
   const retryRef = useRef(0);
   const closedRef = useRef(false);
@@ -23,6 +27,7 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
 
   useEffect(() => {
     closedRef.current = false;
+    atBottomRef.current = true; setShowJump(false);
     client.get(`/teams/${team.id}/chat`).then(r => setMessages(m => {
       const serverIds = new Set(r.data.map(x => x.id));
       const localOnly = m.filter(x => !serverIds.has(x.id));
@@ -57,7 +62,25 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
     connect();
     return () => { closedRef.current = true; wsRef.current?.close(); };
   }, [team.id]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+
+  useEffect(() => {
+    const el = windowRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      atBottomRef.current = nearBottom;
+      if (nearBottom) setShowJump(false);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [team.id]);
+
+  useEffect(() => {
+    if (atBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    else setShowJump(true);
+  }, [messages.length]);
+
+  const jumpToBottom = () => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); setShowJump(false); };
 
   const send = async (body, mentions) => { await client.post(`/teams/${team.id}/chat`, { body, mentions }); };
   const react = async (messageId, emoji) => {
@@ -99,50 +122,69 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
       </div>
       <div className="chat-layout">
         <div className="chat-main">
-          <div className="chat-window" data-testid="chat-window">
-            {messages.map(m => (
-              <div key={m.id} className={`chat-bubble ${m.author_id === currentUser.id ? "mine" : ""}`} data-testid={`chat-message-${m.id}`}>
-                <span className="avatar" style={{ background: avatarColor(m.author_id) }}>{initials(m.author)}</span>
-                <div>
-                  <div className="chat-bubble-head">
-                    <b>{m.author}</b>
-                    {(m.author_id === currentUser.id || myRole === "admin") && (
-                      <button className="icon-button chat-delete-button" onClick={() => removeMessage(m.id)} data-testid={`delete-chat-message-${m.id}`}><Trash2 size={12} /></button>
-                    )}
-                  </div>
-                  {m.body && <p><MentionText body={m.body} mentionIds={m.mentions} members={members} /></p>}
-                  {m.attachment && (
-                    <a className="chat-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
-                      <FileText size={14} /><span>{m.attachment.filename}</span><Download size={13} />
-                    </a>
-                  )}
-                  <div className="chat-reactions" data-testid={`chat-reactions-${m.id}`}>
-                    {Object.entries(m.reactions || {}).filter(([, users]) => users.length > 0).map(([emoji, users]) => (
-                      <button key={emoji} className={`reaction-pill ${users.includes(currentUser.id) ? "mine" : ""}`} onClick={() => react(m.id, emoji)} data-testid={`reaction-${m.id}-${emoji}`}>{emoji} {users.length}</button>
-                    ))}
-                    <div className="reaction-picker-wrap">
-                      <button className="reaction-add" onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} data-testid={`add-reaction-${m.id}`}><Plus size={14} /></button>
-                      {pickerFor === m.id && (
-                        <div className="reaction-picker" data-testid={`reaction-picker-${m.id}`}>
-                          {REACTIONS.map(e => <button key={e} onClick={() => react(m.id, e)} data-testid={`reaction-option-${m.id}-${e}`}>{e}</button>)}
+          <div className="chat-window-wrap">
+            <div className="chat-window" ref={windowRef} data-testid="chat-window">
+              {messages.map((m, i) => {
+                const prev = messages[i - 1];
+                const grouped = prev && prev.author_id === m.author_id && isSameDay(prev.created_at, m.created_at) && (new Date(m.created_at) - new Date(prev.created_at)) < GROUP_GAP_MS;
+                const showDateSep = !prev || !isSameDay(prev.created_at, m.created_at);
+                const mine = m.author_id === currentUser.id;
+                return (
+                  <div key={m.id} className="chat-msg-wrap">
+                    {showDateSep && <div className="chat-date-sep" data-testid={`chat-date-${m.id}`}><span>{dayLabel(m.created_at)}</span></div>}
+                    <div className={`chat-bubble ${mine ? "mine" : ""} ${grouped ? "grouped" : ""}`} data-testid={`chat-message-${m.id}`}>
+                      <span className="avatar" style={{ background: avatarColor(m.author_id), visibility: grouped ? "hidden" : "visible" }}>{!grouped && initials(m.author)}</span>
+                      <div>
+                        {!grouped && <div className="chat-bubble-head"><b>{m.author}</b></div>}
+                        {m.body && <p><MentionText body={m.body} mentionIds={m.mentions} members={members} /></p>}
+                        {m.attachment && isImageFile(m.attachment.filename) ? (
+                          <a className="chat-image-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
+                            <img src={fileUrl(m.attachment.id)} alt={m.attachment.filename} loading="lazy" />
+                          </a>
+                        ) : m.attachment && (
+                          <a className="chat-attachment" href={fileUrl(m.attachment.id)} target="_blank" rel="noreferrer" data-testid={`chat-attachment-${m.id}`}>
+                            <FileText size={14} /><span>{m.attachment.filename}</span><Download size={13} />
+                          </a>
+                        )}
+                        <div className="chat-reactions" data-testid={`chat-reactions-${m.id}`}>
+                          {Object.entries(m.reactions || {}).filter(([, users]) => users.length > 0).map(([emoji, users]) => (
+                            <button key={emoji} className={`reaction-pill ${users.includes(currentUser.id) ? "mine" : ""}`} onClick={() => react(m.id, emoji)} data-testid={`reaction-${m.id}-${emoji}`}>{emoji} {users.length}</button>
+                          ))}
+                          <div className="reaction-picker-wrap">
+                            <button className="reaction-add" onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)} data-testid={`add-reaction-${m.id}`}><Plus size={14} /></button>
+                            {pickerFor === m.id && (
+                              <div className="reaction-picker" data-testid={`reaction-picker-${m.id}`}>
+                                {REACTIONS.map(e => <button key={e} onClick={() => react(m.id, e)} data-testid={`reaction-option-${m.id}-${e}`}>{e}</button>)}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
+                        <div className="chat-bubble-foot">
+                          <small title={new Date(m.created_at).toLocaleString("id-ID")}>{chatTime(m.created_at)}</small>
+                          {(mine || myRole === "admin") && (
+                            <button className="icon-button chat-delete-button" onClick={() => removeMessage(m.id)} data-testid={`delete-chat-message-${m.id}`}><Trash2 size={12} /></button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <small>{timeAgo(m.created_at)}</small>
-                </div>
-              </div>
-            ))}
-            {!messages.length && <p className="muted">Belum ada percakapan. Mulai chat pertama!</p>}
-            <div ref={bottomRef} />
+                );
+              })}
+              {!messages.length && <p className="muted">Belum ada percakapan. Mulai chat pertama!</p>}
+              <div ref={bottomRef} />
+            </div>
+            {showJump && (
+              <button className="chat-jump-button" onClick={jumpToBottom} data-testid="chat-jump-to-bottom"><ArrowDown size={14} /> Pesan baru</button>
+            )}
           </div>
           {error && <div className="error">{error}</div>}
           <div className="chat-input-row">
             <input ref={attachRef} type="file" hidden onChange={e => sendAttachment(e.target.files[0])} data-testid="chat-attach-file-input" />
             <button type="button" className="icon-button chat-attach-button" onClick={() => attachRef.current.click()} disabled={uploading} data-testid="chat-attach-button"><Paperclip size={16} /></button>
-            <MentionBox members={members} onSend={send} placeholder="Ketik pesan, gunakan @ untuk menandai anggota…" rows={2} testId="chat-input" />
+            <MentionBox members={members} onSend={send} placeholder="Ketik pesan, gunakan @ untuk menandai anggota…" rows={1} testId="chat-input" />
           </div>
         </div>
+        {membersOpen && <div className="chat-members-backdrop" onClick={() => setMembersOpen(false)} />}
         {membersOpen && (
           <aside className="chat-members-panel" data-testid="chat-members-panel">
             <div className="ts-search"><Search size={13} /><input value={memberSearch} onChange={e => setMemberSearch(e.target.value)} placeholder="Cari anggota…" data-testid="chat-members-search" /></div>
