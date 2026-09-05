@@ -13,6 +13,7 @@ export const REPEAT_LABELS = { none: "Tidak berulang", daily: "Harian", weekly: 
 export function TaskDetailModal({ task: initialTask, team, teams, lists, members, teamLabels, onLabelCreated, myRole, currentUser, onClose, onReload }) {
   const [task, setTask] = useState(initialTask);
   const [comments, setComments] = useState([]);
+  const [activity, setActivity] = useState([]);
   const [panel, setPanel] = useState(null);
   const [editingNotes, setEditingNotes] = useState(false);
   const [title, setTitle] = useState(initialTask.title);
@@ -37,7 +38,10 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const dirtyRef = useRef(false);
   const confirm = useConfirm();
 
-  useEffect(() => { client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)); }, [task.id]);
+  useEffect(() => {
+    client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data));
+    client.get(`/tasks/${task.id}/activity`).then(r => setActivity(r.data || [])).catch(() => setActivity([]));
+  }, [task.id]);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
@@ -163,7 +167,11 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setAttachingItemId(null);
   };
 
-  const sendComment = async (body, mentions) => { const r = await client.post(`/tasks/${task.id}/comments`, { body, mentions }); setComments(c => [...c, r.data]); };
+  const sendComment = async (body, mentions) => {
+    const r = await client.post(`/tasks/${task.id}/comments`, { body, mentions });
+    setComments(c => [...c, r.data]);
+    client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
+  };
 
   const togglePrivate = () => patch({ is_private: !task.is_private });
   const archiveTask = async () => { await patch({ archived: true }); close(); };
@@ -338,6 +346,15 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 </div>
               ))}
               <MentionBox members={members} onSend={sendComment} placeholder="Tulis komentar, ketik @ untuk menandai anggota…" testId="comment-input" />
+              {!!activity.length && (
+                <div className="td-activity" data-testid="task-activity">
+                  {activity.map(a => (
+                    <p key={a.id} className="td-activity-row">
+                      <b>{a.user_name}</b> {a.detail || a.action} <small>{timeAgo(a.created_at)}</small>
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
             {error && <div className="error" data-testid="task-detail-error">{error}</div>}
           </div>

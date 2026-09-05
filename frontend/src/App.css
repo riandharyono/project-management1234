@@ -39,6 +39,29 @@
   --sky: var(--accent-tint);
 }
 
+html[data-theme="dark"] {
+  --paper: #12151A;
+  --surface: #1B1F27;
+  --sidebar: #161A21;
+  --sidebar-panel: #0E2A40;
+  --ink: #E8EAED;
+  --muted: #9AA3B2;
+  --line: #2A3140;
+  --accent: #5B8FC7;
+  --accent-hover: #7AA8D6;
+  --accent-tint: #1E3348;
+  --success-tint: #14352A;
+  --danger-tint: #3A1B18;
+  --warning-tint: #3A2C12;
+  --violet-tint: #241E3A;
+  --teal-tint: #173038;
+  --rose-tint: #3A1C28;
+}
+
+html, body, #root { background: var(--paper); color: var(--ink); }
+html[data-theme="dark"] .td-sidebar-btn { color: #E8EAED; }
+html[data-theme="dark"] input, html[data-theme="dark"] textarea, html[data-theme="dark"] select { color: var(--ink); }
+
 h1, h2, h3, strong, b { font-family: var(--font-heading); }
 h1, h2, h3, p { margin: 0; }
 .muted { color: var(--muted); font-size: 13px; }
@@ -220,7 +243,7 @@ h1, h2, h3, p { margin: 0; }
 .activity small { display: block; color: var(--muted); font-size: 10px; font-family: var(--font-mono); }
 
 .toast {
-  position: fixed; right: 25px; bottom: 25px; background: var(--ink); color: #fff;
+  position: fixed; right: 25px; bottom: 25px; background: #15181d; color: #fff;
   padding: 12px 18px; border-radius: var(--r-sm); font-size: 12px; box-shadow: 0 14px 30px #1a1d2333;
   animation: riseIn .25s ease both;
 }

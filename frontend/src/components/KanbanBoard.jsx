@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X } from "lucide-react";
-import { client, apiError } from "../lib/api";
+import { client, apiError, shortDate } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
 import { useConfirm } from "./ConfirmDialog";
+import { Avatar } from "./Avatar";
+import { priorityLabel, priorityKey } from "../lib/priority";
 
 export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onCreateTask, onReload }) {
   const [localTasks, setLocalTasks] = useState(tasks);
   const [localLists, setLocalLists] = useState(lists);
-  const [view, setView] = useState("kanban");
+  const [view, setView] = useState(() => { try { return localStorage.getItem(`pmng_view_${team.id}`) || "kanban"; } catch (e) { return "kanban"; } });
+  const [sort, setSort] = useState({ key: "due", dir: "asc" });
   const [menuFor, setMenuFor] = useState(null);
   const [quickMenuTask, setQuickMenuTask] = useState(null);
   const [renaming, setRenaming] = useState(null);
@@ -77,6 +80,22 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   };
 
   const handleDragEnd = (result) => result.type === "COLUMN" ? handleColumnDragEnd(result) : handleTaskDragEnd(result);
+  const setViewPersist = (next) => {
+    setView(next);
+    try { localStorage.setItem(`pmng_view_${team.id}`, next); } catch (e) { /* ignore */ }
+  };
+  const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" });
+  const tableRows = visibleLists.flatMap(list => byList(list.id).map(t => ({ ...t, listName: list.name, stage: stageOf(list) })));
+  const sortedRows = [...tableRows].sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    if (sort.key === "title") return a.title.localeCompare(b.title, "id") * dir;
+    if (sort.key === "list") return a.listName.localeCompare(b.listName, "id") * dir;
+    if (sort.key === "priority") {
+      const order = { High: 0, Medium: 1, Low: 2 };
+      return ((order[a.priority] ?? 9) - (order[b.priority] ?? 9)) * dir;
+    }
+    return (a.due_date || "9999").localeCompare(b.due_date || "9999") * dir;
+  });
 
   const createList = async () => {
     if (!newListName.trim()) return;
@@ -114,14 +133,14 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
             <button className="secondary" onClick={() => setFilterOpen(!filterOpen)} data-testid="filter-button"><Filter size={14} /> Filter</button>
             {filterOpen && (
               <div className="td-panel kb-filter-panel" data-testid="filter-panel">
-                <select value={filters.priority} onChange={e => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority-select"><option value="">Semua prioritas</option><option>Low</option><option>Medium</option><option>High</option></select>
+                <select value={filters.priority} onChange={e => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority-select"><option value="">Semua prioritas</option><option value="High">Tinggi</option><option value="Medium">Sedang</option><option value="Low">Rendah</option></select>
                 <select value={filters.assignee} onChange={e => setFilters({ ...filters, assignee: e.target.value })} data-testid="filter-assignee-select"><option value="">Semua anggota</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
               </div>
             )}
           </div>
           <div className="view-toggle">
-            <button className={view === "kanban" ? "selected" : ""} onClick={() => setView("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /></button>
-            <button className={view === "list" ? "selected" : ""} onClick={() => setView("list")} data-testid="list-view-button"><ListIcon size={14} /></button>
+            <button className={view === "kanban" ? "selected" : ""} onClick={() => setViewPersist("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /></button>
+            <button className={view === "list" ? "selected" : ""} onClick={() => setViewPersist("list")} data-testid="list-view-button"><ListIcon size={14} /></button>
           </div>
           <button className="secondary" onClick={openArchivedTasks} data-testid="archive-tasks-button"><Archive size={14} /> Arsip Tugas</button>
           {isAdmin && <button className="secondary" onClick={openArchivedLists} data-testid="archive-lists-button"><Archive size={14} /> Arsip List</button>}
@@ -196,8 +215,37 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
           </Droppable>
         </DragDropContext>
       ) : (
-        <div className="task-list" data-testid="task-list-view">
-          {visibleLists.map(list => byList(list.id).map(t => <TaskCard key={t.id} task={t} members={members} labels={labels} stage={stageOf(list)} onOpen={() => onOpenTask(t)} onQuickMenu={() => setQuickMenuTask(t)} />))}
+        <div className="task-table-wrap" data-testid="task-list-view">
+          <table className="task-table">
+            <thead>
+              <tr>
+                <th><button type="button" onClick={() => toggleSort("title")}>Tugas {sort.key === "title" ? (sort.dir === "asc" ? "↑" : "↓") : ""}</button></th>
+                <th><button type="button" onClick={() => toggleSort("list")}>List {sort.key === "list" ? (sort.dir === "asc" ? "↑" : "↓") : ""}</button></th>
+                <th><button type="button" onClick={() => toggleSort("priority")}>Prioritas</button></th>
+                <th>Anggota</th>
+                <th><button type="button" onClick={() => toggleSort("due")}>Tenggat {sort.key === "due" ? (sort.dir === "asc" ? "↑" : "↓") : ""}</button></th>
+                <th>Label</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map(t => {
+                const assigned = members.filter(m => (t.assignees || []).includes(m.id));
+                const chips = (t.labels || []).map(id => (labels || []).find(l => l.id === id)).filter(Boolean);
+                const overdue = t.due_date && t.stage !== "done" && t.due_date < new Date().toISOString().slice(0, 10);
+                return (
+                  <tr key={t.id} onClick={() => onOpenTask(t)} data-testid={`task-row-${t.id}`}>
+                    <td className="task-table-title">{t.title}</td>
+                    <td><span className="badge-status">{t.listName}</span></td>
+                    <td><span className={`kb-priority-dot ${priorityKey(t.priority)}`} /> {priorityLabel(t.priority)}</td>
+                    <td><div className="kb-avatars">{assigned.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}</div></td>
+                    <td>{t.due_date ? <span className={`due ${overdue ? "overdue" : ""}`}>{shortDate(t.due_date)}</span> : <span className="muted">—</span>}</td>
+                    <td className="tags">{chips.map(l => <span key={l.id} className="kb-label-chip" style={{ background: l.color + "26", color: l.color }}>{l.name}</span>)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!sortedRows.length && <p className="muted" style={{ padding: 20 }}>Belum ada tugas di papan ini.</p>}
         </div>
       )}
 

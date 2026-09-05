@@ -95,6 +95,16 @@ async def notify(user_id, type_, text, team_id=None, task_id=None):
     await broadcast_notif(user_id, {"type": "notification", "item": doc, "unread": unread})
     await send_push(user_id, NOTIF_PUSH_TITLES.get(type_, "Notifikasi Baru"), text)
 
+async def log_activity(task_id, user, action, detail="", team_id=None):
+    doc = {
+        "id": str(uuid.uuid4()), "task_id": task_id, "team_id": team_id,
+        "user_id": user["id"], "user_name": user.get("name") or "",
+        "action": action, "detail": detail, "created_at": now(),
+    }
+    await db.task_activity.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
 NOTIF_PUSH_TITLES = {"mention": "Disebut di Chat", "announcement": "Pengumuman Baru", "answer": "Pertanyaan Dijawab",
                       "assignment": "Ditugaskan ke Anda", "deadline": "Tenggat Tugas", "question": "Pertanyaan Rutin"}
 
@@ -230,6 +240,8 @@ class LabelPatch(BaseModel):
     color: Optional[str] = None
 class ReactionInput(BaseModel):
     emoji: str = Field(min_length=1)
+class DocumentPatch(BaseModel):
+    folder: Optional[str] = None
 
 DEFAULT_LISTS = ["To Do List", "Dikerjakan", "Selesai", "Batal"]
 
@@ -305,6 +317,7 @@ async def startup():
     _warn_if_default_secrets()
     await seed_admin()
     await db.tasks.create_index("team_id")
+    await db.task_activity.create_index("task_id")
     await db.comments.create_index("task_id")
     await db.login_attempts.create_index("identifier")
     await db.team_members.create_index([("team_id", 1), ("user_id", 1)], unique=True)
@@ -597,6 +610,7 @@ async def create_task(team_id: str, data: TaskCreate, user=Depends(current_user)
     task.update({"id": str(uuid.uuid4()), "team_id": team_id, "order": count, "checklist": [], "attachments": [],
                   "cover": None, "archived": False, "created_by": user["id"], "created_by_name": user["name"], "created_at": now(), "updated_at": now()})
     await db.tasks.insert_one(task); task.pop("_id", None)
+    await log_activity(task["id"], user, "created", f"membuat tugas \"{task['title']}\"", team_id=team_id)
     for a in task["assignees"]:
         if a != user["id"]: await notify(a, "assignment", f"{user['name']} menugaskan Anda ke \"{task['title']}\"", team_id=team_id, task_id=task["id"])
     return task
@@ -626,6 +640,20 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
             for a in new_assignees:
                 if a not in task.get("assignees", []) and a != user["id"]:
                     await notify(a, "assignment", f"{user['name']} menugaskan Anda ke \"{task['title']}\"", team_id=task["team_id"], task_id=task_id)
+        if "title" in updates and updates["title"] != task.get("title"):
+            await log_activity(task_id, user, "title", f"mengganti judul menjadi \"{updates['title']}\"", team_id=task["team_id"])
+        if "list_id" in updates and updates["list_id"] != task.get("list_id"):
+            lst = await db.lists.find_one({"id": updates["list_id"]}, {"_id": 0})
+            await log_activity(task_id, user, "moved", f"memindahkan ke {lst['name'] if lst else 'list lain'}", team_id=task["team_id"])
+        if "due_date" in updates and updates["due_date"] != task.get("due_date"):
+            label = updates["due_date"] or "tanpa tenggat"
+            await log_activity(task_id, user, "due", f"mengubah tenggat menjadi {label}", team_id=task["team_id"])
+        if "archived" in updates and updates["archived"] != task.get("archived"):
+            await log_activity(task_id, user, "archived", "mengarsipkan tugas" if updates["archived"] else "mengembalikan tugas dari arsip", team_id=task["team_id"])
+        if "assignees" in updates:
+            await log_activity(task_id, user, "assignees", "memperbarui anggota tugas", team_id=task["team_id"])
+        if "description" in updates:
+            await log_activity(task_id, user, "notes", "memperbarui catatan", team_id=task["team_id"])
     return await db.tasks.find_one({"id": task_id}, {"_id": 0})
 
 @api.post("/tasks/{task_id}/duplicate")
@@ -679,6 +707,7 @@ async def add_comment(task_id: str, data: CommentInput, user=Depends(current_use
     task, role = await load_visible_task(task_id, user)
     comment = {"id": str(uuid.uuid4()), "task_id": task_id, "body": data.body, "mentions": data.mentions, "author": user["name"], "author_id": user["id"], "created_at": now()}
     await db.comments.insert_one(comment); comment.pop("_id", None)
+    await log_activity(task_id, user, "comment", "menulis komentar", team_id=task["team_id"])
     for m in data.mentions:
         if m != user["id"]: await notify(m, "mention", f"{user['name']} menyebut Anda di \"{task['title']}\"", team_id=task["team_id"], task_id=task_id)
     return comment
@@ -687,7 +716,7 @@ async def add_comment(task_id: str, data: CommentInput, user=Depends(current_use
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
 @api.post("/files/upload")
-async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), kind: str = Query("attachment"), file: UploadFile = File(...), user=Depends(current_user)):
+async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), kind: str = Query("attachment"), folder: str = Query(""), file: UploadFile = File(...), user=Depends(current_user)):
     await require_member(team_id, user)
     if task_id: await load_visible_task(task_id, user)
     ext = re.sub(r"[^A-Za-z0-9]", "", file.filename.rsplit(".", 1)[-1])[:10] or "bin" if "." in file.filename else "bin"
@@ -703,14 +732,17 @@ async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(
     entry = {"id": record["id"], "filename": record["original_filename"], "content_type": record["content_type"], "size": record["size"], "created_at": record["created_at"]}
     if kind == "attachment" and task_id:
         await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": entry}})
+        await log_activity(task_id, user, "attachment", f"mengunggah {entry['filename']}", team_id=team_id)
     elif kind == "cover" and task_id:
         await db.tasks.update_one({"id": task_id}, {"$set": {"cover": record["id"]}})
+        await log_activity(task_id, user, "cover", "mengganti cover", team_id=team_id)
     else:
         await db.documents.insert_one({"id": str(uuid.uuid4()), "team_id": team_id, "file_id": record["id"], "filename": entry["filename"],
-                                         "content_type": entry["content_type"], "size": entry["size"], "uploaded_by_name": user["name"], "task_id": task_id, "created_at": now()})
+                                         "content_type": entry["content_type"], "size": entry["size"], "uploaded_by_name": user["name"], "task_id": task_id,
+                                         "folder": (folder or "").strip(), "created_at": now()})
     return entry
 
-INLINE_SAFE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+INLINE_SAFE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"}
 
 def _safe_download_filename(name):
     name = re.sub(r'[\r\n"]', "", name or "file").strip()
@@ -743,6 +775,23 @@ async def team_documents(team_id: str, user=Depends(current_user)):
                           "size": a["size"], "uploaded_by_name": t.get("created_by_name", ""), "uploaded_by": None, "task_id": t["id"], "task_title": t["title"], "created_at": a.get("created_at", t["created_at"])})
     docs.sort(key=lambda d: d["created_at"], reverse=True)
     return docs
+
+@api.patch("/documents/{document_id}")
+async def patch_document(document_id: str, data: DocumentPatch, user=Depends(current_user)):
+    doc = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not doc: raise HTTPException(404, "Dokumen tidak ditemukan")
+    await require_member(doc["team_id"], user)
+    updates = data.model_dump(exclude_unset=True)
+    if "folder" in updates:
+        updates["folder"] = (updates["folder"] or "").strip()
+    if updates:
+        await db.documents.update_one({"id": document_id}, {"$set": updates})
+    return await db.documents.find_one({"id": document_id}, {"_id": 0})
+
+@api.get("/tasks/{task_id}/activity")
+async def task_activity(task_id: str, user=Depends(current_user)):
+    task, role = await load_visible_task(task_id, user)
+    return await db.task_activity.find({"task_id": task_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 @api.delete("/documents/{document_id}")
 async def delete_document(document_id: str, user=Depends(current_user)):
@@ -1116,12 +1165,16 @@ async def delete_member(member_id: str, user=Depends(current_user)):
 
 @api.get("/search")
 async def search(q: str = "", user=Depends(current_user)):
-    if not q.strip(): return {"tasks": []}
+    if not q.strip(): return {"tasks": [], "documents": [], "teams": []}
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
     roles = {m["team_id"]: m["role"] for m in memberships}
+    team_ids = list(roles.keys())
     regex = {"$regex": re.escape(q), "$options": "i"}
-    tasks = await db.tasks.find({"team_id": {"$in": list(roles.keys())}, "$or": [{"title": regex}, {"description": regex}]}, {"_id": 0}).to_list(50)
-    return {"tasks": [t for t in tasks if task_visible(t, user, roles.get(t["team_id"]))]}
+    tasks = await db.tasks.find({"team_id": {"$in": team_ids}, "$or": [{"title": regex}, {"description": regex}]}, {"_id": 0}).to_list(30)
+    visible_tasks = [t for t in tasks if task_visible(t, user, roles.get(t["team_id"]))]
+    docs = await db.documents.find({"team_id": {"$in": team_ids}, "filename": regex}, {"_id": 0}).to_list(20)
+    teams = await db.teams.find({"id": {"$in": team_ids}, "name": regex}, {"_id": 0}).to_list(10)
+    return {"tasks": visible_tasks, "documents": docs, "teams": teams}
 
 @api.get("/")
 async def root(): return {"message": "Northstar Workspace API"}

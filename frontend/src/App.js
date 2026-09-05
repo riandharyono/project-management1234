@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
 import { CheckCircle2 } from "lucide-react";
 import { client, apiError } from "./lib/api";
@@ -19,6 +19,7 @@ import { ProfileModal } from "./components/ProfileModal";
 import { NotificationsPanel } from "./components/NotificationsPanel";
 import { UserAdminPage } from "./components/UserAdminPage";
 import { MyWork } from "./components/MyWork";
+import { CommandPalette } from "./components/CommandPalette";
 
 const NOTIF_TITLES = { mention: "Disebut di Chat", announcement: "Pengumuman Baru", answer: "Pertanyaan Dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Pertanyaan Rutin" };
 const ORIGINAL_TITLE = document.title;
@@ -134,6 +135,9 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [toast, setToast] = useState("");
   const [userAdminOpen, setUserAdminOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const skipUrl = useRef(false);
+  const bootUrl = useRef(true);
 
   const activeTeam = teams.find(t => t.id === activeTeamId);
 
@@ -204,21 +208,76 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   }, [notif.unread, chatUnread]);
   useEffect(() => { if (activeTeamId) loadTeamData(activeTeamId); }, [activeTeamId]);
   useEffect(() => {
+    const taskId = urlParams.get("task");
+    if (!taskId) return;
+    client.get(`/tasks/${taskId}`).then(r => {
+      skipUrl.current = true;
+      setActiveTeamId(r.data.team_id);
+      setTab("tasks");
+      setTaskModal({ mode: "detail", task: r.data });
+    }).catch(() => {});
+  }, []);
+  const taskIdInUrl = taskModal?.mode === "detail" ? taskModal.task?.id : null;
+  useEffect(() => {
     const params = new URLSearchParams();
-    if (activeTeamId) params.set("team", activeTeamId);
-    if (tab) params.set("tab", tab);
-    const qs = params.toString();
-    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [activeTeamId, tab]);
+    if (userAdminOpen) params.set("page", "users");
+    else {
+      if (activeTeamId) params.set("team", activeTeamId);
+      if (activeTeamId && tab) params.set("tab", tab);
+      if (taskIdInUrl) params.set("task", taskIdInUrl);
+    }
+    const next = params.toString() ? `?${params.toString()}` : window.location.pathname;
+    const current = window.location.pathname + window.location.search;
+    if (next === current) return;
+    const replace = bootUrl.current || skipUrl.current;
+    bootUrl.current = false;
+    skipUrl.current = false;
+    if (replace) window.history.replaceState(null, "", next);
+    else window.history.pushState(null, "", next);
+  }, [activeTeamId, tab, taskIdInUrl, userAdminOpen]);
+  useEffect(() => {
+    const onPop = () => {
+      const p = new URLSearchParams(window.location.search);
+      skipUrl.current = true;
+      setUserAdminOpen(p.get("page") === "users");
+      setActiveTeamId(p.get("team"));
+      setTab(p.get("tab") || "overview");
+      const task = p.get("task");
+      if (task) client.get(`/tasks/${task}`).then(r => setTaskModal({ mode: "detail", task: r.data })).catch(() => setTaskModal(null));
+      else setTaskModal(null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  useEffect(() => {
+    const onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     if (!query.trim()) { setSearchResults([]); return; }
-    const t = setTimeout(() => client.get("/search", { params: { q: query } }).then(r => setSearchResults(r.data.tasks)), 300);
+    const t = setTimeout(() => client.get("/search", { params: { q: query } }).then(r => setSearchResults(r.data.tasks || [])), 300);
     return () => clearTimeout(t);
   }, [query]);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(""), 2200); };
-  const selectTeam = id => { setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); };
-  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); };
+  const selectTeam = id => { setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); setTaskModal(null); };
+  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setTaskModal(null); };
+  const openTask = async (task) => {
+    if (task.team_id && task.team_id !== activeTeamId) {
+      setActiveTeamId(task.team_id);
+      await loadTeamData(task.team_id);
+    }
+    setUserAdminOpen(false);
+    setTab("tasks");
+    setTaskModal({ mode: "detail", task });
+  };
+  const closeTask = () => setTaskModal(null);
   const listsById = useMemo(() => Object.fromEntries(lists.map(l => [l.id, l])), [lists]);
 
   const openNotification = async n => {
@@ -245,25 +304,23 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           notifPermission={notifPermission} onEnableNotif={enableNotifications}
           onToggleNotif={() => setNotifOpen(!notifOpen)} user={user} onLogout={onLogout} onOpenProfile={() => setProfileOpen(true)}
           query={query} setQuery={setQuery} searchResults={searchResults}
-          onSelectSearchResult={async r => { if (r.team_id !== activeTeamId) { setActiveTeamId(r.team_id); await loadTeamData(r.team_id); } setTab("tasks"); setTaskModal({ mode: "detail", task: r }); setQuery(""); setSearchResults([]); }} />
+          onOpenPalette={() => setPaletteOpen(true)}
+          onSelectSearchResult={async r => { setQuery(""); setSearchResults([]); openTask(r); }} />
         {notifOpen && <NotificationsPanel items={notif.items} hasMore={notif.has_more} onLoadMore={loadMoreNotif} onRead={markNotifRead} onReadAll={markAllNotifRead} onSelect={openNotification} />}
 
         {userAdminOpen ? (
           <UserAdminPage currentUser={user} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
-            onOpenTask={async task => {
-              if (task.team_id !== activeTeamId) { setActiveTeamId(task.team_id); await loadTeamData(task.team_id); }
-              setTab("tasks"); setTaskModal({ mode: "detail", task });
-            }}
+            onOpenTask={openTask}
             onOpenMention={openNotification}
             onCreateTeam={() => setCreateTeamOpen(true)} />
         ) : tab === "overview" ? (
           <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab}
-            onOpenTask={task => setTaskModal({ mode: "detail", task })} />
+            onOpenTask={openTask} />
         ) : tab === "tasks" ? (
           <KanbanBoard team={activeTeam} teams={teams} lists={lists} tasks={tasks} members={members} labels={labels} myRole={activeTeam.my_role}
-            onOpenTask={(task) => setTaskModal({ mode: "detail", task })}
+            onOpenTask={openTask}
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "chat" ? (
@@ -271,7 +328,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         ) : tab === "announcements" ? (
           <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (
-          <Schedule team={activeTeam} lists={lists} onReload={() => loadTeamData(activeTeamId)} />
+          <Schedule team={activeTeam} lists={lists} onReload={() => loadTeamData(activeTeamId)} onOpenTask={openTask} />
         ) : tab === "questions" ? (
           <Questions team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "documents" ? (
@@ -285,7 +342,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         {taskModal?.mode === "detail" && activeTeam && (
           <TaskDetailModal task={taskModal.task} team={activeTeam} teams={teams} lists={lists} members={members} teamLabels={labels} myRole={activeTeam.my_role}
             onLabelCreated={(label) => setLabels(prev => [...prev, label])}
-            currentUser={user} onClose={() => setTaskModal(null)} onReload={() => loadTeamData(activeTeamId)} />
+            currentUser={user} onClose={closeTask} onReload={() => loadTeamData(activeTeamId)} />
         )}
         {membersModal && activeTeam && (
           <MembersModal team={activeTeam} mode={membersModal} members={members} myRole={activeTeam.my_role}
@@ -300,6 +357,19 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           <ProfileModal user={user} onClose={() => setProfileOpen(false)} onUpdated={onUserUpdate} />
         )}
         {toast && <div className="toast" data-testid="success-toast">{toast}</div>}
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          teams={teams}
+          team={activeTeam}
+          onSelectTeam={selectTeam}
+          onOpenTask={openTask}
+          onCreateTeam={() => setCreateTeamOpen(true)}
+          onCreateTask={() => { if (activeTeamId) setTaskModal({ mode: "new", listId: lists[0]?.id }); }}
+          onGoHQ={goHQ}
+          onTab={setTab}
+          onOpenDocuments={d => { if (d.team_id) { setActiveTeamId(d.team_id); setTab("documents"); } }}
+        />
       </main>
     </div>
   );

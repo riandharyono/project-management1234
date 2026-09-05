@@ -524,6 +524,63 @@
 .notif-load-more { width: 100%; text-align: center; border: 0; background: none; color: var(--accent); font-size: 11.5px; font-weight: 700; padding: 12px; }
 .notif-load-more:hover { background: var(--paper); }
 
+.tt-search { cursor: text; }
+.tt-kbd { font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+.cmdk-backdrop { z-index: 80; }
+.cmdk { width: min(560px, 94vw); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 24px 60px #1a1d2333; overflow: hidden; animation: modalIn .16s ease both; }
+.cmdk-search { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.cmdk-search input { border: 0; outline: 0; flex: 1; font-size: 15px; background: none; color: var(--ink); }
+.cmdk-search kbd { font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; }
+.cmdk-list { max-height: 380px; overflow: auto; padding: 6px; }
+.cmdk-list button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 9px 10px; border-radius: var(--r-sm); font-size: 13px; color: var(--ink); }
+.cmdk-list button.active, .cmdk-list button:hover { background: var(--accent-tint); }
+.cmdk-kind { font-family: var(--font-mono); font-size: 9px; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); width: 64px; flex-shrink: 0; }
+.cmdk-empty { padding: 24px; text-align: center; }
+
+.task-table-wrap { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: auto; }
+.task-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.task-table th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper); white-space: nowrap; }
+.task-table th button { border: 0; background: none; color: inherit; font: inherit; padding: 0; }
+.task-table td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.task-table tbody tr { cursor: pointer; }
+.task-table tbody tr:hover { background: var(--paper); }
+.task-table-title { font-weight: 600; color: var(--ink); }
+.task-table .kb-priority-dot { display: inline-block; margin-right: 6px; vertical-align: middle; }
+
+.notif-icon { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--paper); color: var(--muted); flex-shrink: 0; }
+.notif-icon.type-mention { background: var(--accent-tint); color: var(--accent); }
+.notif-icon.type-assignment { background: var(--violet-tint); color: var(--violet); }
+.notif-icon.type-announcement { background: var(--warning-tint); color: var(--warning); }
+.notif-icon.type-deadline { background: var(--danger-tint); color: var(--danger); }
+.notif-icon.type-answer, .notif-icon.type-question { background: var(--teal-tint); color: var(--teal); }
+.notif-kind { display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+
+.td-activity { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); display: grid; gap: 8px; }
+.td-activity-row { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.td-activity-row b { color: var(--ink); margin-right: 4px; }
+.td-activity-row small { font-family: var(--font-mono); font-size: 10px; margin-left: 6px; }
+
+.docs-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 18px; margin-top: 18px; }
+.docs-folders { display: grid; gap: 4px; align-content: start; }
+.docs-folders button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: var(--r-sm); font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.docs-folders button.active, .docs-folders button:hover { background: var(--accent-tint); color: var(--accent-hover); }
+.docs-add-folder { color: var(--accent) !important; }
+.docs-new-folder { display: grid; gap: 6px; }
+.docs-new-folder input { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; font-size: 12px; background: var(--surface); color: var(--ink); }
+.docs-open { border: 0; background: none; text-align: left; flex: 1; min-width: 0; }
+.docs-open b, .docs-open small { display: block; }
+.docs-move { border: 1px solid var(--line); border-radius: 6px; font-size: 11px; padding: 5px 6px; background: var(--surface); color: var(--muted); }
+.docs-preview { width: min(860px, 96vw); }
+.docs-preview img, .docs-preview iframe { width: 100%; min-height: 420px; border: 0; border-radius: var(--r-sm); background: var(--paper); }
+
+.calendar-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.calendar-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px; min-height: 420px; }
+.calendar-week-col { border: 1px dashed var(--line); border-radius: var(--r-sm); padding: 10px; min-height: 380px; display: flex; flex-direction: column; gap: 6px; }
+.calendar-week-col.today { background: var(--accent-tint); border-color: var(--accent); }
+.calendar-week-col header { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.calendar-task { cursor: grab; }
+
 /* ===== Responsive ===== */
 html, body, #root { overflow-x: hidden; }
 @media (max-width: 900px) {
@@ -565,6 +622,9 @@ html, body, #root { overflow-x: hidden; }
   .chat-bubble { max-width: 92%; }
   .hq-team-grid { grid-template-columns: 1fr; }
   .calendar-layout { grid-template-columns: 1fr; }
+  .docs-layout { grid-template-columns: 1fr; }
+  .calendar-week { grid-template-columns: 1fr; min-height: 0; }
+  .calendar-week-col { min-height: 0; }
 }
 
 @media (max-width: 860px) {

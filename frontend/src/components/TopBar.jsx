@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Avatar } from "./Avatar";
+import { applyTheme, readTheme } from "../lib/theme";
 
 const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
@@ -12,10 +13,12 @@ const TABS = [
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
-export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult }) {
+export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult, onOpenPalette }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(readTheme);
   const menuRef = useRef(null);
   const activeTabLabel = TABS.find(t => t.key === tab)?.label;
+  const toggleTheme = () => setTheme(applyTheme(theme === "dark" ? "light" : "dark"));
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -32,9 +35,10 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
           {team && <><b>/</b><span className="tt-current">{team.name}</span></>}
           {team && tab !== "overview" && activeTabLabel && <><b>/</b><span className="tt-current">{activeTabLabel}</span></>}
         </div>
-        <div className="tt-search">
+        <div className="tt-search" onClick={onOpenPalette} role="button">
           <Search size={14} />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Cari tugas…" data-testid="global-search-input" />
+          <input value={query} onChange={e => { setQuery(e.target.value); onOpenPalette?.(); }} onFocus={onOpenPalette} placeholder="Cari atau jalankan perintah…" data-testid="global-search-input" readOnly />
+          <kbd className="tt-kbd">Ctrl K</kbd>
           {searchResults?.length > 0 && (
             <div className="tt-search-results" data-testid="search-results">
               {searchResults.map(r => <button key={r.id} onClick={() => onSelectSearchResult(r)} data-testid={`search-result-${r.id}`}>{r.title}</button>)}
@@ -56,6 +60,9 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
             {menuOpen && (
               <div className="tt-user-menu" data-testid="user-menu">
                 <button onClick={() => { setMenuOpen(false); onOpenProfile(); }} data-testid="user-menu-profile"><User size={14} /> Profil</button>
+                <button onClick={toggleTheme} data-testid="theme-toggle-button">
+                  {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />} {theme === "dark" ? "Mode terang" : "Mode gelap"}
+                </button>
                 <button onClick={() => { setMenuOpen(false); onLogout(); }} data-testid="topbar-logout-button"><LogOut size={14} /> Keluar</button>
               </div>
             )}

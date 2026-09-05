@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { client, apiError } from "../lib/api";
+import { PRIORITIES } from "../lib/priority";
 
 export function NewTaskModal({ teamId, lists, listId, members, onClose, onCreated }) {
   const [form, setForm] = useState({ title: "", description: "", list_id: listId || lists[0]?.id, priority: "Medium", due_date: "", assignees: [] });
@@ -19,7 +20,7 @@ export function NewTaskModal({ teamId, lists, listId, members, onClose, onCreate
           <label>Deskripsi<textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} data-testid="new-task-description-input" /></label>
           <div className="form-grid">
             <label>List<select value={form.list_id} onChange={e => setForm({ ...form, list_id: e.target.value })} data-testid="new-task-list-select">{lists.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
-            <label>Prioritas<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} data-testid="new-task-priority-select"><option>Low</option><option>Medium</option><option>High</option></select></label>
+            <label>Prioritas<select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} data-testid="new-task-priority-select">{PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
             <label>Tenggat<input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} data-testid="new-task-due-date-input" /></label>
             <label>Anggota<select value={form.assignees[0] || ""} onChange={e => setForm({ ...form, assignees: e.target.value ? [e.target.value] : [] })} data-testid="new-task-assignee-select"><option value="">Belum ditugaskan</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label>
           </div>

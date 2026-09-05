@@ -8,8 +8,8 @@
 body {
   margin: 0;
   font-family: 'IBM Plex Sans', sans-serif;
-  background: #F4F6F8;
-  color: #1A1D23;
+  background: var(--paper, #F4F6F8);
+  color: var(--ink, #1A1D23);
   -webkit-font-smoothing: antialiased;
 }
 

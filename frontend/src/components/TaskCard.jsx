@@ -1,8 +1,7 @@
 import { CalendarDays, Paperclip, CheckSquare, Lock, MoreHorizontal } from "lucide-react";
 import { fileUrl, shortDate } from "../lib/api";
 import { Avatar } from "./Avatar";
-
-const PRIORITY_DOT = { high: "high", medium: "medium", low: "low", sedang: "medium" };
+import { priorityKey, priorityLabel } from "../lib/priority";
 
 export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "todo" }) {
   const done = stage === "done";
@@ -11,7 +10,7 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
   const checklistDone = (task.checklist || []).reduce((s, c) => s + (c.done ? 1 : 0) + (c.subitems || []).filter(x => x.done).length, 0);
   const checklistTotal = (task.checklist || []).reduce((s, c) => s + 1 + (c.subitems || []).length, 0);
   const overdue = task.due_date && !done && task.due_date < new Date().toISOString().slice(0, 10);
-  const pri = PRIORITY_DOT[(task.priority || "").toLowerCase()] || "medium";
+  const pri = priorityKey(task.priority);
   return (
     <article className="kb-card" onClick={onOpen} data-testid={`task-card-${task.id}`}>
       <span hidden data-testid={`task-stage-badge-${task.id}`}>{stage}</span>
@@ -22,7 +21,7 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
       )}
       {task.cover && <img src={fileUrl(task.cover)} className="kb-card-cover" alt="" />}
       <div className="kb-card-top">
-        <span className={`kb-priority-dot ${pri}`} title={task.priority} data-testid={`task-priority-${task.id}`} />
+        <span className={`kb-priority-dot ${pri}`} title={priorityLabel(task.priority)} data-testid={`task-priority-${task.id}`} />
         {task.is_private && <Lock size={12} className="kb-private-icon" />}
       </div>
       <h4>{task.title}</h4>
