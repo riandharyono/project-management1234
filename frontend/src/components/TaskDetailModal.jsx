@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil } from "lucide-react";
+import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
@@ -201,7 +201,12 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     <div className="modal-backdrop" onClick={close}>
       <section className="task-detail" data-testid="task-detail-modal" onClick={e => e.stopPropagation()}>
         <button className="icon-button td-close" onClick={close} data-testid="close-task-detail-button"><X size={19} /></button>
-        {task.cover && <img src={fileUrl(task.cover)} className="td-cover" alt="" />}
+        {task.cover && (
+          <div className="td-cover-wrap">
+            <img src={fileUrl(task.cover)} className="td-cover" alt="" />
+            <button className="td-cover-remove" onClick={() => patch({ cover: null })} data-testid="remove-cover-button">Hapus cover</button>
+          </div>
+        )}
         <div className="td-body">
           <div className="td-main">
             <button className={`td-status-dot ${list?.is_done ? "done" : ""}`} onClick={toggleComplete} data-testid="task-complete-toggle" />
@@ -210,6 +215,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <div className="td-creator">
               <Avatar id={task.created_by} name={task.created_by_name} photo={members.find(m => m.id === task.created_by)?.avatar} />
               <div><b>{task.created_by_name}</b><small>{timeAgo(task.created_at)}</small></div>
+              <span className="td-access"><ShieldCheck size={14} /> Akses</span>
             </div>
 
             <div className="td-section">

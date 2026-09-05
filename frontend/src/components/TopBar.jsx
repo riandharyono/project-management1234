@@ -31,9 +31,10 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
     <div className="team-top">
       <div className="tt-row1">
         <div className="tt-crumb">
-          <span onClick={onOpenHQ} data-testid="breadcrumb-home">Tugas saya</span>
-          {team && <><b>/</b><span className="tt-current">{team.name}</span></>}
-          {team && tab !== "overview" && activeTabLabel && <><b>/</b><span className="tt-current">{activeTabLabel}</span></>}
+          <span onClick={onOpenHQ} data-testid="breadcrumb-home">Beranda</span>
+          {team && <><b>›</b><span className="tt-current">{team.name}</span></>}
+          {team && tab === "tasks" && <><b>›</b><span className="tt-current">Tugas - Kanban</span></>}
+          {team && tab !== "overview" && tab !== "tasks" && activeTabLabel && <><b>›</b><span className="tt-current">{activeTabLabel}</span></>}
         </div>
         <div className="tt-search" onClick={onOpenPalette} role="button">
           <Search size={14} />

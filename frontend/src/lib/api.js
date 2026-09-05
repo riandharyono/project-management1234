@@ -25,7 +25,7 @@ export const fileUrl = id => `${process.env.REACT_APP_BACKEND_URL}/api/files/${i
 
 export const initials = name => (name || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
-const PALETTE = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a", "#f4bd59"];
+const PALETTE = ["#1B4A3A", "#2F6F4E", "#3D5A4A", "#245C4A", "#5A6B5E", "#40664F", "#1A3D32", "#4A6748"];
 export const avatarColor = seed => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 
 export const isImageFile = filename => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(filename || "");

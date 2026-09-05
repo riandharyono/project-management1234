@@ -297,7 +297,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         onCreateTeam={() => setCreateTeamOpen(true)} user={user}
         userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
         onOpenProfile={() => setProfileOpen(true)} />
-      <main className="content">
+      <main className="content" data-tab={userAdminOpen ? "users" : (activeTeam ? tab : "hq")}>
         <TopBar team={activeTeam} tab={tab} onTabChange={setTab} onOpenHQ={goHQ} members={members} myRole={activeTeam?.my_role}
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
           onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread} chatUnread={chatUnread}

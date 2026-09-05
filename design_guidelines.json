@@ -2,82 +2,89 @@
   "project_name": "Project Management",
   "created_by": "R",
   "theme_preference": "light",
-  "design_system_name": "Ledger",
+  "design_system_name": "Cicle",
   "typography": {
     "headings": "Manrope",
     "body": "IBM Plex Sans, sans-serif",
     "mono": "IBM Plex Mono, monospace",
     "hierarchy": {
-      "h1": "28px / 800 tracking-tight",
-      "h2": "20px / 700 tracking-tight",
-      "h3": "14px / 700",
+      "h1": "24px / 700",
+      "h2": "16px / 700",
+      "h3": "13.5px / 700",
       "body": "13px / 1.5",
-      "small": "11px / 600"
+      "small": "11.5px / 600"
     },
-    "guidelines": "Manrope for headings, IBM Plex Sans for body copy. IBM Plex Mono is the signature accent face for metadata: counts, dates, priority/status pills, stat numbers, kbd hints, breadcrumbs — it is what separates this from a generic dashboard."
+    "guidelines": "Manrope for titles, IBM Plex Sans for everything else. Keep type quiet like Cicle: 13–14px body, 13.5px column names, 14px card titles. Do not use mono on kanban chrome, breadcrumbs, or section labels."
   },
   "colors": {
-    "archetype": "Cool professional workspace — paper gray, blue accent",
+    "archetype": "Cicle-like workspace — light gray board, white cards, forest green, warm yellow selection",
     "variables": {
-      "--paper": "#F4F6F8",
+      "--paper": "#EFEFEF",
       "--surface": "#FFFFFF",
       "--sidebar": "#FFFFFF",
-      "--sidebar-panel": "#1B3A57",
-      "--ink": "#1A1D23",
-      "--muted": "#667085",
-      "--line": "#E5E8EE",
-      "--accent": "#3368A0",
-      "--accent-hover": "#285480",
-      "--accent-tint": "#E6F0F8",
-      "--success": "#1F7A52",
-      "--success-tint": "#E1F3E9",
-      "--danger": "#C63C2A",
-      "--danger-tint": "#FBE4DF",
-      "--warning": "#B9781A",
-      "--warning-tint": "#FBEEDA",
-      "--violet": "#6355C7",
-      "--violet-tint": "#EDEBFB",
-      "--teal": "#0E8A82",
-      "--teal-tint": "#E1F4F2",
-      "--rose": "#C23A63",
-      "--rose-tint": "#FBE3EA"
+      "--sidebar-panel": "#6B7585",
+      "--ink": "#2A2A2A",
+      "--muted": "#8A8A8A",
+      "--line": "#E4E4E4",
+      "--accent": "#1B4A3A",
+      "--accent-hover": "#14382C",
+      "--accent-tint": "#E7F0EC",
+      "--select": "#F6E7B0",
+      "--column": "#E6E6E6",
+      "--action": "#6B7585",
+      "--action-hover": "#5A6372",
+      "--success": "#2E9B5A",
+      "--success-tint": "#E3F6EA",
+      "--danger": "#E45B5B",
+      "--danger-tint": "#FDECEC",
+      "--warning": "#D4A017",
+      "--warning-tint": "#FBF3D5",
+      "--violet": "#7C5CFC",
+      "--violet-tint": "#F0ECFF",
+      "--teal": "#2F6F4E",
+      "--teal-tint": "#E3F0EA",
+      "--rose": "#E0447A",
+      "--rose-tint": "#FDE6EE"
     },
     "specific_adjustments": {
       "sidebar_bg": "#FFFFFF",
-      "sidebar_text_active": "#285480",
-      "sidebar_text_inactive": "#667085",
-      "sidebar_active_indicator": "2px solid var(--accent) inset-left",
-      "primary_button_bg": "#3368A0",
-      "primary_button_hover": "#285480",
-      "borders": "#E5E8EE",
-      "muted_text": "#667085"
+      "sidebar_text_active": "#2A2A2A",
+      "sidebar_text_inactive": "#6B6B6B",
+      "sidebar_active_row": "warm yellow #F6E7B0, no left accent bar",
+      "primary_button_bg": "#1B4A3A",
+      "primary_button_hover": "#14382C",
+      "task_action_buttons": "#6B7585 gray, white text, 8px radius",
+      "borders": "#E4E4E4",
+      "muted_text": "#8A8A8A",
+      "notif_badge": "#E8B923"
     },
-    "guidelines": "Cool paper gray (#F4F6F8) with white surfaces and a single blue accent (#3368A0). Sidebar is white with a tinted active row. Semantic colors (success/danger/warning) stay independent of brand color."
+    "guidelines": "Match Cicle contrast: almost-white sidebar, #EFEFEF board, #E6E6E6 columns, white cards with a 1px-soft shadow (no card border). Selected team is warm yellow, not a blue tint. Avatars are circular forest green. Task-detail action buttons are medium gray, not navy."
   },
   "spacing_and_layout": {
-    "strategy": "High Density Grid — Compact and Scannable",
+    "strategy": "Airy Cicle board — gray columns, white cards, compact chrome",
     "radius_scale": {
-      "sm": "6px (buttons, inputs, pills, tags)",
-      "md": "8px (cards, columns, panels)",
-      "lg": "12px (modals only)"
+      "sm": "8px (buttons, cards, pills)",
+      "md": "10px (columns, panels)",
+      "lg": "12px (modals)",
+      "pill": "20px (sidebar search, comment input)"
     },
-    "guidelines": "Cards are flat (1px border, no ambient shadow) at rest; elevation (lift + shadow) appears only on hover/focus. Keep padding compact and consistent with the existing density (task cards ~11px, page padding ~28px 4.5%)."
+    "guidelines": "Kanban has no page heading. Columns are 272px, 10px padding, 10px radius, no border. Cards 14px padding, 8px radius, soft shadow. Topbar row1 48px, tabs 42px with black underline. Task modal is wide, white, gray action stack on the right."
   },
   "motion": {
     "guidelines": "Every interactive element gets a targeted transition (never `transition: all`): buttons lift on hover and scale down slightly on press; tabs and nav items animate background/color; kanban cards, overview cards, and list rows fade+rise in on mount (`riseIn` keyframe); modals and dropdowns fade+scale in (`modalIn`); the unread notification dot pulses (`pulseDot`). Keyframes live in index.css and are reused across App.css/team.css/extra.css."
   },
   "components": {
     "kanban_cards": {
-      "guidelines": "Quiet cards: no floating badges. Priority is a 7px color dot. Due date is muted unless overdue. Menu appears on hover inside the card."
+      "guidelines": "White cards on gray columns, no border, soft shadow. Title 14px. Due date is plain gray unless overdue (red pill, white text) or done (green pill, white text). Circular avatar bottom-left. No visible priority dot. Menu appears on hover."
     },
     "sidebar": {
-      "guidelines": "White sidebar, no gradient. Active item uses accent-tint fill, accent-hover text, and a 2px accent inset-left indicator."
+      "guidelines": "White sidebar, pill search. Active item is warm yellow (#F6E7B0) with dark text and no inset bar. Team dots stay gray/team-color."
     },
     "topbar": {
-      "guidelines": "58px first row. Tabs are underline-style, all visible (no overflow menu). Account actions live in the avatar menu — no duplicate logout."
+      "guidelines": "48px first row. Breadcrumb: Beranda › tim › Tugas - Kanban. Tabs underline in ink, not accent. Filter/Kanban/Arsip sit in the kanban toolbar. Account actions live in the avatar menu."
     },
     "task_detail_modal": {
-      "guidelines": "Compact padding, low-profile inputs (8-10px). Mono font for breadcrumb, labels, and section eyebrows."
+      "guidelines": "Spacious white modal. Status circle + title + 'di dalam list X di tim Y'. Gray KELOLA TUGAS / AKSI buttons. Light filled dropzone, not dashed. Comment input is a pill."
     }
   },
   "instructions_to_main_agent": [
@@ -85,7 +92,7 @@
     "2. Do NOT change the LABEL_COLORS swatch palette values (CreateTeamModal.jsx / TaskDetailModal.jsx) — they are embedded in generated data-testid strings.",
     "3. All visual styling lives in App.css, extra.css, team.css and the font import in index.css — prefer editing those over adding inline styles or Tailwind classes to JSX.",
     "4. Keep class names stable; only change declarations inside existing rules or add new rules for a genuinely new class.",
-    "5. Reuse the CSS custom properties defined in App.css :root (--paper, --surface, --ink, --muted, --line, --accent, --accent-hover, --accent-tint, --success, --danger, --warning, --violet, --teal, --rose, --r-sm, --r-md, --r-lg, --font-heading, --font-body, --font-mono) instead of hardcoding new hex values."
+    "5. Reuse the CSS custom properties defined in App.css :root (--paper, --surface, --ink, --muted, --line, --accent, --accent-hover, --accent-tint, --select, --column, --action, --action-hover, --success, --danger, --warning, --violet, --teal, --rose, --r-sm, --r-md, --r-lg, --font-heading, --font-body, --font-mono) instead of hardcoding new hex values."
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
     "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends.",

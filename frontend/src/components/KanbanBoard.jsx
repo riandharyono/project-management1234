@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X } from "lucide-react";
+import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X, ListTodo, CheckCircle2, Ban } from "lucide-react";
 import { client, apiError, shortDate } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
@@ -46,6 +46,11 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const visibleLists = localLists.filter(l => !l.archived).sort((a, b) => a.order - b.order);
   const activeLists = visibleLists.filter(l => !l.is_done && !l.is_cancelled);
   const stageOf = (list) => list.is_done ? "done" : list.is_cancelled ? "cancelled" : activeLists[0]?.id === list.id ? "todo" : "progress";
+  const listStageIcon = (list) => list.is_done
+    ? <CheckCircle2 size={15} />
+    : list.is_cancelled
+    ? <Ban size={15} />
+    : <ListTodo size={15} />;
   const byList = id => localTasks.filter(t => t.list_id === id && !t.archived
     && (!filters.priority || t.priority === filters.priority)
     && (!filters.assignee || (t.assignees || []).includes(filters.assignee))
@@ -127,7 +132,6 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   return (
     <div className="page kanban-page">
       <div className="kb-toolbar">
-        <div><h1>Tugas</h1><p className="muted">Papan {team.name}</p></div>
         <div className="kb-toolbar-actions">
           <div className="kb-filter-wrap">
             <button className="secondary" onClick={() => setFilterOpen(!filterOpen)} data-testid="filter-button"><Filter size={14} /> Filter</button>
@@ -139,8 +143,8 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
             )}
           </div>
           <div className="view-toggle">
-            <button className={view === "kanban" ? "selected" : ""} onClick={() => setViewPersist("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /></button>
-            <button className={view === "list" ? "selected" : ""} onClick={() => setViewPersist("list")} data-testid="list-view-button"><ListIcon size={14} /></button>
+            <button className={view === "kanban" ? "selected" : ""} onClick={() => setViewPersist("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /> Kanban</button>
+            <button className={view === "list" ? "selected" : ""} onClick={() => setViewPersist("list")} data-testid="list-view-button"><ListIcon size={14} /> List</button>
           </div>
           <button className="secondary" onClick={openArchivedTasks} data-testid="archive-tasks-button"><Archive size={14} /> Arsip Tugas</button>
           {isAdmin && <button className="secondary" onClick={openArchivedLists} data-testid="archive-lists-button"><Archive size={14} /> Arsip List</button>}
@@ -156,8 +160,9 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                 {visibleLists.map((list, colIdx) => (
                   <Draggable draggableId={`col-${list.id}`} index={colIdx} key={list.id} isDragDisabled={!isAdmin}>
                     {(colProvided) => (
-                      <div className="kb-column" data-testid={`kanban-column-${list.id}`} ref={colProvided.innerRef} {...colProvided.draggableProps}>
+                      <div className={`kb-column stage-${stageOf(list)}`} data-testid={`kanban-column-${list.id}`} ref={colProvided.innerRef} {...colProvided.draggableProps}>
                         <div className="kb-column-head" {...colProvided.dragHandleProps}>
+                          <span className="kb-stage-icon">{listStageIcon(list)}</span>
                           {renaming === list.id ? (
                             <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={() => renameList(list.id)} onKeyDown={e => e.key === "Enter" && renameList(list.id)} data-testid={`rename-list-input-${list.id}`} />
                           ) : (<b>{list.name}</b>)}
