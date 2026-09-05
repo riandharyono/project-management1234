@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { UserPlus, Trash2, ShieldCheck } from "lucide-react";
 import { client, apiError } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { useConfirm } from "./ConfirmDialog";
 
 export function UserAdminPage({ currentUser }) {
+  const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "member" });
@@ -22,7 +24,10 @@ export function UserAdminPage({ currentUser }) {
   };
 
   const setRole = async (id, role) => { await client.patch(`/members/${id}`, { role }); load(); };
-  const remove = async id => { if (window.confirm("Hapus akun ini secara permanen? Pengguna akan keluar dari semua tim.")) { await client.delete(`/members/${id}`); load(); } };
+  const remove = async id => {
+    const ok = await confirm({ title: "Hapus akun ini?", body: "Pengguna akan keluar dari semua tim. Tindakan ini permanen.", confirmLabel: "Hapus akun", danger: true });
+    if (ok) { await client.delete(`/members/${id}`); load(); }
+  };
 
   return (
     <div className="page">

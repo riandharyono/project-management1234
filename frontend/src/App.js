@@ -18,6 +18,7 @@ import { CreateTeamModal } from "./components/CreateTeamModal";
 import { ProfileModal } from "./components/ProfileModal";
 import { NotificationsPanel } from "./components/NotificationsPanel";
 import { UserAdminPage } from "./components/UserAdminPage";
+import { MyWork } from "./components/MyWork";
 
 const NOTIF_TITLES = { mention: "Disebut di Chat", announcement: "Pengumuman Baru", answer: "Pertanyaan Dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Pertanyaan Rutin" };
 const ORIGINAL_TITLE = document.title;
@@ -82,14 +83,14 @@ function Auth({ onLogin }) {
     <main className="auth-shell">
       <section className="auth-brand">
         <div className="brand-mark">P</div>
-        <p className="eyebrow">PROJECT MANAGEMENT · CREATED BY R</p>
+        <p className="eyebrow">WORKSPACE</p>
         <h1>Kerja tim, <em>lebih terarah.</em></h1>
         <p className="auth-copy">Satu ruang kerja untuk menyusun prioritas, menjaga ritme, dan menyelesaikan hal penting bersama tim Anda.</p>
         <div className="auth-signal"><CheckCircle2 size={18} /> Semua progres tim, terlihat jelas</div>
       </section>
       <section className="auth-panel">
-        <div className="mobile-logo"><div className="brand-mark">P</div><b>Project Management</b></div>
-        <p className="eyebrow">SELAMAT DATANG KEMBALI</p>
+        <div className="mobile-logo"><div className="brand-mark">P</div><b>Project</b></div>
+        <p className="eyebrow">SELAMAT DATANG</p>
         <h2>Masuk ke ruang kerja Anda</h2>
         <p className="muted">Lanjutkan pekerjaan terbaik Anda hari ini.</p>
         <form onSubmit={submit} data-testid="auth-form">
@@ -138,8 +139,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
 
   const loadTeams = () => client.get("/teams").then(r => {
     setTeams(r.data);
-    if (activeTeamId && !r.data.some(t => t.id === activeTeamId)) setActiveTeamId(r.data[0]?.id || null);
-    else if (!activeTeamId && r.data.length) setActiveTeamId(r.data[0].id);
+    if (activeTeamId && !r.data.some(t => t.id === activeTeamId)) setActiveTeamId(null);
   });
   const loadTeamData = (teamId) => Promise.all([
     client.get(`/teams/${teamId}/lists`), client.get(`/teams/${teamId}/tasks`), client.get(`/teams/${teamId}/members`), client.get(`/teams/${teamId}/labels`)
@@ -217,7 +217,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   }, [query]);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(""), 2200); };
-  const selectTeam = id => { setActiveTeamId(id); setTab("overview"); setUserAdminOpen(false); };
+  const selectTeam = id => { setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); };
   const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); };
   const listsById = useMemo(() => Object.fromEntries(lists.map(l => [l.id, l])), [lists]);
 
@@ -235,8 +235,9 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   return (
     <div className="app-frame">
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
-        onCreateTeam={() => setCreateTeamOpen(true)} user={user} onLogout={onLogout}
-        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }} />
+        onCreateTeam={() => setCreateTeamOpen(true)} user={user}
+        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
+        onOpenProfile={() => setProfileOpen(true)} />
       <main className="content">
         <TopBar team={activeTeam} tab={tab} onTabChange={setTab} onOpenHQ={goHQ} members={members} myRole={activeTeam?.my_role}
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
@@ -250,23 +251,16 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         {userAdminOpen ? (
           <UserAdminPage currentUser={user} />
         ) : !activeTeam ? (
-          <div className="page">
-            <div className="page-heading">
-              <div><p className="eyebrow">BERANDA</p><h1>Selamat datang, {user.name}</h1><p className="muted">Pilih tim untuk mulai bekerja, atau buat tim baru.</p></div>
-              <button className="primary" onClick={() => setCreateTeamOpen(true)} data-testid="hq-create-team-button">+ Buat Tim</button>
-            </div>
-            <div className="hq-team-grid" data-testid="hq-team-grid">
-              {teams.map(t => (
-                <div className="hq-team-card" key={t.id} onClick={() => selectTeam(t.id)} data-testid={`hq-team-card-${t.id}`}>
-                  <span className="hq-team-dot" style={{ background: t.color }} />
-                  <b>{t.name}</b><small>{t.member_count} anggota</small>
-                </div>
-              ))}
-              {!teams.length && <p className="muted">Anda belum memiliki tim. Buat tim pertama Anda.</p>}
-            </div>
-          </div>
+          <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
+            onOpenTask={async task => {
+              if (task.team_id !== activeTeamId) { setActiveTeamId(task.team_id); await loadTeamData(task.team_id); }
+              setTab("tasks"); setTaskModal({ mode: "detail", task });
+            }}
+            onOpenMention={openNotification}
+            onCreateTeam={() => setCreateTeamOpen(true)} />
         ) : tab === "overview" ? (
-          <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab} />
+          <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab}
+            onOpenTask={task => setTaskModal({ mode: "detail", task })} />
         ) : tab === "tasks" ? (
           <KanbanBoard team={activeTeam} teams={teams} lists={lists} tasks={tasks} members={members} labels={labels} myRole={activeTeam.my_role}
             onOpenTask={(task) => setTaskModal({ mode: "detail", task })}
@@ -288,7 +282,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           <NewTaskModal teamId={activeTeamId} lists={lists} listId={taskModal.listId} members={members}
             onClose={() => setTaskModal(null)} onCreated={() => { setTaskModal(null); loadTeamData(activeTeamId); showToast("Tugas berhasil dibuat"); }} />
         )}
-        {taskModal?.mode === "detail" && (
+        {taskModal?.mode === "detail" && activeTeam && (
           <TaskDetailModal task={taskModal.task} team={activeTeam} teams={teams} lists={lists} members={members} teamLabels={labels} myRole={activeTeam.my_role}
             onLabelCreated={(label) => setLabels(prev => [...prev, label])}
             currentUser={user} onClose={() => setTaskModal(null)} onReload={() => loadTeamData(activeTeamId)} />
@@ -300,7 +294,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onTeamDeleted={() => { setMembersModal(null); goHQ(); loadTeams(); showToast("Tim berhasil dihapus"); }} />
         )}
         {createTeamOpen && (
-          <CreateTeamModal onClose={() => setCreateTeamOpen(false)} onCreated={(team) => { setCreateTeamOpen(false); loadTeams(); setActiveTeamId(team.id); }} />
+          <CreateTeamModal onClose={() => setCreateTeamOpen(false)} onCreated={(team) => { setCreateTeamOpen(false); loadTeams(); setActiveTeamId(team.id); setTab("tasks"); }} />
         )}
         {profileOpen && (
           <ProfileModal user={user} onClose={() => setProfileOpen(false)} onUpdated={onUserUpdate} />

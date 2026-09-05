@@ -4,11 +4,13 @@ import { client, chatTime, dayLabel, isSameDay, isImageFile, fileUrl, apiError }
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
+import { useConfirm } from "./ConfirmDialog";
 
 const REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "✅"];
 const GROUP_GAP_MS = 5 * 60 * 1000;
 
 export function ChatGroup({ team, members, currentUser, myRole }) {
+  const confirm = useConfirm();
   const [messages, setMessages] = useState([]);
   const [connected, setConnected] = useState(false);
   const [pickerFor, setPickerFor] = useState(null);
@@ -117,12 +119,14 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
     setUploading(false);
   };
   const removeMessage = async id => {
-    if (!window.confirm("Hapus pesan ini?")) return;
+    const ok = await confirm({ title: "Hapus pesan ini?", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
     setMessages(m => m.filter(msg => msg.id !== id));
     try { await client.delete(`/chat/${id}`); } catch (e) { setError(apiError(e)); }
   };
   const clearAll = async () => {
-    if (!window.confirm("Hapus SEMUA pesan chat di tim ini? Tindakan ini tidak bisa dibatalkan.")) return;
+    const ok = await confirm({ title: "Kosongkan seluruh chat?", body: "Semua pesan di tim ini akan dihapus. Tindakan ini tidak bisa dibatalkan.", confirmLabel: "Kosongkan", danger: true });
+    if (!ok) return;
     try { await client.delete(`/teams/${team.id}/chat`); setMessages([]); } catch (e) { setError(apiError(e)); }
   };
   const filteredMembers = members.filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()));

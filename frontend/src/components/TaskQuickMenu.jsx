@@ -6,6 +6,7 @@ import { MentionBox } from "./MentionBox";
 import { RichTextEditor } from "./RichTextEditor";
 import { CopyMoveModal } from "./CopyMoveModal";
 import { REPEAT_LABELS } from "./TaskDetailModal";
+import { useConfirm } from "./ConfirmDialog";
 
 export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLabels, myRole, onClose, onReload }) {
   const [task, setTask] = useState(initialTask);
@@ -16,6 +17,7 @@ export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLab
   const dirtyRef = useRef(false);
   const fileInput = useRef(null);
   const isAdmin = myRole === "admin";
+  const confirm = useConfirm();
 
   const patch = async (data) => {
     dirtyRef.current = true;
@@ -53,7 +55,8 @@ export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLab
   const togglePrivate = () => patch({ is_private: !task.is_private });
   const archiveTask = async () => { await patch({ archived: true }); close(); };
   const deleteTask = async () => {
-    if (!window.confirm("Hapus tugas ini secara permanen?")) return;
+    const ok = await confirm({ title: "Hapus tugas ini?", body: "Tugas akan dihapus secara permanen.", confirmLabel: "Hapus tugas", danger: true });
+    if (!ok) return;
     await client.delete(`/tasks/${task.id}`);
     dirtyRef.current = true;
     close();

@@ -4,6 +4,7 @@ import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, 
 import { client, apiError } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
+import { useConfirm } from "./ConfirmDialog";
 
 export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onCreateTask, onReload }) {
   const [localTasks, setLocalTasks] = useState(tasks);
@@ -21,6 +22,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [archivedLists, setArchivedLists] = useState([]);
   const [error, setError] = useState("");
+  const confirm = useConfirm();
   const loadOnboardDismissed = () => { try { return new Set(JSON.parse(localStorage.getItem(`pmng_onboard_${team.id}`) || "[]")); } catch (e) { return new Set(); } };
   const [onboardDismissed, setOnboardDismissed] = useState(loadOnboardDismissed);
   const isAdmin = myRole === "admin";
@@ -91,7 +93,8 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     setMenuFor(null);
   };
   const deleteList = async (id) => {
-    if (window.confirm("Hapus list ini beserta semua tugasnya?")) {
+    const ok = await confirm({ title: "Hapus list ini?", body: "Semua tugas di list ini akan ikut terhapus.", confirmLabel: "Hapus list", danger: true });
+    if (ok) {
       try { await client.delete(`/lists/${id}`); onReload(); } catch (e) { setError(apiError(e)); }
     }
     setMenuFor(null);
@@ -105,7 +108,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   return (
     <div className="page kanban-page">
       <div className="kb-toolbar">
-        <div><p className="eyebrow">TUGAS</p><h1>Tugas - Kanban</h1></div>
+        <div><h1>Tugas</h1><p className="muted">Papan {team.name}</p></div>
         <div className="kb-toolbar-actions">
           <div className="kb-filter-wrap">
             <button className="secondary" onClick={() => setFilterOpen(!filterOpen)} data-testid="filter-button"><Filter size={14} /> Filter</button>

@@ -6,6 +6,7 @@ import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
 import { RichTextEditor, sanitizeNotesHtml } from "./RichTextEditor";
 import { CopyMoveModal } from "./CopyMoveModal";
+import { useConfirm } from "./ConfirmDialog";
 
 export const REPEAT_LABELS = { none: "Tidak berulang", daily: "Harian", weekly: "Mingguan", monthly: "Bulanan" };
 
@@ -34,6 +35,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const coverInput = useRef(null);
   const checklistAttachInput = useRef(null);
   const dirtyRef = useRef(false);
+  const confirm = useConfirm();
 
   useEffect(() => { client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)); }, [task.id]);
   useEffect(() => {
@@ -165,7 +167,13 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
 
   const togglePrivate = () => patch({ is_private: !task.is_private });
   const archiveTask = async () => { await patch({ archived: true }); close(); };
-  const deleteTask = async () => { if (!window.confirm("Hapus tugas ini secara permanen?")) return; await client.delete(`/tasks/${task.id}`); dirtyRef.current = true; close(); };
+  const deleteTask = async () => {
+    const ok = await confirm({ title: "Hapus tugas ini?", body: "Tugas akan dihapus secara permanen.", confirmLabel: "Hapus tugas", danger: true });
+    if (!ok) return;
+    await client.delete(`/tasks/${task.id}`);
+    dirtyRef.current = true;
+    close();
+  };
   const startRenameLabel = (l) => { setRenamingLabel(l.id); setRenameText(l.name); };
   const saveRenameLabel = async () => {
     if (renameText.trim()) { await client.patch(`/labels/${renamingLabel}`, { name: renameText.trim() }); dirtyRef.current = true; onReload(); }

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { FileText, Plus, Download, Trash2 } from "lucide-react";
+import { FileText, Plus, Download, Trash2, FolderOpen } from "lucide-react";
 import { client, fileUrl, formatSize, timeAgo } from "../lib/api";
+import { useConfirm } from "./ConfirmDialog";
+import { EmptyState } from "./EmptyState";
 
 export function Documents({ team, currentUser, myRole }) {
   const [items, setItems] = useState([]);
   const inputRef = useRef(null);
+  const confirm = useConfirm();
 
   const load = () => client.get(`/teams/${team.id}/documents`).then(r => setItems(r.data));
   useEffect(() => { load(); }, [team.id]);
@@ -19,7 +22,8 @@ export function Documents({ team, currentUser, myRole }) {
 
   const canDelete = d => d.task_id ? true : (d.uploaded_by === currentUser.id || myRole === "admin");
   const remove = async d => {
-    if (!window.confirm(`Hapus "${d.filename}"?`)) return;
+    const ok = await confirm({ title: `Hapus "${d.filename}"?`, body: "Berkas ini akan dihapus dari tim.", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
     if (d.task_id) await client.delete(`/tasks/${d.task_id}/attachments/${d.file_id}`);
     else await client.delete(`/documents/${d.id}`);
     load();
@@ -41,7 +45,14 @@ export function Documents({ team, currentUser, myRole }) {
             {canDelete(d) && <button className="icon-button" onClick={() => remove(d)} data-testid={`delete-document-${d.id}`}><Trash2 size={15} /></button>}
           </div>
         ))}
-        {!items.length && <p className="muted">Belum ada dokumen.</p>}
+        {!items.length && (
+          <EmptyState
+            icon={<FolderOpen size={22} />}
+            title="Belum ada dokumen"
+            body="Unggah berkas tim, atau lampirkan file di tugas — semuanya akan terkumpul di sini."
+            action={<button className="primary" onClick={() => inputRef.current.click()}><Plus size={16} /> Unggah file pertama</button>}
+          />
+        )}
       </div>
     </div>
   );

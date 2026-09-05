@@ -17,18 +17,18 @@
     "guidelines": "Manrope for headings, IBM Plex Sans for body copy. IBM Plex Mono is the signature accent face for metadata: counts, dates, priority/status pills, stat numbers, kbd hints, breadcrumbs — it is what separates this from a generic dashboard."
   },
   "colors": {
-    "archetype": "Ledger — warm editorial workbench, high contrast",
+    "archetype": "Cool professional workspace — paper gray, blue accent",
     "variables": {
-      "--paper": "#F6F4EF",
+      "--paper": "#F4F6F8",
       "--surface": "#FFFFFF",
-      "--sidebar": "#0C0B09",
-      "--sidebar-panel": "#17140F",
-      "--ink": "#17140F",
-      "--muted": "#6B6355",
-      "--line": "#E3DFD3",
-      "--accent": "#E8531F",
-      "--accent-hover": "#C7431A",
-      "--accent-tint": "#FDE4D8",
+      "--sidebar": "#FFFFFF",
+      "--sidebar-panel": "#1B3A57",
+      "--ink": "#1A1D23",
+      "--muted": "#667085",
+      "--line": "#E5E8EE",
+      "--accent": "#3368A0",
+      "--accent-hover": "#285480",
+      "--accent-tint": "#E6F0F8",
       "--success": "#1F7A52",
       "--success-tint": "#E1F3E9",
       "--danger": "#C63C2A",
@@ -43,16 +43,16 @@
       "--rose-tint": "#FBE3EA"
     },
     "specific_adjustments": {
-      "sidebar_bg": "#0C0B09",
-      "sidebar_text_active": "#FFFFFF",
-      "sidebar_text_inactive": "#A99C87",
+      "sidebar_bg": "#FFFFFF",
+      "sidebar_text_active": "#285480",
+      "sidebar_text_inactive": "#667085",
       "sidebar_active_indicator": "2px solid var(--accent) inset-left",
-      "primary_button_bg": "#E8531F",
-      "primary_button_hover": "#C7431A",
-      "borders": "#E3DFD3",
-      "muted_text": "#6B6355"
+      "primary_button_bg": "#3368A0",
+      "primary_button_hover": "#285480",
+      "borders": "#E5E8EE",
+      "muted_text": "#667085"
     },
-    "guidelines": "One confident accent (Ember orange) replaces the previous generic blue. Warm paper background (#F6F4EF) with white surfaces on top creates layering instead of flat white-on-white. Sidebar is a flat near-black (no gradient). Semantic colors (success/danger/warning) and the violet/teal/rose overview-card tones all sit on the same warm-neutral base."
+    "guidelines": "Cool paper gray (#F4F6F8) with white surfaces and a single blue accent (#3368A0). Sidebar is white with a tinted active row. Semantic colors (success/danger/warning) stay independent of brand color."
   },
   "spacing_and_layout": {
     "strategy": "High Density Grid — Compact and Scannable",
@@ -68,13 +68,13 @@
   },
   "components": {
     "kanban_cards": {
-      "guidelines": "Tight information density, mono font for meta (due date, counts). Solid 1px var(--line) borders; hover lifts the card and darkens the border, never changes at rest."
+      "guidelines": "Quiet cards: no floating badges. Priority is a 7px color dot. Due date is muted unless overdue. Menu appears on hover inside the card."
     },
     "sidebar": {
-      "guidelines": "Flat near-black background, no gradient. Active state uses a dark panel fill plus a crisp 2px accent (Ember) inset-left indicator and white text."
+      "guidelines": "White sidebar, no gradient. Active item uses accent-tint fill, accent-hover text, and a 2px accent inset-left indicator."
     },
     "topbar": {
-      "guidelines": "58px height to preserve vertical space for the board/lists. Active tab uses the accent tint background + accent-hover text."
+      "guidelines": "58px first row. Tabs are underline-style, all visible (no overflow menu). Account actions live in the avatar menu — no duplicate logout."
     },
     "task_detail_modal": {
       "guidelines": "Compact padding, low-profile inputs (8-10px). Mono font for breadcrumb, labels, and section eyebrows."

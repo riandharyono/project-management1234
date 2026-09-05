@@ -1,6 +1,6 @@
 {
-  "short_name": "Project Mgmt",
-  "name": "Project Management | created by R",
+  "short_name": "Project",
+  "name": "Project Workspace",
   "description": "Satu ruang kerja untuk menyusun prioritas, menjaga ritme, dan menyelesaikan pekerjaan tim.",
   "icons": [
     { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
@@ -12,5 +12,5 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#3368A0",
-  "background_color": "#F2EFE7"
+  "background_color": "#F4F6F8"
 }

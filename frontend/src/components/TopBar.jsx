@@ -1,29 +1,36 @@
-import { useState } from "react";
-import { Search, Bell, ChevronDown, Settings, UserPlus, ShieldCheck, Users, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User } from "lucide-react";
 import { Avatar } from "./Avatar";
 
-const MAIN_TABS = [
-  { key: "overview", label: "Ringkasan", icon: Users },
+const TABS = [
+  { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Tugas", icon: ClipboardList },
-  { key: "chat", label: "Chat Grup", icon: MessageSquare },
+  { key: "chat", label: "Chat", icon: MessageSquare },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
-];
-const MORE_TABS = [
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Pertanyaan", icon: HelpCircle },
-  { key: "documents", label: "Dokumen & File", icon: FolderOpen },
+  { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
 export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult }) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const activeTabLabel = [...MAIN_TABS, ...MORE_TABS].find(t => t.key === tab)?.label || "Ringkasan";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const activeTabLabel = TABS.find(t => t.key === tab)?.label;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = e => { if (!menuRef.current?.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpen]);
+
   return (
     <div className="team-top">
       <div className="tt-row1">
         <div className="tt-crumb">
-          <span onClick={onOpenHQ} data-testid="breadcrumb-home">Beranda</span>
-          {team && <><b>›</b><span className="tt-current">{team.name}</span></>}
-          {team && tab !== "overview" && <><b>›</b><span className="tt-current">{activeTabLabel}</span></>}
+          <span onClick={onOpenHQ} data-testid="breadcrumb-home">Tugas saya</span>
+          {team && <><b>/</b><span className="tt-current">{team.name}</span></>}
+          {team && tab !== "overview" && activeTabLabel && <><b>/</b><span className="tt-current">{activeTabLabel}</span></>}
         </div>
         <div className="tt-search">
           <Search size={14} />
@@ -37,40 +44,35 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
         <div className="tt-actions">
           {notifPermission === "default" && (
             <button className="secondary enable-notif-button" onClick={onEnableNotif} data-testid="enable-notifications-button">
-              <Bell size={13} /> Aktifkan Notifikasi
+              <Bell size={13} /> Aktifkan notifikasi
             </button>
           )}
           <button className="icon-button" onClick={onToggleNotif} data-testid="notifications-button"><Bell size={18} />{notifUnread > 0 && <i className="tt-badge" data-testid="notif-unread-badge">{notifUnread}</i>}</button>
-          <button className="tt-user" onClick={onOpenProfile} data-testid="open-profile-button" title="Edit profil">
-            <Avatar id={user.id} name={user.name} photo={user.avatar} />
-            <span className="tt-user-name">{user.name}</span>
-          </button>
-          <button className="secondary tt-logout" onClick={onLogout} data-testid="topbar-logout-button">Keluar</button>
+          <div className="tt-user-wrap" ref={menuRef}>
+            <button className="tt-user" onClick={() => setMenuOpen(o => !o)} data-testid="open-profile-button" title="Akun">
+              <Avatar id={user.id} name={user.name} photo={user.avatar} />
+              <span className="tt-user-name">{user.name}</span>
+            </button>
+            {menuOpen && (
+              <div className="tt-user-menu" data-testid="user-menu">
+                <button onClick={() => { setMenuOpen(false); onOpenProfile(); }} data-testid="user-menu-profile"><User size={14} /> Profil</button>
+                <button onClick={() => { setMenuOpen(false); onLogout(); }} data-testid="topbar-logout-button"><LogOut size={14} /> Keluar</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {team && (
         <div className="tt-row2">
           <div className="tt-tabs">
-            {MAIN_TABS.map(t => (
+            {TABS.map(t => (
               <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => onTabChange(t.key)} data-testid={`tab-${t.key}`}>
-                <span className="tab-icon-wrap"><t.icon size={15} />{t.key === "chat" && chatUnread && <i className="tab-unread-dot" data-testid="chat-unread-dot" />}</span> {t.label}
+                <span className="tab-icon-wrap"><t.icon size={14} />{t.key === "chat" && chatUnread && <i className="tab-unread-dot" data-testid="chat-unread-dot" />}</span> {t.label}
               </button>
             ))}
-            <div className="tt-more">
-              <button onClick={() => setMoreOpen(!moreOpen)} data-testid="tab-more-button">{MORE_TABS.some(m => m.key === tab) ? activeTabLabel : "3 lagi…"} <ChevronDown size={13} /></button>
-              {moreOpen && (
-                <div className="tt-more-menu" data-testid="tab-more-menu">
-                  {MORE_TABS.map(t => (
-                    <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => { onTabChange(t.key); setMoreOpen(false); }} data-testid={`tab-${t.key}`}>
-                      <t.icon size={14} /> {t.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
           <div className="tt-team-actions">
-            {myRole === "admin" && <button className="secondary" onClick={onOpenAddMember} data-testid="add-member-button"><UserPlus size={14} /> Tambah Anggota</button>}
+            {myRole === "admin" && <button className="secondary" onClick={onOpenAddMember} data-testid="add-member-button"><UserPlus size={14} /> Tambah</button>}
             <div className="tt-avatars">
               {members.slice(0, 4).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}
               {members.length > 4 && <span className="avatar more">+{members.length - 4}</span>}

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
 import { client, timeAgo, apiError } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { useConfirm } from "./ConfirmDialog";
+import { EmptyState } from "./EmptyState";
 
 export function Announcements({ team, members, currentUser, myRole }) {
   const [items, setItems] = useState([]);
@@ -10,6 +12,7 @@ export function Announcements({ team, members, currentUser, myRole }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", body: "" });
   const [error, setError] = useState("");
+  const confirm = useConfirm();
 
   const load = () => client.get(`/teams/${team.id}/announcements`).then(r => setItems(r.data));
   useEffect(() => { load(); }, [team.id]);
@@ -27,7 +30,8 @@ export function Announcements({ team, members, currentUser, myRole }) {
     catch (x) { setError(apiError(x)); }
   };
   const remove = async id => {
-    if (!window.confirm("Hapus pengumuman ini?")) return;
+    const ok = await confirm({ title: "Hapus pengumuman ini?", body: "Pengumuman tidak bisa dikembalikan.", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
     try { await client.delete(`/announcements/${id}`); load(); }
     catch (x) { setError(apiError(x)); }
   };
@@ -73,7 +77,14 @@ export function Announcements({ team, members, currentUser, myRole }) {
             )}
           </div>
         ))}
-        {!items.length && <p className="muted">Belum ada pengumuman.</p>}
+        {!items.length && (
+          <EmptyState
+            icon={<Megaphone size={22} />}
+            title="Belum ada pengumuman"
+            body="Bagikan informasi penting ke seluruh anggota tim dari sini."
+            action={<button className="primary" onClick={() => setOpen(true)}><Plus size={16} /> Buat pengumuman</button>}
+          />
+        )}
       </div>
     </div>
   );

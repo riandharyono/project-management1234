@@ -525,6 +525,65 @@ async def list_tasks(team_id: str, archived: bool = False, user=Depends(current_
     tasks = await db.tasks.find({"team_id": team_id, "archived": archived}, {"_id": 0}).sort("order", 1).to_list(1000)
     return [t for t in tasks if task_visible(t, user, role)]
 
+@api.get("/me/tasks")
+async def my_tasks(user=Depends(current_user)):
+    memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
+    roles = {m["team_id"]: m["role"] for m in memberships}
+    team_ids = list(roles.keys())
+    empty = {"overdue": [], "today": [], "upcoming": [], "unscheduled": [], "mentions": []}
+    if not team_ids:
+        return empty
+    teams = {t["id"]: t for t in await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0}).to_list(200)}
+    lists = {l["id"]: l for l in await db.lists.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(2000)}
+    tasks = await db.tasks.find(
+        {"team_id": {"$in": team_ids}, "archived": False, "assignees": user["id"]},
+        {"_id": 0},
+    ).to_list(500)
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def enrich(task):
+        lst = lists.get(task.get("list_id") or "", {})
+        team = teams.get(task.get("team_id") or "", {})
+        return {
+            **task,
+            "team_name": team.get("name"),
+            "team_color": team.get("color"),
+            "list_name": lst.get("name"),
+            "is_done": bool(lst.get("is_done")),
+            "is_cancelled": bool(lst.get("is_cancelled")),
+        }
+
+    overdue, due_today, upcoming, unscheduled = [], [], [], []
+    for task in tasks:
+        if not task_visible(task, user, roles.get(task["team_id"])):
+            continue
+        item = enrich(task)
+        if item["is_done"] or item["is_cancelled"]:
+            continue
+        due = task.get("due_date") or ""
+        if due and due < today:
+            overdue.append(item)
+        elif due == today:
+            due_today.append(item)
+        elif due:
+            upcoming.append(item)
+        else:
+            unscheduled.append(item)
+
+    overdue.sort(key=lambda t: t.get("due_date") or "")
+    due_today.sort(key=lambda t: (t.get("due_time") or "", t.get("title") or ""))
+    upcoming.sort(key=lambda t: t.get("due_date") or "")
+    mentions = await db.notifications.find(
+        {"user_id": user["id"], "type": "mention", "read": False}, {"_id": 0}
+    ).sort("created_at", -1).to_list(10)
+    return {
+        "overdue": overdue,
+        "today": due_today,
+        "upcoming": upcoming[:20],
+        "unscheduled": unscheduled[:20],
+        "mentions": mentions,
+    }
+
 @api.get("/tasks/{task_id}")
 async def get_task(task_id: str, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)

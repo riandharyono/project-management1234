@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { HelpCircle, Plus, ChevronDown, ChevronUp, Clock, Trash2, Pencil } from "lucide-react";
 import { client, initials, avatarColor, fileUrl, timeAgo, apiError } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { useConfirm } from "./ConfirmDialog";
+import { EmptyState } from "./EmptyState";
 
 const DAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
 
@@ -16,6 +18,7 @@ export function Questions({ team, members, currentUser, myRole }) {
   const [editingQId, setEditingQId] = useState(null);
   const [editQForm, setEditQForm] = useState({ title: "", body: "" });
   const [error, setError] = useState("");
+  const confirm = useConfirm();
 
   const canModify = q => q.author_id === currentUser.id || myRole === "admin";
 
@@ -46,7 +49,8 @@ export function Questions({ team, members, currentUser, myRole }) {
     catch (x) { setError(apiError(x)); }
   };
   const removeQuestion = async id => {
-    if (!window.confirm("Hapus pertanyaan ini beserta semua jawabannya?")) return;
+    const ok = await confirm({ title: "Hapus pertanyaan ini?", body: "Semua jawaban akan ikut terhapus.", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
     try { await client.delete(`/questions/${id}`); load(); }
     catch (x) { setError(apiError(x)); }
   };
@@ -149,7 +153,14 @@ export function Questions({ team, members, currentUser, myRole }) {
             )}
           </div>
         ))}
-        {!items.length && <p className="muted">Belum ada pertanyaan.</p>}
+        {!items.length && (
+          <EmptyState
+            icon={<HelpCircle size={22} />}
+            title="Belum ada pertanyaan"
+            body="Ajukan pertanyaan ke tim, atau jadwalkan pertanyaan rutin harian."
+            action={<button className="primary" onClick={() => setMode("once")}><Plus size={16} /> Ajukan pertanyaan</button>}
+          />
+        )}
       </div>
     </div>
   );

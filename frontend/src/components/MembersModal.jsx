@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, UserPlus, Trash2 } from "lucide-react";
 import { client, apiError, LABEL_COLORS } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { useConfirm } from "./ConfirmDialog";
 
 export function MembersModal({ team, mode, members, myRole, currentUser, onClose, onChanged, onTeamUpdated, onTeamDeleted }) {
   const [tab, setTab] = useState(mode || "access");
@@ -11,13 +12,17 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const isAdmin = myRole === "admin";
+  const confirm = useConfirm();
 
   const loadAvailable = () => client.get(`/teams/${team.id}/available-members`).then(r => setAvailable(r.data));
   useEffect(() => { if (tab === "add") loadAvailable(); }, [tab, team.id]);
 
   const add = async id => { await client.post(`/teams/${team.id}/members`, { user_id: id }); onChanged(); loadAvailable(); };
   const setRole = async (id, role) => { await client.patch(`/teams/${team.id}/members/${id}`, { role }); onChanged(); };
-  const remove = async id => { if (window.confirm("Keluarkan anggota ini dari tim?")) { await client.delete(`/teams/${team.id}/members/${id}`); onChanged(); } };
+  const remove = async id => {
+    const ok = await confirm({ title: "Keluarkan anggota ini?", body: "Mereka kehilangan akses ke tim ini.", confirmLabel: "Keluarkan", danger: true });
+    if (ok) { await client.delete(`/teams/${team.id}/members/${id}`); onChanged(); }
+  };
 
   const saveTeam = async () => {
     if (!teamName.trim()) return;
