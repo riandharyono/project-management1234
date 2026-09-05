@@ -273,7 +273,9 @@
 .td-section-head { display: flex; align-items: center; gap: 8px; font-family: var(--font-body); font-size: 11.5px; font-weight: 700; letter-spacing: .2px; color: #8A8A8A; text-transform: uppercase; margin-bottom: 10px; }
 .td-section-head span:not(:first-child) { flex: 1; }
 .td-section-head button { margin-left: auto; color: var(--muted); border: 0; background: none; }
-.td-section-head small { color: var(--muted); font-weight: normal; text-transform: none; }
+.td-section-head .td-checklist-plus { margin-left: 6px; }
+.td-section-head small { color: var(--muted); font-weight: normal; text-transform: none; margin-left: auto; }
+.td-check-main > span { flex: 1; min-width: 0; }
 .td-section-head .notes-edit-button {
   display: flex; align-items: center; gap: 5px; margin-left: auto; border: 0;
   background: none; color: var(--muted); border-radius: var(--r-sm); padding: 4px 6px;
@@ -315,10 +317,26 @@
 .td-attachment small { color: var(--muted); font-size: 10px; }
 .td-attachment > div { flex: 1; min-width: 0; }
 .td-attachment a, .td-attachment button { color: var(--muted); flex-shrink: 0; }
-.td-progress { height: 6px; background: var(--paper); border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
-.td-progress div { height: 100%; background: var(--success); transition: width .3s ease; }
-.td-checklist-item { position: relative; display: flex; align-items: center; gap: 9px; font-size: 12.5px; padding: 6px 0; }
-.td-checklist-item span.done { text-decoration: line-through; color: var(--muted); }
+.td-progress-row { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.td-progress-row em { font-style: normal; font-size: 12px; color: var(--muted); min-width: 34px; font-weight: 600; }
+.td-progress { height: 4px; background: #E5E5E5; border-radius: 2px; overflow: hidden; margin-bottom: 0; flex: 1; }
+.td-progress div { height: 100%; background: #2F80ED; transition: width .2s ease; }
+.td-checklist-plus {
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); background: var(--paper);
+  color: var(--muted); display: grid; place-items: center; padding: 0; margin-left: 4px;
+}
+.td-checklist-plus:hover { color: var(--ink); border-color: #C8C8C8; }
+.td-check-toggle {
+  border: 0; background: none; padding: 0; color: #9A9A9A; display: grid; place-items: center; flex-shrink: 0;
+}
+.td-check-toggle.done { color: #6B6B6B; }
+.td-check-square, .td-sub-item input[type=checkbox] {
+  width: 16px; height: 16px; accent-color: #4F8DF5; flex-shrink: 0; margin: 0;
+}
+.td-checklist-item { position: relative; display: flex; align-items: center; gap: 9px; font-size: 13px; padding: 5px 0; }
+.td-check-main { font-size: 14px; font-weight: 500; padding: 4px 0 2px; }
+.td-checklist-item span.done { text-decoration: none; color: var(--muted); }
+.td-sub-item span.done { text-decoration: none; color: var(--ink); }
 .td-checklist-item > span, .td-checklist-item > .td-item-edit-input { flex-shrink: 1; min-width: 0; }
 .td-item-edit-input { border: 1px solid var(--accent); border-radius: 5px; padding: 3px 6px; font-size: 12.5px; flex: 1; }
 .td-item-meta { display: flex; align-items: center; gap: 6px; margin-left: 8px; flex-shrink: 0; }
@@ -340,11 +358,14 @@
 .td-item-picker input[type=date] { border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; font-size: 12px; }
 .td-checklist-add { display: flex; gap: 8px; margin-top: 8px; }
 .td-checklist-add input { flex: 1; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; font-size: 12px; }
-.td-checklist-group { border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-bottom: 4px; }
-.td-subchecklist { margin-left: 26px; padding-left: 10px; border-left: 2px solid var(--line); }
-.td-sub-item { font-size: 11.5px; padding: 4px 0; color: #344054; }
-.td-sub-add { margin: 2px 0 4px 26px; }
-.td-sub-add input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font-size: 11px; }
+.td-checklist-group { border-bottom: 0; padding-bottom: 8px; margin-bottom: 6px; }
+.td-subchecklist { margin-left: 0; padding-left: 0; border-left: 0; }
+.td-sub-item { font-size: 13px; padding: 4px 0; color: var(--ink); }
+.td-sub-item button { margin-left: auto; border: 0; background: none; color: #C0C0C0; opacity: 0; }
+.td-sub-item:hover button { opacity: 1; }
+.td-sub-add { margin: 2px 0 4px 0; }
+.td-sub-add input { flex: 1; border: 0; border-bottom: 1px solid transparent; border-radius: 0; padding: 6px 2px; font-size: 13px; background: none; }
+.td-sub-add input:focus { border-bottom-color: var(--line); }
 .td-sub-add button { padding: 5px 10px; font-size: 12px; font-weight: 800; }
 .td-label-swatches { display: flex; gap: 8px; flex-wrap: wrap; }
 .td-label-swatches button { width: 24px; height: 24px; border-radius: 6px; border: 0; }

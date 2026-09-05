@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck } from "lucide-react";
+import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2 } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
@@ -35,7 +35,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const attachInput = useRef(null);
   const coverInput = useRef(null);
   const checklistAttachInput = useRef(null);
+  const checklistNewRef = useRef(null);
   const dirtyRef = useRef(false);
+  const checklistGen = useRef(0);
   const confirm = useConfirm();
 
   useEffect(() => {
@@ -114,45 +116,73 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setTask(t => ({ ...t, attachments: (t.attachments || []).filter(a => a.id !== id) }));
   };
 
+  const saveChecklist = (checklist) => {
+    dirtyRef.current = true;
+    const gen = ++checklistGen.current;
+    setTask(t => ({ ...t, checklist }));
+    client.patch(`/tasks/${task.id}`, { checklist }).then(r => {
+      if (gen !== checklistGen.current) return;
+      setTask(r.data);
+    }).catch(e => { if (gen === checklistGen.current) setError(apiError(e)); });
+  };
+  const syncParentDone = (item) => {
+    const subs = item.subitems || [];
+    if (!subs.length) return item;
+    return { ...item, done: subs.every(s => s.done) };
+  };
   const addChecklistItem = () => {
     if (!checklistText.trim()) return;
     const items = [...(task.checklist || []), { id: Date.now().toString(), text: checklistText.trim(), done: false }];
     setChecklistText("");
-    patch({ checklist: items });
+    saveChecklist(items);
   };
-  const toggleChecklistItem = (id) => patch({ checklist: (task.checklist || []).map(c => c.id === id ? { ...c, done: !c.done } : c) });
-  const removeChecklistItem = (id) => patch({ checklist: (task.checklist || []).filter(c => c.id !== id) });
+  const toggleChecklistItem = (id) => {
+    saveChecklist((task.checklist || []).map(c => {
+      if (c.id !== id) return c;
+      const nextDone = !c.done;
+      if ((c.subitems || []).length) {
+        return { ...c, done: nextDone, subitems: c.subitems.map(s => ({ ...s, done: nextDone })) };
+      }
+      return { ...c, done: nextDone };
+    }));
+  };
+  const removeChecklistItem = (id) => saveChecklist((task.checklist || []).filter(c => c.id !== id));
   const addSubItem = (parentId) => {
     const text = (subDraft[parentId] || "").trim();
     if (!text) return;
     const sub = { id: Date.now().toString(), text, done: false };
-    patch({ checklist: (task.checklist || []).map(c => c.id === parentId ? { ...c, subitems: [...(c.subitems || []), sub] } : c) });
+    saveChecklist((task.checklist || []).map(c => c.id === parentId ? syncParentDone({ ...c, subitems: [...(c.subitems || []), sub] }) : c));
     setSubDraft(d => ({ ...d, [parentId]: "" }));
   };
-  const toggleSubItem = (parentId, subId) => patch({
-    checklist: (task.checklist || []).map(c => c.id === parentId
-      ? { ...c, subitems: (c.subitems || []).map(s => s.id === subId ? { ...s, done: !s.done } : s) } : c)
-  });
-  const removeSubItem = (parentId, subId) => patch({
-    checklist: (task.checklist || []).map(c => c.id === parentId
-      ? { ...c, subitems: (c.subitems || []).filter(s => s.id !== subId) } : c)
-  });
+  const toggleSubItem = (parentId, subId) => {
+    saveChecklist((task.checklist || []).map(c => {
+      if (c.id !== parentId) return c;
+      const subitems = (c.subitems || []).map(s => s.id === subId ? { ...s, done: !s.done } : s);
+      return syncParentDone({ ...c, subitems });
+    }));
+  };
+  const removeSubItem = (parentId, subId) => {
+    saveChecklist((task.checklist || []).map(c => {
+      if (c.id !== parentId) return c;
+      return syncParentDone({ ...c, subitems: (c.subitems || []).filter(s => s.id !== subId) });
+    }));
+  };
   const setItemAssignee = (itemId, memberId) => {
-    patch({ checklist: (task.checklist || []).map(c => c.id === itemId ? { ...c, assignee_id: memberId || null } : c) });
+    saveChecklist((task.checklist || []).map(c => c.id === itemId ? { ...c, assignee_id: memberId || null } : c));
     setAssigneePickerFor(null);
   };
   const setItemDueDate = (itemId, date) => {
-    patch({ checklist: (task.checklist || []).map(c => c.id === itemId ? { ...c, due_date: date || null } : c) });
+    saveChecklist((task.checklist || []).map(c => c.id === itemId ? { ...c, due_date: date || null } : c));
   };
   const duplicateChecklistItem = (item) => {
     const clone = { ...item, id: Date.now().toString(), done: false };
     const items = [...(task.checklist || [])];
     items.splice(items.findIndex(c => c.id === item.id) + 1, 0, clone);
-    patch({ checklist: items });
+    saveChecklist(items);
   };
   const startEditItem = (item) => { setEditingItemId(item.id); setEditingItemText(item.text); };
   const saveEditItem = () => {
-    if (editingItemText.trim()) patch({ checklist: (task.checklist || []).map(c => c.id === editingItemId ? { ...c, text: editingItemText.trim() } : c) });
+    if (editingItemText.trim()) saveChecklist((task.checklist || []).map(c => c.id === editingItemId ? { ...c, text: editingItemText.trim() } : c));
     setEditingItemId(null);
   };
   const openChecklistAttach = (itemId) => { setAttachingItemId(itemId); checklistAttachInput.current?.click(); };
@@ -162,7 +192,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     try {
       const r = await client.post(`/files/upload?team_id=${team.id}&task_id=${task.id}&kind=attachment`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       dirtyRef.current = true;
-      patch({ checklist: (task.checklist || []).map(c => c.id === attachingItemId ? { ...c, attachment: { id: r.data.id, filename: r.data.filename } } : c) });
+      saveChecklist((task.checklist || []).map(c => c.id === attachingItemId ? { ...c, attachment: { id: r.data.id, filename: r.data.filename } } : c));
     } catch (e) { setError(apiError(e)); }
     setAttachingItemId(null);
   };
@@ -270,16 +300,36 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
 
             {showChecklist && (
               <div className="td-section">
-                <div className="td-section-head"><span>Ceklis</span><small data-testid="checklist-progress-count">{checklistDone}/{checklistTotal}{checklistTotal > 0 ? ` · ${Math.round((checklistDone / checklistTotal) * 100)}%` : ""}</small></div>
-                {checklistTotal > 0 && <div className="td-progress" data-testid="checklist-progress-bar"><div style={{ width: `${(checklistDone / checklistTotal) * 100}%` }} /></div>}
+                <div className="td-section-head">
+                  <span>Ceklis</span>
+                  <button type="button" className="td-checklist-plus" onClick={() => checklistNewRef.current?.focus()} data-testid="checklist-header-add-button"><Plus size={14} /></button>
+                  <small data-testid="checklist-progress-count">{checklistDone}/{checklistTotal}{checklistTotal > 0 ? ` · ${Math.round((checklistDone / checklistTotal) * 100)}%` : ""}</small>
+                </div>
+                {!(task.checklist || []).some(c => (c.subitems || []).length) && checklistTotal > 0 && (
+                  <div className="td-progress-row">
+                    <em>{Math.round((checklistDone / checklistTotal) * 100)}%</em>
+                    <div className="td-progress" data-testid="checklist-progress-bar"><div style={{ width: `${(checklistDone / checklistTotal) * 100}%` }} /></div>
+                  </div>
+                )}
                 <input ref={checklistAttachInput} type="file" hidden onChange={e => uploadChecklistAttachment(e.target.files[0])} data-testid="checklist-attachment-file-input" />
                 {(task.checklist || []).map(c => {
                   const itemAssignee = members.find(m => m.id === c.assignee_id);
                   const itemOverdue = c.due_date && !c.done && c.due_date < new Date().toISOString().slice(0, 10);
+                  const subs = c.subitems || [];
+                  const hasSubs = subs.length > 0;
+                  const subDone = subs.filter(s => s.done).length;
+                  const subPct = hasSubs ? Math.round((subDone / subs.length) * 100) : (c.done ? 100 : 0);
                   return (
-                  <div key={c.id} className="td-checklist-group" data-testid={`checklist-group-${c.id}`}>
-                    <label className="td-checklist-item" data-testid={`checklist-item-${c.id}`}>
-                      <input type="checkbox" checked={c.done} onChange={() => toggleChecklistItem(c.id)} data-testid={`checklist-toggle-${c.id}`} />
+                  <div key={c.id} className={`td-checklist-group ${hasSubs ? "has-subs" : ""}`} data-testid={`checklist-group-${c.id}`}>
+                    <div className={`td-checklist-item ${hasSubs ? "td-check-main" : ""}`} data-testid={`checklist-item-${c.id}`}>
+                      {hasSubs ? (
+                        <button type="button" className={`td-check-toggle circle ${c.done ? "done" : ""}`}
+                          onClick={() => toggleChecklistItem(c.id)} data-testid={`checklist-toggle-${c.id}`} aria-pressed={c.done}>
+                          {c.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                        </button>
+                      ) : (
+                        <input type="checkbox" className="td-check-square" checked={c.done} onChange={() => toggleChecklistItem(c.id)} data-testid={`checklist-toggle-${c.id}`} />
+                      )}
                       {editingItemId === c.id ? (
                         <input autoFocus className="td-item-edit-input" value={editingItemText} onChange={e => setEditingItemText(e.target.value)}
                           onBlur={saveEditItem} onKeyDown={e => e.key === "Enter" && saveEditItem()} data-testid={`checklist-edit-input-${c.id}`} />
@@ -299,7 +349,13 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                         <button type="button" onClick={() => startEditItem(c)} data-testid={`checklist-edit-${c.id}`}><Pencil size={13} /></button>
                         <button type="button" onClick={() => removeChecklistItem(c.id)} data-testid={`checklist-remove-${c.id}`}><Trash2 size={13} /></button>
                       </div>
-                    </label>
+                    </div>
+                    {hasSubs && (
+                      <div className="td-progress-row" data-testid={`checklist-progress-${c.id}`}>
+                        <em>{subPct}%</em>
+                        <div className="td-progress" data-testid="checklist-progress-bar"><div style={{ width: `${subPct}%` }} /></div>
+                      </div>
+                    )}
                     {assigneePickerFor === c.id && (
                       <div className="td-item-picker" data-testid={`checklist-assign-picker-${c.id}`}>
                         {members.map(m => (
@@ -316,20 +372,20 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                         {c.due_date && <button type="button" className="danger" onClick={() => setItemDueDate(c.id, null)} data-testid={`checklist-date-clear-${c.id}`}>Hapus tanggal</button>}
                       </div>
                     )}
-                    {!!(c.subitems || []).length && (
+                    {hasSubs && (
                       <div className="td-subchecklist" data-testid={`subchecklist-${c.id}`}>
-                        {c.subitems.map(s => (
+                        {subs.map(s => (
                           <label className="td-checklist-item td-sub-item" key={s.id} data-testid={`subchecklist-item-${s.id}`}>
                             <input type="checkbox" checked={s.done} onChange={() => toggleSubItem(c.id, s.id)} data-testid={`subchecklist-toggle-${s.id}`} />
                             <span className={s.done ? "done" : ""}>{s.text}</span>
-                            <button onClick={() => removeSubItem(c.id, s.id)} data-testid={`subchecklist-remove-${s.id}`}><X size={11} /></button>
+                            <button type="button" onClick={e => { e.preventDefault(); removeSubItem(c.id, s.id); }} data-testid={`subchecklist-remove-${s.id}`}><X size={11} /></button>
                           </label>
                         ))}
                       </div>
                     )}
                     <div className="td-checklist-add td-sub-add">
                       <input value={subDraft[c.id] || ""} onChange={e => setSubDraft(d => ({ ...d, [c.id]: e.target.value }))}
-                        placeholder="Tambah sub-item…" onKeyDown={e => e.key === "Enter" && addSubItem(c.id)}
+                        placeholder="Tambah sub-tugas…" onKeyDown={e => e.key === "Enter" && addSubItem(c.id)}
                         data-testid={`subchecklist-new-item-input-${c.id}`} />
                       <button className="secondary" onClick={() => addSubItem(c.id)} data-testid={`subchecklist-add-button-${c.id}`}>+</button>
                     </div>
@@ -337,7 +393,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                   );
                 })}
                 <div className="td-checklist-add">
-                  <input value={checklistText} onChange={e => setChecklistText(e.target.value)} placeholder="Tambah item…" onKeyDown={e => e.key === "Enter" && addChecklistItem()} data-testid="checklist-new-item-input" />
+                  <input ref={checklistNewRef} value={checklistText} onChange={e => setChecklistText(e.target.value)} placeholder="Tambah item…" onKeyDown={e => e.key === "Enter" && addChecklistItem()} data-testid="checklist-new-item-input" />
                   <button className="secondary" onClick={addChecklistItem} data-testid="checklist-add-button">Tambah</button>
                 </div>
               </div>
