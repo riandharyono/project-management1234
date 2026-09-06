@@ -9,12 +9,24 @@ const CARDS = [
   { key: "documents", label: "Dokumen", icon: FolderOpen, tone: "indigo" },
 ];
 
+function taskProgressFraction(task, list) {
+  if (list?.is_done) return 1;
+  if (list?.is_cancelled) return 0;
+  const bits = [];
+  (task.checklist || []).forEach(c => {
+    bits.push(!!c.done);
+    (c.subitems || []).forEach(s => bits.push(!!s.done));
+  });
+  return bits.length ? bits.filter(Boolean).length / bits.length : 0;
+}
+
 export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask }) {
   const today = localISODate();
   const open = tasks.filter(t => !listsById[t.list_id]?.is_done && !listsById[t.list_id]?.is_cancelled);
   const total = tasks.length;
   const done = tasks.filter(t => listsById[t.list_id]?.is_done).length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  const progressSum = tasks.reduce((sum, t) => sum + taskProgressFraction(t, listsById[t.list_id]), 0);
+  const pct = total ? Math.round((progressSum / total) * 100) : 0;
   const overdue = open.filter(t => t.due_date && t.due_date < today);
   const dueToday = open.filter(t => t.due_date === today);
   return (
