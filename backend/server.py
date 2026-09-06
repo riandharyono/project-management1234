@@ -179,6 +179,8 @@ class PasswordUpdate(BaseModel):
 class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
+    laporan_deadline: Optional[str] = None
+    kke_deadline: Optional[str] = None
 class ListInput(BaseModel):
     name: str = Field(min_length=1)
 class ListPatch(BaseModel):
@@ -300,8 +302,9 @@ async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
     await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
-async def create_team_internal(name, color, owner):
-    team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now()}
+async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None):
+    team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now(),
+            "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline}
     await db.teams.insert_one(team)
     await db.team_members.insert_one({"id": str(uuid.uuid4()), "team_id": team["id"], "user_id": owner["id"], "role": "admin", "joined_at": now()})
     for i, name_ in enumerate(DEFAULT_LISTS):
@@ -511,7 +514,7 @@ async def list_teams(user=Depends(current_user)):
 async def create_team(data: TeamInput, user=Depends(current_user)):
     if not can_create_team(user):
         raise HTTPException(403, "Role Anda tidak dapat membuat tim")
-    team = await create_team_internal(data.name, data.color, user)
+    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline)
     return {**team, "my_role": "admin", "member_count": 1}
 
 def _task_progress_fraction(task, lst):
@@ -550,7 +553,8 @@ async def tasks_monitoring(user=Depends(current_user)):
         pct = round((progress_sum / total) * 100) if total else 0
         result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
                         "total": total, "done": done_count, "overdue": overdue_count,
-                        "pct_complete": pct, "created_at": t.get("created_at")})
+                        "pct_complete": pct, "created_at": t.get("created_at"),
+                        "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline")})
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
 
@@ -564,7 +568,10 @@ async def get_team(team_id: str, user=Depends(current_user)):
 @api.patch("/teams/{team_id}")
 async def update_team(team_id: str, data: TeamInput, user=Depends(current_user)):
     await require_admin(team_id, user)
-    await db.teams.update_one({"id": team_id}, {"$set": {"name": data.name, "color": data.color}})
+    await db.teams.update_one({"id": team_id}, {"$set": {
+        "name": data.name, "color": data.color,
+        "laporan_deadline": data.laporan_deadline, "kke_deadline": data.kke_deadline,
+    }})
     return await db.teams.find_one({"id": team_id}, {"_id": 0})
 
 @api.delete("/teams/{team_id}")
@@ -1016,7 +1023,8 @@ async def data_requests_monitoring(user=Depends(current_user)):
         for r in rows: counts[r["status"]] = counts.get(r["status"], 0) + 1
         pct = round((counts["diterima_lengkap"] / total) * 100) if total else 0
         result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
-                        "total": total, "counts": counts, "pct_complete": pct, "created_at": t.get("created_at")})
+                        "total": total, "counts": counts, "pct_complete": pct, "created_at": t.get("created_at"),
+                        "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline")})
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
 

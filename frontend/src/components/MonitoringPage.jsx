@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { client, shortDate } from "../lib/api";
+import { client, shortDate, localISODate } from "../lib/api";
 import { EmptyState } from "./EmptyState";
 
 const TABS = [
   { key: "progress", label: "Progres Tim" },
   { key: "data-requests", label: "Permintaan Data" },
 ];
+
+function Deadlines({ row }) {
+  if (!row.laporan_deadline && !row.kke_deadline) return null;
+  const today = localISODate();
+  const tone = d => (d < today ? "overdue" : "");
+  return (
+    <div className="mon-deadlines">
+      {row.laporan_deadline && <span className={tone(row.laporan_deadline)}>Laporan: {shortDate(row.laporan_deadline)}</span>}
+      {row.kke_deadline && <span className={tone(row.kke_deadline)}>KKE: {shortDate(row.kke_deadline)}</span>}
+    </div>
+  );
+}
 
 export function MonitoringPage({ onOpenTeam }) {
   const [tab, setTab] = useState("progress");
@@ -41,6 +53,7 @@ function ProgressMonitoring({ onOpenTeam }) {
             <div>
               <div className="name">{r.team_name}</div>
               <div className="meta">{r.done}/{r.total || 0} tugas selesai · dimulai {r.created_at ? shortDate(r.created_at) : "-"}</div>
+              <Deadlines row={r} />
             </div>
             <div>
               {r.overdue > 0
@@ -71,6 +84,7 @@ function DataRequestMonitoring({ onOpenTeam }) {
             <div>
               <div className="name">{r.team_name}</div>
               <div className="meta">{r.counts.diterima_lengkap}/{r.total || 0} data · dimulai {r.created_at ? shortDate(r.created_at) : "-"}</div>
+              <Deadlines row={r} />
             </div>
             <div>
               {flagged

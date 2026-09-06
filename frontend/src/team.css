@@ -137,6 +137,17 @@
 .overview-progress-bar { height: 6px; background: var(--paper); border-radius: 4px; overflow: hidden; margin-bottom: 6px; border: 1px solid var(--line); }
 .overview-progress-bar div { height: 100%; background: var(--success); transition: width .4s ease; }
 .overview-progress span { font-family: var(--font-mono); font-size: 10px; color: var(--muted); font-weight: 600; }
+.overview-deadlines { display: flex; gap: 10px; margin: 4px 0 18px; flex-wrap: wrap; }
+.overview-deadline { display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 8px 12px; }
+.overview-deadline span { font-size: 10.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .2px; }
+.overview-deadline b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.overview-deadline.soon b { color: var(--warning); }
+.overview-deadline.overdue { border-color: var(--danger); }
+.overview-deadline.overdue b { color: var(--danger); }
+
+.mon-deadlines { display: flex; gap: 10px; margin-top: 3px; }
+.mon-deadlines span { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mon-deadlines span.overdue { color: var(--danger); font-weight: 700; }
 .overview-work { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .overview-work-col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px 18px; cursor: pointer; }
 .overview-work-col header { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-bottom: 12px; }

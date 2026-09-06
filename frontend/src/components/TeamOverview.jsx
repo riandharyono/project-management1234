@@ -9,6 +9,14 @@ const CARDS = [
   { key: "documents", label: "Dokumen", icon: FolderOpen, tone: "indigo" },
 ];
 
+function deadlineTone(date, today) {
+  if (!date) return "";
+  if (date < today) return "overdue";
+  const soon = new Date(today); soon.setDate(soon.getDate() + 7);
+  if (date <= soon.toISOString().slice(0, 10)) return "soon";
+  return "";
+}
+
 function taskProgressFraction(task, list) {
   if (list?.is_done) return 1;
   if (list?.is_cancelled) return 0;
@@ -38,6 +46,20 @@ export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask })
         </div>
         <button className="primary" onClick={() => onNavigate("tasks")} data-testid="overview-goto-tasks">Buka papan</button>
       </div>
+      {(team.laporan_deadline || team.kke_deadline) && (
+        <div className="overview-deadlines" data-testid="overview-deadlines">
+          {team.laporan_deadline && (
+            <div className={`overview-deadline ${deadlineTone(team.laporan_deadline, today)}`} data-testid="overview-deadline-laporan">
+              <span>Tenggat Upload Laporan</span><b>{shortDate(team.laporan_deadline)}</b>
+            </div>
+          )}
+          {team.kke_deadline && (
+            <div className={`overview-deadline ${deadlineTone(team.kke_deadline, today)}`} data-testid="overview-deadline-kke">
+              <span>Tenggat KKE</span><b>{shortDate(team.kke_deadline)}</b>
+            </div>
+          )}
+        </div>
+      )}
       {total > 0 && (
         <div className="overview-progress" data-testid="overview-progress">
           <div className="overview-progress-bar"><div style={{ width: `${pct}%` }} /></div>
