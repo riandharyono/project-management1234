@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CalendarDays, CheckSquare, Inbox, MessageCircle, Plus } from "lucide-react";
 import { client, shortDate, timeAgo } from "../lib/api";
+import { canCreateTeam } from "../lib/roles";
 import { EmptyState } from "./EmptyState";
 
 const PRIORITY_DOT = { high: "high", medium: "medium", low: "low", sedang: "medium" };
@@ -30,7 +31,7 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
           <h1>{greeting}, {user.name.split(" ")[0]}</h1>
           <p className="muted">Tugas yang ditugaskan ke Anda, lintas tim.</p>
         </div>
-        {user.role === "admin" && (
+        {canCreateTeam(user) && (
           <button className="primary" onClick={onCreateTeam} data-testid="hq-create-team-button"><Plus size={16} /> Buat Tim</button>
         )}
       </div>
@@ -57,7 +58,7 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
                 icon={<Inbox size={22} />}
                 title="Belum ada tugas untuk Anda"
                 body="Tugas yang ditugaskan ke Anda akan muncul di sini, dikelompokkan menurut tenggat."
-                action={teams.length || user.role !== "admin" ? null : <button className="primary" onClick={onCreateTeam}>Buat tim pertama</button>}
+                action={teams.length || !canCreateTeam(user) ? null : <button className="primary" onClick={onCreateTeam}>Buat tim pertama</button>}
                 testId="my-work-empty"
               />
             )}

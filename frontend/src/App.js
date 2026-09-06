@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
 import { CheckCircle2 } from "lucide-react";
 import { client, apiError } from "./lib/api";
+import { canCreateTeam } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -350,7 +351,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     <div className="app-frame">
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
         onPrefetchTeam={prefetchTeam}
-        onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)} user={user}
+        onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} user={user}
         userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
         onOpenProfile={() => setProfileOpen(true)} />
       <main className="content" data-tab={userAdminOpen ? "users" : (activeTeam ? tab : "hq")}>
@@ -371,7 +372,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onPrefetchTeam={prefetchTeam}
             onOpenTask={openTask}
             onOpenMention={openNotification}
-            onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)} />
+            onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} />
         ) : tab === "overview" ? (
           <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab}
             onOpenTask={openTask} />
@@ -408,7 +409,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onTeamUpdated={() => loadTeams()}
             onTeamDeleted={() => { setMembersModal(null); goHQ(); loadTeams(); showToast("Tim berhasil dihapus"); }} />
         )}
-        {createTeamOpen && user.role === "admin" && (
+        {createTeamOpen && canCreateTeam(user) && (
           <CreateTeamModal onClose={() => setCreateTeamOpen(false)} onCreated={(team) => { setCreateTeamOpen(false); loadTeams(); setActiveTeamId(team.id); setTab("tasks"); }} />
         )}
         {profileOpen && (
@@ -422,8 +423,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           team={activeTeam}
           onSelectTeam={selectTeam}
           onOpenTask={openTask}
-          onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)}
-          canCreateTeam={user.role === "admin"}
+          onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)}
+          canCreateTeam={canCreateTeam(user)}
           onCreateTask={() => { if (activeTeamId) setTaskModal({ mode: "new", listId: lists[0]?.id }); }}
           onGoHQ={goHQ}
           onTab={setTab}

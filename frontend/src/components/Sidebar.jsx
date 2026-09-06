@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, Plus, Inbox, Users } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { BrandMark } from "./BrandMark";
+import { canCreateTeam, isSuperAdmin } from "../lib/roles";
 
 export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, onOpenProfile }) {
   const [q, setQ] = useState("");
@@ -15,7 +16,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
       <div className="ts-search">
         <Search size={14} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari tim" data-testid="sidebar-team-search" />
-        {user.role === "admin" && (
+        {canCreateTeam(user) && (
           <button className="icon-button" onClick={onCreateTeam} data-testid="sidebar-create-team-button"><Plus size={15} /></button>
         )}
       </div>
@@ -23,7 +24,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
         <a className={`ts-item ${!activeTeamId && !userAdminOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
           <Inbox size={16} /> <span>Tugas saya</span>
         </a>
-        {user.role === "admin" && (
+        {isSuperAdmin(user) && (
           <a className={`ts-item ${userAdminOpen ? "active" : ""}`} onClick={onOpenUserAdmin} data-testid="sidebar-user-admin-item">
             <Users size={16} /> <span>Pengguna</span>
           </a>

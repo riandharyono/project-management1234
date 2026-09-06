@@ -18,6 +18,14 @@ api = APIRouter(prefix="/api")
 JWT_ALGORITHM = "HS256"
 APP_NAME = os.environ["APP_NAME"]
 
+ROLE_SUPER_ADMIN = "super_admin"
+ROLE_KOORWAS = "koorwas"
+ROLE_KETUA_TIM = "ketua_tim"
+ROLE_ANGGOTA_TIM = "anggota_tim"
+USER_ROLES = [ROLE_SUPER_ADMIN, ROLE_KOORWAS, ROLE_KETUA_TIM, ROLE_ANGGOTA_TIM]
+ROLES_CAN_CREATE_TEAM = {ROLE_SUPER_ADMIN, ROLE_KETUA_TIM}
+ROLES_VIEW_ALL_TEAMS = {ROLE_SUPER_ADMIN, ROLE_KOORWAS}
+
 STORAGE_DIR = Path(os.environ.get("STORAGE_DIR") or ROOT_DIR / "storage").resolve()
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -128,15 +136,25 @@ async def team_role(team_id, user_id):
     m = await db.team_members.find_one({"team_id": team_id, "user_id": user_id}, {"_id": 0})
     return m["role"] if m else None
 
+def can_create_team(user): return user.get("role") in ROLES_CAN_CREATE_TEAM
+def can_view_all_teams(user): return user.get("role") in ROLES_VIEW_ALL_TEAMS
+
 async def require_member(team_id, user):
     role = await team_role(team_id, user["id"])
-    if not role: raise HTTPException(403, "Anda bukan anggota tim ini")
-    return role
+    if role: return role
+    if user.get("role") == ROLE_SUPER_ADMIN: return "admin"
+    if user.get("role") == ROLE_KOORWAS: return "member"
+    raise HTTPException(403, "Anda bukan anggota tim ini")
 
 async def require_admin(team_id, user):
     role = await require_member(team_id, user)
     if role != "admin": raise HTTPException(403, "Hanya admin tim yang dapat melakukan ini")
     return role
+
+async def can_access_team(team_id, user_id):
+    if await team_role(team_id, user_id): return True
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1})
+    return bool(u) and u.get("role") in ROLES_VIEW_ALL_TEAMS
 
 def task_visible(task, user, role):
     return role == "admin" or not task.get("is_private") or task.get("created_by") == user["id"] or user["id"] in task.get("assignees", [])
@@ -215,7 +233,7 @@ class MemberCreate(BaseModel):
     name: str = Field(min_length=1)
     email: EmailStr
     password: str = Field(min_length=6)
-    role: str = "member"
+    role: str = ROLE_ANGGOTA_TIM
 class AnnouncementInput(BaseModel):
     title: str = Field(min_length=1)
     body: str = ""
@@ -258,9 +276,13 @@ async def seed_admin():
     email, password = os.environ["ADMIN_EMAIL"].lower(), os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if not existing:
-        await db.users.insert_one({"id": str(uuid.uuid4()), "email": email, "name": "Workspace Admin", "role": "admin", "password_hash": hash_password(password), "created_at": now()})
+        await db.users.insert_one({"id": str(uuid.uuid4()), "email": email, "name": "Workspace Admin", "role": ROLE_SUPER_ADMIN, "password_hash": hash_password(password), "created_at": now()})
     elif not verify_password(password, existing["password_hash"]):
         await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
+
+async def migrate_user_roles():
+    await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
+    await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
 async def create_team_internal(name, color, owner):
     team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now()}
@@ -283,15 +305,15 @@ async def purge_team(team_id):
     await db.teams.delete_one({"id": team_id})
 
 async def purge_member_created_teams():
-    admin_ids = {u["id"] for u in await db.users.find({"role": "admin"}, {"_id": 0, "id": 1}).to_list(1000)}
+    creator_ids = {u["id"] for u in await db.users.find({"role": {"$in": list(ROLES_CAN_CREATE_TEAM)}}, {"_id": 0, "id": 1}).to_list(1000)}
     teams = await db.teams.find({}, {"_id": 0, "id": 1, "created_by": 1, "name": 1}).to_list(1000)
     removed = 0
     for t in teams:
         creator = t.get("created_by")
-        if creator and creator not in admin_ids:
+        if creator and creator not in creator_ids:
             await purge_team(t["id"])
             removed += 1
-            logging.info("Removed member-created team %s (%s)", t.get("name"), t["id"])
+            logging.info("Removed team created by a role without team-creation rights: %s (%s)", t.get("name"), t["id"])
     return removed
 
 async def migrate_legacy_tasks():
@@ -346,6 +368,7 @@ def _warn_if_default_secrets():
 async def startup():
     _warn_if_default_secrets()
     await seed_admin()
+    await migrate_user_roles()
     await db.tasks.create_index("team_id")
     await db.tasks.create_index([("team_id", 1), ("archived", 1), ("order", 1)])
     await db.lists.create_index([("team_id", 1), ("archived", 1), ("order", 1)])
@@ -449,24 +472,29 @@ async def remove_avatar(user=Depends(current_user)):
 @api.get("/teams")
 async def list_teams(user=Depends(current_user)):
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
-    if not memberships:
-        return []
     role_by_team = {m["team_id"]: m["role"] for m in memberships}
-    team_ids = list(role_by_team.keys())
-    teams = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0}).to_list(200)
+    if can_view_all_teams(user):
+        teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+        default_role = "admin" if user.get("role") == ROLE_SUPER_ADMIN else "member"
+    else:
+        if not memberships:
+            return []
+        teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(200)
+        default_role = "member"
+    team_ids = [t["id"] for t in teams]
     counts = await db.team_members.aggregate([
         {"$match": {"team_id": {"$in": team_ids}}},
         {"$group": {"_id": "$team_id", "n": {"$sum": 1}}},
     ]).to_list(200)
     count_map = {c["_id"]: c["n"] for c in counts}
-    result = [{**t, "my_role": role_by_team.get(t["id"]), "member_count": count_map.get(t["id"], 0)} for t in teams]
+    result = [{**t, "my_role": role_by_team.get(t["id"], default_role), "member_count": count_map.get(t["id"], 0)} for t in teams]
     result.sort(key=lambda t: t.get("created_at") or "")
     return result
 
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
-    if user.get("role") != "admin":
-        raise HTTPException(403, "Hanya admin yang dapat membuat tim")
+    if not can_create_team(user):
+        raise HTTPException(403, "Role Anda tidak dapat membuat tim")
     team = await create_team_internal(data.name, data.color, user)
     return {**team, "my_role": "admin", "member_count": 1}
 
@@ -873,7 +901,7 @@ async def team_calendar_ics(team_id: str, token: str):
         if payload.get("type") != "calendar" or payload.get("team_id") != team_id: raise HTTPException(401, "Token tidak valid")
     except jwt.PyJWTError:
         raise HTTPException(401, "Token tidak valid")
-    if not await team_role(team_id, payload["sub"]): raise HTTPException(403, "Bukan anggota tim ini")
+    if not await can_access_team(team_id, payload["sub"]): raise HTTPException(403, "Bukan anggota tim ini")
     team = await db.teams.find_one({"id": team_id}, {"_id": 0})
     tasks = await db.tasks.find({"team_id": team_id, "due_date": {"$nin": [None, ""]}, "archived": False}, {"_id": 0}).to_list(1000)
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Project Management//ID", f"X-WR-CALNAME:{_ics_escape(team['name'] if team else 'Tim')} - Tugas"]
@@ -947,7 +975,7 @@ async def delete_chat_message(message_id: str, user=Depends(current_user)):
 @app.websocket("/api/ws/chat/{team_id}")
 async def chat_websocket(websocket: WebSocket, team_id: str):
     user = await user_from_token(websocket.cookies.get("access_token"))
-    if not user or not await team_role(team_id, user["id"]):
+    if not user or not await can_access_team(team_id, user["id"]):
         await websocket.close(code=4401); return
     await websocket.accept()
     chat_connections.setdefault(team_id, []).append(websocket)
@@ -1182,13 +1210,13 @@ async def push_unsubscribe(data: dict, user=Depends(current_user)):
 # ---------- global members / search ----------
 @api.get("/members")
 async def members(user=Depends(current_user)):
-    if user["role"] != "admin": raise HTTPException(403, "Hanya admin yang dapat melihat daftar pengguna")
+    if user["role"] != ROLE_SUPER_ADMIN: raise HTTPException(403, "Hanya super admin yang dapat melihat daftar pengguna")
     return [public_user(x) async for x in db.users.find({}, {"_id": 0})]
 
 @api.post("/members")
 async def create_member(data: MemberCreate, user=Depends(current_user)):
-    if user["role"] != "admin": raise HTTPException(403, "Hanya admin yang dapat membuat akun")
-    if data.role not in ["admin", "member"]: raise HTTPException(400, "Role tidak valid")
+    if user["role"] != ROLE_SUPER_ADMIN: raise HTTPException(403, "Hanya super admin yang dapat membuat akun")
+    if data.role not in USER_ROLES: raise HTTPException(400, "Role tidak valid")
     email = str(data.email).lower()
     if await db.users.find_one({"email": email}): raise HTTPException(409, "Email sudah terdaftar")
     new_user = {"id": str(uuid.uuid4()), "email": email, "name": data.name.strip(), "role": data.role,
@@ -1198,15 +1226,15 @@ async def create_member(data: MemberCreate, user=Depends(current_user)):
 
 @api.patch("/members/{member_id}")
 async def update_member(member_id: str, data: MemberUpdate, user=Depends(current_user)):
-    if user["role"] != "admin": raise HTTPException(403, "Hanya admin yang dapat mengubah role")
-    if data.role not in ["admin", "member"]: raise HTTPException(400, "Role tidak valid")
+    if user["role"] != ROLE_SUPER_ADMIN: raise HTTPException(403, "Hanya super admin yang dapat mengubah role")
+    if data.role not in USER_ROLES: raise HTTPException(400, "Role tidak valid")
     result = await db.users.update_one({"id": member_id}, {"$set": {"role": data.role}})
     if not result.matched_count: raise HTTPException(404, "Member tidak ditemukan")
     return {"ok": True}
 
 @api.delete("/members/{member_id}")
 async def delete_member(member_id: str, user=Depends(current_user)):
-    if user["role"] != "admin": raise HTTPException(403, "Hanya admin yang dapat menghapus akun")
+    if user["role"] != ROLE_SUPER_ADMIN: raise HTTPException(403, "Hanya super admin yang dapat menghapus akun")
     if member_id == user["id"]: raise HTTPException(400, "Tidak bisa menghapus akun sendiri")
     result = await db.users.delete_one({"id": member_id})
     if not result.deleted_count: raise HTTPException(404, "Pengguna tidak ditemukan")

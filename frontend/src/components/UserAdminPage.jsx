@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UserPlus, Trash2, ShieldCheck } from "lucide-react";
 import { client, apiError } from "../lib/api";
+import { ROLE_ANGGOTA_TIM, ROLE_OPTIONS, ROLE_SUPER_ADMIN, roleLabel } from "../lib/roles";
 import { Avatar } from "./Avatar";
 import { useConfirm } from "./ConfirmDialog";
 
@@ -8,7 +9,7 @@ export function UserAdminPage({ currentUser }) {
   const confirm = useConfirm();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "member" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: ROLE_ANGGOTA_TIM });
   const [error, setError] = useState("");
 
   const load = () => client.get("/members").then(r => setItems(r.data));
@@ -18,7 +19,7 @@ export function UserAdminPage({ currentUser }) {
     e.preventDefault();
     try {
       await client.post("/members", form);
-      setForm({ name: "", email: "", password: "", role: "member" });
+      setForm({ name: "", email: "", password: "", role: ROLE_ANGGOTA_TIM });
       setOpen(false); setError(""); load();
     } catch (x) { setError(apiError(x)); }
   };
@@ -41,8 +42,7 @@ export function UserAdminPage({ currentUser }) {
           <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} data-testid="create-user-email-input" required />
           <input type="password" placeholder="Password (minimal 6 karakter)" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} data-testid="create-user-password-input" required />
           <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} data-testid="create-user-role-select">
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
+            {ROLE_OPTIONS.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
           {error && <div className="error" data-testid="create-user-error">{error}</div>}
           <div><button className="primary" data-testid="submit-create-user-button">Buat Akun</button><button type="button" className="secondary" onClick={() => setOpen(false)}>Batal</button></div>
@@ -53,10 +53,9 @@ export function UserAdminPage({ currentUser }) {
           <div className="member-row" key={u.id} data-testid={`user-admin-row-${u.id}`}>
             <Avatar id={u.id} name={u.name} photo={u.avatar} />
             <div><b>{u.name}</b><small>{u.email}</small></div>
-            {u.role === "admin" && <ShieldCheck size={14} className="muted" />}
+            {u.role === ROLE_SUPER_ADMIN && <ShieldCheck size={14} className="muted" />}
             <select value={u.role} onChange={e => setRole(u.id, e.target.value)} disabled={u.id === currentUser.id} data-testid={`user-admin-role-${u.id}`}>
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
+              {ROLE_OPTIONS.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
             </select>
             {u.id !== currentUser.id && <button className="danger-link" onClick={() => remove(u.id)} data-testid={`user-admin-delete-${u.id}`}><Trash2 size={13} /> Hapus</button>}
           </div>
