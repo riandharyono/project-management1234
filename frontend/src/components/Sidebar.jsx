@@ -10,7 +10,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
     <aside className="team-sidebar">
       <div className="ts-brand">
         <BrandMark size={28} />
-        <div className="ts-brand-text"><b>Northstar</b><small>Workspace</small></div>
+        <div className="ts-brand-text"><b>FallenStar</b><small>Workspace</small></div>
       </div>
       <div className="ts-search">
         <Search size={14} />

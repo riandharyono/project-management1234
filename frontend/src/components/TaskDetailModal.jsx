@@ -402,27 +402,6 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
               )}
             </div>
 
-            <div className="td-section">
-              <div className="td-section-head"><span>Lampiran</span><button className="icon-button" onClick={() => attachInput.current.click()} data-testid="task-add-attachment-button"><Plus size={14} /></button></div>
-              <input ref={attachInput} type="file" multiple hidden onChange={e => handleUpload(e.target.files, "attachment")} data-testid="task-attachment-file-input" />
-              <div className="td-dropzone" onClick={() => attachInput.current.click()}
-                onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files, "attachment"); }} data-testid="task-attachment-dropzone">
-                Klik atau lepaskan file disini untuk mengunggah
-              </div>
-              {!!(task.attachments || []).length && (
-                <div className="td-attachments" data-testid="task-attachments-list">
-                  {task.attachments.map(a => (
-                    <div className="td-attachment" key={a.id} data-testid={`task-attachment-${a.id}`}>
-                      <FileText size={15} />
-                      <div><b>{a.filename}</b><small>{formatSize(a.size)}</small></div>
-                      <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" data-testid={`download-attachment-${a.id}`}><Download size={14} /></a>
-                      <button onClick={() => removeAttachment(a.id)} data-testid={`remove-attachment-${a.id}`}><X size={13} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {showChecklist && (
               <div className="td-section">
                 <div className="td-section-head">
@@ -523,6 +502,27 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 </div>
               </div>
             )}
+
+            <div className="td-section">
+              <div className="td-section-head"><span>Lampiran</span><button className="icon-button" onClick={() => attachInput.current.click()} data-testid="task-add-attachment-button"><Plus size={14} /></button></div>
+              <input ref={attachInput} type="file" multiple hidden onChange={e => handleUpload(e.target.files, "attachment")} data-testid="task-attachment-file-input" />
+              <div className="td-dropzone" onClick={() => attachInput.current.click()}
+                onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files, "attachment"); }} data-testid="task-attachment-dropzone">
+                Klik atau lepaskan file disini untuk mengunggah
+              </div>
+              {!!(task.attachments || []).length && (
+                <div className="td-attachments" data-testid="task-attachments-list">
+                  {task.attachments.map(a => (
+                    <div className="td-attachment" key={a.id} data-testid={`task-attachment-${a.id}`}>
+                      <FileText size={15} />
+                      <div><b>{a.filename}</b><small>{formatSize(a.size)}</small></div>
+                      <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" data-testid={`download-attachment-${a.id}`}><Download size={14} /></a>
+                      <button onClick={() => removeAttachment(a.id)} data-testid={`remove-attachment-${a.id}`}><X size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="td-section td-comments" data-testid="task-comments">
               <div className="td-section-head"><MessageCircle size={15} /><span>Komentar & Aktifitas</span><small>{comments.length}</small></div>

@@ -89,15 +89,15 @@ function Auth({ onLogin }) {
     <main className="auth-shell">
       <section className="auth-brand">
         <BrandMark size={40} />
-        <p className="eyebrow">NORTHSTAR</p>
+        <p className="eyebrow">FALLENSTAR</p>
         <h1>Kerja tim, <em>lebih terarah.</em></h1>
         <p className="auth-copy">Satu ruang kerja untuk menyusun prioritas, menjaga ritme, dan menyelesaikan hal penting bersama tim Anda.</p>
         <div className="auth-signal"><CheckCircle2 size={18} /> Semua progres tim, terlihat jelas</div>
       </section>
       <section className="auth-panel">
-        <div className="mobile-logo"><BrandMark size={28} /><b>Northstar</b></div>
+        <div className="mobile-logo"><BrandMark size={28} /><b>FallenStar</b></div>
         <p className="eyebrow">SELAMAT DATANG</p>
-        <h2>Masuk ke Northstar</h2>
+        <h2>Masuk ke FallenStar</h2>
         <p className="muted">Lanjutkan pekerjaan terbaik Anda hari ini.</p>
         <form onSubmit={submit} data-testid="auth-form">
           <label>Email<input data-testid="auth-email-input" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="nama@perusahaan.com" /></label>

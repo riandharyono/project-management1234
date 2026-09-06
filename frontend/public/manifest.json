@@ -1,6 +1,6 @@
 {
-  "short_name": "Northstar",
-  "name": "Northstar Workspace",
+  "short_name": "FallenStar",
+  "name": "FallenStar Workspace",
   "description": "Satu ruang kerja untuk menyusun prioritas, menjaga ritme, dan menyelesaikan pekerjaan tim.",
   "icons": [
     { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },

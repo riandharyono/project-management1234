@@ -1227,7 +1227,7 @@ async def search(q: str = "", user=Depends(current_user)):
     return {"tasks": visible_tasks, "documents": docs, "teams": teams}
 
 @api.get("/")
-async def root(): return {"message": "Northstar Workspace API"}
+async def root(): return {"message": "FallenStar Workspace API"}
 app.include_router(api)
 configured_origins = set(x.strip() for x in os.environ["CORS_ORIGINS"].split(",") if x.strip() and x.strip() != "*")
 configured_origins.update({os.environ["FRONTEND_URL"], "http://localhost:3000"})

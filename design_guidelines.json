@@ -1,5 +1,5 @@
 {
-  "project_name": "Northstar",
+  "project_name": "FallenStar",
   "created_by": "R",
   "theme_preference": "light",
   "design_system_name": "Ink",
@@ -14,7 +14,7 @@
       "body": "13px / 1.5",
       "small": "11.5px / 600"
     },
-    "guidelines": "Plus Jakarta Sans for all UI type. Tight tracking on the Northstar wordmark. Do not use Manrope, IBM Plex, or Cicle-like mono labels on chrome."
+    "guidelines": "Plus Jakarta Sans for all UI type. Tight tracking on the FallenStar wordmark. Do not use Manrope, IBM Plex, or Cicle-like mono labels on chrome."
   },
   "colors": {
     "archetype": "Ink workspace — charcoal sidebar, indigo accent, cool gray board, hairline cards",
@@ -64,7 +64,7 @@
       "guidelines": "White cards, 1px line border, no default shadow. Hover lifts 2px. Overdue cards get a red strip and tint. Due chip is red when due today or past."
     },
     "sidebar": {
-      "guidelines": "Charcoal sidebar, Northstar wordmark (4-point star + name), indigo active row. Never a yellow selected row."
+      "guidelines": "Charcoal sidebar, FallenStar wordmark (falling star with a comet trail + name), indigo active row. Never a yellow selected row."
     },
     "topbar": {
       "guidelines": "Breadcrumb: Beranda › tim › Papan. Tabs are indigo-tinted pills, not a black underline."
@@ -74,7 +74,7 @@
     }
   },
   "copy": {
-    "product": "Northstar",
+    "product": "FallenStar",
     "kanban_tab_crumb": "Papan",
     "checklist": "Subtugas",
     "questions": "Check-in",
