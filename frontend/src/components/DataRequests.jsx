@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Paperclip, Trash2, X, Pencil, Check } from "lucide-react";
+import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
+import { ExportSuratModal } from "./ExportSuratModal";
 
 const STATUS_OPTIONS = [
   { value: "diminta", label: "Diminta" },
@@ -23,6 +24,7 @@ export function DataRequests({ team, myRole }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", pic: "", notes: "" });
   const [attachingId, setAttachingId] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const fileInput = useRef(null);
   const confirm = useConfirm();
 
@@ -87,8 +89,18 @@ export function DataRequests({ team, myRole }) {
     <div className="page dr-page" data-testid="data-requests-page">
       <div className="page-heading">
         <div><h1>Permintaan Data</h1><p className="muted">Data yang dibutuhkan tiap sheet kertas kerja evaluasi, dan status permintaannya ke pemda.</p></div>
-        <button className="primary" onClick={() => setOpenSheet("__new__")} data-testid="add-data-request-button"><Plus size={16} /> Tambah Data</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
+          <button className="primary" onClick={() => setOpenSheet("__new__")} data-testid="add-data-request-button"><Plus size={16} /> Tambah Data</button>
+        </div>
       </div>
+      {exportOpen && (
+        <ExportSuratModal
+          team={team}
+          items={items.filter(i => i.status !== "diterima_lengkap" && i.status !== "tidak_relevan")}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
 
       {!!counts.total && (
         <>
