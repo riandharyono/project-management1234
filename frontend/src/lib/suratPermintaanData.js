@@ -4,6 +4,8 @@ import {
 } from "docx";
 
 const CONTENT_WIDTH = 9071; // twips, A4 minus BPKP letter margins
+const BODY_FONT = "Arial";
+const BODY_SIZE = 24; // half-points -> 12pt
 const NO_BORDER = {
   top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
   bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -16,6 +18,13 @@ const CELL_BORDER = {
   left: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
   right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
 };
+
+// TextRun with the letter's body font/size baked in, so every run stays
+// consistent without repeating font/size at every call site.
+function run(textOrOpts) {
+  const opts = typeof textOrOpts === "string" ? { text: textOrOpts } : textOrOpts;
+  return new TextRun({ font: BODY_FONT, size: BODY_SIZE, ...opts });
+}
 
 const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 function formatIndoDate(iso) {
@@ -31,7 +40,7 @@ function plainCell(text, size, opts = {}) {
     borders: NO_BORDER,
     columnSpan: opts.span,
     verticalAlign: VerticalAlign.TOP,
-    children: [new Paragraph({ alignment: opts.align, spacing: { line: 264 }, children: [new TextRun({ text: text || "", bold: opts.bold })] })],
+    children: [new Paragraph({ alignment: opts.align, spacing: { line: 264 }, children: [run({ text: text || "", bold: opts.bold })] })],
   });
 }
 
@@ -42,7 +51,7 @@ function dataCell(text, size, opts = {}) {
     shading: opts.header ? { type: ShadingType.CLEAR, fill: "E4E6EE" } : undefined,
     verticalAlign: VerticalAlign.CENTER,
     margins: { top: 60, bottom: 60, left: 80, right: 80 },
-    children: [new Paragraph({ alignment: opts.align || AlignmentType.LEFT, children: [new TextRun({ text: text || "-", bold: !!opts.header })] })],
+    children: [new Paragraph({ alignment: opts.align || AlignmentType.LEFT, children: [run({ text: text || "-", bold: !!opts.header })] })],
   });
 }
 
@@ -72,10 +81,10 @@ export function buildSuratDocument({
           new TableCell({
             width: { size: 7471, type: WidthType.DXA }, borders: NO_BORDER, verticalAlign: VerticalAlign.CENTER,
             children: [
-              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [new TextRun({ text: "BADAN PENGAWASAN KEUANGAN DAN PEMBANGUNAN", bold: true, size: 22 })] }),
-              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [new TextRun({ text: "PERWAKILAN PROVINSI PAPUA BARAT", bold: true, size: 22 })] }),
-              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [new TextRun({ text: "Jalan Brigjen Marinir (Purn.) Abraham O. Atururi, Arfai, Manokwari 98315", size: 16 })] }),
-              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [new TextRun({ text: "Telepon (0986) 2217088  |  E-mail: papbar@bpkp.go.id  |  Website: https://www.bpkp.go.id", size: 16 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [run({ text: "BADAN PENGAWASAN KEUANGAN DAN PEMBANGUNAN", bold: true, size: 22 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [run({ text: "PERWAKILAN PROVINSI PAPUA BARAT", bold: true, size: 22 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [run({ text: "Jalan Brigjen Marinir (Purn.) Abraham O. Atururi, Arfai, Manokwari 98315", size: 16 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 240 }, children: [run({ text: "Telepon (0986) 2217088  |  E-mail: papbar@bpkp.go.id  |  Website: https://www.bpkp.go.id", size: 16 })] }),
             ],
           }),
         ],
@@ -107,7 +116,7 @@ export function buildSuratDocument({
   const introParagraph = new Paragraph({
     alignment: AlignmentType.JUSTIFIED,
     spacing: { after: 200, line: 300 },
-    children: [new TextRun(
+    children: [run(
       `Menindaklanjuti Surat Tugas Nomor ${nomorSuratTugas || "-"}, dalam rangka ${perihal || team?.name || "-"} di Wilayah Provinsi Papua Barat, kami mengharapkan ${penerimaSurat || "-"} memberikan informasi dan data kepada kami berupa:`
     )],
   });
@@ -140,44 +149,44 @@ export function buildSuratDocument({
     alignment: AlignmentType.JUSTIFIED,
     spacing: { after: 300, line: 300 },
     children: [
-      new TextRun("Data tersebut agar dapat disampaikan dan dapat kami terima paling lambat "),
-      new TextRun({ text: formatIndoDate(tenggatUploadData), bold: true }),
-      new TextRun(" melalui tautan "),
-      new TextRun({ text: linkUpload || "-", bold: true }),
-      new TextRun(". Informasi lebih lanjut dapat menghubungi narahubung kami yaitu "),
-      new TextRun({ text: `${picNama || "-"} (HP/WA ${picWa || "-"})`, bold: true }),
-      new TextRun("."),
+      run("Data tersebut agar dapat disampaikan dan dapat kami terima paling lambat "),
+      run({ text: formatIndoDate(tenggatUploadData), bold: true }),
+      run(" melalui tautan "),
+      run({ text: linkUpload || "-", bold: true }),
+      run(". Informasi lebih lanjut dapat menghubungi narahubung kami yaitu "),
+      run({ text: `${picNama || "-"} (HP/WA ${picWa || "-"})`, bold: true }),
+      run("."),
     ],
   });
 
   const thanksParagraph = new Paragraph({
     spacing: { after: 500 },
-    children: [new TextRun("Demikian permintaan ini kami sampaikan. Atas perhatian dan kerja sama yang baik, kami mengucapkan terima kasih.")],
+    children: [run("Demikian permintaan ini kami sampaikan. Atas perhatian dan kerja sama yang baik, kami mengucapkan terima kasih.")],
   });
 
   const signatureBlock = penandatangan.tandaTangan === "manual"
     ? [
-        new Paragraph({ children: [new TextRun(`${jabatanLabel},`)] }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ text: "" }),
-        new Paragraph({ children: [new TextRun(penandatangan.nama || "-")] }),
-        new Paragraph({ children: [new TextRun(`NIP ${penandatangan.nip || "-"}`)] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(`${jabatanLabel},`)] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, text: "" }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, text: "" }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, text: "" }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(penandatangan.nama || "-")] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(`NIP ${penandatangan.nip || "-"}`)] }),
       ]
     : [
-        new Paragraph({ children: [new TextRun(`${jabatanLabel},`)] }),
-        new Paragraph({ spacing: { after: 400 }, children: [new TextRun({ text: "Ditandatangani secara elektronik oleh", italics: true })] }),
-        new Paragraph({ children: [new TextRun(penandatangan.nama || "-")] }),
-        new Paragraph({ children: [new TextRun(`NIP ${penandatangan.nip || "-"}`)] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(`${jabatanLabel},`)] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 400 }, children: [run({ text: "Ditandatangani secara elektronik oleh", italics: true })] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(penandatangan.nama || "-")] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [run(`NIP ${penandatangan.nip || "-"}`)] }),
       ];
 
   const body = [
     kopSurat, kopDivider, infoTable,
     new Paragraph({ spacing: { after: 200 } }),
-    new Paragraph({ text: "Yth." }),
-    new Paragraph({ text: penerimaSurat || "-" }),
-    new Paragraph({ text: "di" }),
-    new Paragraph({ text: "Tempat", spacing: { after: 200 } }),
+    new Paragraph({ children: [run("Yth.")] }),
+    new Paragraph({ children: [run(penerimaSurat || "-")] }),
+    new Paragraph({ children: [run("di")] }),
+    new Paragraph({ spacing: { after: 200 }, children: [run("Tempat")] }),
     ...dataParagraphs,
     closingParagraph,
     thanksParagraph,

@@ -181,6 +181,18 @@ class TeamInput(BaseModel):
     color: str = "#2879ed"
     laporan_deadline: Optional[str] = None
     kke_deadline: Optional[str] = None
+class SuratDefaultsInput(BaseModel):
+    penerima_surat: str = ""
+    nomor_surat_tugas: str = ""
+    perihal: str = ""
+    link_upload: str = ""
+    jabatan: str = ""
+    bidang: str = ""
+    nama: str = ""
+    nip: str = ""
+    tanda_tangan: str = ""
+    pic_nama: str = ""
+    pic_wa: str = ""
 class ListInput(BaseModel):
     name: str = Field(min_length=1)
 class ListPatch(BaseModel):
@@ -1004,6 +1016,12 @@ async def remove_data_request_attachment(item_id: str, file_id: str, user=Depend
     item = await data_request_or_404(item_id)
     await require_member(item["team_id"], user)
     await db.data_requests.update_one({"id": item_id}, {"$pull": {"attachments": {"id": file_id}}})
+    return {"ok": True}
+
+@api.patch("/teams/{team_id}/surat-defaults")
+async def update_surat_defaults(team_id: str, data: SuratDefaultsInput, user=Depends(current_user)):
+    await require_member(team_id, user)
+    await db.teams.update_one({"id": team_id}, {"$set": {"surat_defaults": data.model_dump()}})
     return {"ok": True}
 
 @api.get("/data-requests/monitoring")

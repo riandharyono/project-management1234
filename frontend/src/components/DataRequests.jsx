@@ -17,7 +17,7 @@ const STATUS_TONE = {
 };
 const NO_SHEET = "(Tanpa sheet)";
 
-export function DataRequests({ team, myRole }) {
+export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSheet, setOpenSheet] = useState(null);
@@ -99,6 +99,7 @@ export function DataRequests({ team, myRole }) {
           team={team}
           items={items.filter(i => i.status !== "diterima_lengkap" && i.status !== "tidak_relevan")}
           onClose={() => setExportOpen(false)}
+          onSaved={onTeamUpdated}
         />
       )}
 

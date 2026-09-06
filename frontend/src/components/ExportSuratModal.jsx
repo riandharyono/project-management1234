@@ -1,25 +1,28 @@
 import { useState } from "react";
 import { X, Download } from "lucide-react";
 import { Packer } from "docx";
+import { client } from "../lib/api";
 import bpkpLogo from "../assets/bpkp-logo.jpeg";
 import { buildSuratDocument } from "../lib/suratPermintaanData";
 
 const BIDANG_OPTIONS = ["Akuntabilitas Pemerintahan Daerah", "Isi sendiri"];
 
-export function ExportSuratModal({ team, items, onClose }) {
-  const [penerimaSurat, setPenerimaSurat] = useState("");
-  const [nomorSuratTugas, setNomorSuratTugas] = useState("");
-  const [perihal, setPerihal] = useState(team?.name || "");
-  const [linkUpload, setLinkUpload] = useState("");
-  const [jabatan, setJabatan] = useState("koorwas");
-  const [tandaTangan, setTandaTangan] = useState("elektronik");
-  const [bidang, setBidang] = useState(BIDANG_OPTIONS[0]);
-  const [bidangCustom, setBidangCustom] = useState("");
-  const [nama, setNama] = useState("");
-  const [nip, setNip] = useState("");
+export function ExportSuratModal({ team, items, onClose, onSaved }) {
+  const d = team?.surat_defaults || {};
+  const [penerimaSurat, setPenerimaSurat] = useState(d.penerima_surat || "");
+  const [nomorSuratTugas, setNomorSuratTugas] = useState(d.nomor_surat_tugas || "");
+  const [perihal, setPerihal] = useState(d.perihal || team?.name || "");
+  const [linkUpload, setLinkUpload] = useState(d.link_upload || "");
+  const [jabatan, setJabatan] = useState(d.jabatan || "koorwas");
+  const [tandaTangan, setTandaTangan] = useState(d.tanda_tangan || "elektronik");
+  const [bidang, setBidang] = useState(d.bidang && BIDANG_OPTIONS.includes(d.bidang) ? d.bidang : (d.bidang ? "Isi sendiri" : BIDANG_OPTIONS[0]));
+  const [bidangCustom, setBidangCustom] = useState(d.bidang && !BIDANG_OPTIONS.includes(d.bidang) ? d.bidang : "");
+  const [nama, setNama] = useState(d.nama || "");
+  const [nip, setNip] = useState(d.nip || "");
+  // Tenggat tidak diisi otomatis dari riwayat — tanggal lama gampang kebawa salah kalau lupa diganti.
   const [tenggatUploadData, setTenggatUploadData] = useState("");
-  const [picNama, setPicNama] = useState("");
-  const [picWa, setPicWa] = useState("");
+  const [picNama, setPicNama] = useState(d.pic_nama || "");
+  const [picWa, setPicWa] = useState(d.pic_wa || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,16 +30,13 @@ export function ExportSuratModal({ team, items, onClose }) {
     e.preventDefault();
     setBusy(true);
     setError("");
+    const bidangValue = jabatan === "koorwas" ? (bidang === "Isi sendiri" ? bidangCustom : bidang) : "";
     try {
       const logoBytes = await fetch(bpkpLogo).then(r => r.arrayBuffer());
       const doc = buildSuratDocument({
         team, items,
         penerimaSurat, nomorSuratTugas, perihal, linkUpload,
-        penandatangan: {
-          jabatan,
-          bidang: jabatan === "koorwas" ? (bidang === "Isi sendiri" ? bidangCustom : bidang) : undefined,
-          nama, nip, tandaTangan,
-        },
+        penandatangan: { jabatan, bidang: bidangValue || undefined, nama, nip, tandaTangan },
         tenggatUploadData, picNama, picWa,
         logoBytes: new Uint8Array(logoBytes),
       });
@@ -49,6 +49,13 @@ export function ExportSuratModal({ team, items, onClose }) {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      try {
+        await client.patch(`/teams/${team.id}/surat-defaults`, {
+          penerima_surat: penerimaSurat, nomor_surat_tugas: nomorSuratTugas, perihal, link_upload: linkUpload,
+          jabatan, bidang: bidangValue, nama, nip, tanda_tangan: tandaTangan, pic_nama: picNama, pic_wa: picWa,
+        });
+        onSaved?.();
+      } catch (saveErr) { /* riwayat gagal disimpan, tidak menghalangi unduhan yang sudah berhasil */ }
       onClose();
     } catch (err) {
       setError("Gagal membuat surat. Coba lagi.");
@@ -61,6 +68,7 @@ export function ExportSuratModal({ team, items, onClose }) {
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal export-surat-modal" onClick={e => e.stopPropagation()} data-testid="export-surat-modal">
         <div className="modal-head"><h2>Ekspor Surat Permintaan Data</h2><button className="icon-button" onClick={onClose} data-testid="close-export-surat-modal"><X size={18} /></button></div>
+        {!!(d.penerima_surat || d.nama) && <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Form diisi otomatis dari ekspor terakhir di tim ini — tinggal cek ulang lalu perbarui tenggatnya.</p>}
         <form onSubmit={submit} className="inline-form">
           <label>PEJABAT PENERIMA SURAT
             <input value={penerimaSurat} onChange={e => setPenerimaSurat(e.target.value)} placeholder="Kepala BPKAD Kabupaten …" required data-testid="surat-penerima-input" />

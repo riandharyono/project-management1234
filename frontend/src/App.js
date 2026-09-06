@@ -392,7 +392,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
-          <DataRequests team={activeTeam} myRole={activeTeam.my_role} />
+          <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} />
         ) : tab === "chat" ? (
           <ChatGroup team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "announcements" ? (
