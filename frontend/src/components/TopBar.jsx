@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { applyTheme, readTheme } from "../lib/theme";
 
 const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Tugas", icon: ClipboardList },
+  { key: "data-requests", label: "Permintaan Data", icon: ClipboardCheck },
   { key: "chat", label: "Chat", icon: MessageSquare },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },

@@ -270,8 +270,22 @@ class ReactionInput(BaseModel):
     emoji: str = Field(min_length=1)
 class DocumentPatch(BaseModel):
     folder: Optional[str] = None
+class DataRequestCreate(BaseModel):
+    name: str = Field(min_length=1)
+    sheets: List[str] = []
+    status: str = "diminta"
+    pic: str = ""
+    notes: str = ""
+class DataRequestPatch(BaseModel):
+    name: Optional[str] = None
+    sheets: Optional[List[str]] = None
+    status: Optional[str] = None
+    pic: Optional[str] = None
+    notes: Optional[str] = None
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
+DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
+DATA_REQUEST_RECEIVED_STATUSES = {"diterima_sebagian", "diterima_lengkap"}
 
 async def seed_admin():
     await db.users.create_index("email", unique=True)
@@ -301,7 +315,7 @@ async def purge_team(team_id):
     if task_ids:
         await db.comments.delete_many({"task_id": {"$in": task_ids}})
         await db.task_activity.delete_many({"task_id": {"$in": task_ids}})
-    for coll in ["tasks", "lists", "team_members", "chat_messages", "announcements", "questions", "documents", "labels"]:
+    for coll in ["tasks", "lists", "team_members", "chat_messages", "announcements", "questions", "documents", "labels", "data_requests"]:
         await db[coll].delete_many({"team_id": team_id})
     await db.notifications.delete_many({"team_id": team_id})
     await db.teams.delete_one({"id": team_id})
@@ -796,9 +810,12 @@ async def add_comment(task_id: str, data: CommentInput, user=Depends(current_use
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
 @api.post("/files/upload")
-async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), kind: str = Query("attachment"), folder: str = Query(""), file: UploadFile = File(...), user=Depends(current_user)):
+async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), data_request_id: Optional[str] = Query(None), kind: str = Query("attachment"), folder: str = Query(""), file: UploadFile = File(...), user=Depends(current_user)):
     await require_member(team_id, user)
     if task_id: await load_visible_task(task_id, user)
+    if data_request_id:
+        item = await data_request_or_404(data_request_id)
+        if item["team_id"] != team_id: raise HTTPException(404, "Item data tidak ditemukan")
     ext = re.sub(r"[^A-Za-z0-9]", "", file.filename.rsplit(".", 1)[-1])[:10] or "bin" if "." in file.filename else "bin"
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
@@ -816,6 +833,8 @@ async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(
     elif kind == "cover" and task_id:
         await db.tasks.update_one({"id": task_id}, {"$set": {"cover": record["id"]}})
         await log_activity(task_id, user, "cover", "mengganti cover", team_id=team_id)
+    elif kind == "data_request" and data_request_id:
+        await db.data_requests.update_one({"id": data_request_id}, {"$push": {"attachments": entry}})
     else:
         await db.documents.insert_one({"id": str(uuid.uuid4()), "team_id": team_id, "file_id": record["id"], "filename": entry["filename"],
                                          "content_type": entry["content_type"], "size": entry["size"], "uploaded_by_name": user["name"], "task_id": task_id,
@@ -884,6 +903,82 @@ async def delete_document(document_id: str, user=Depends(current_user)):
     await db.documents.delete_one({"id": document_id})
     if file_record: await db.files.update_one({"id": doc["file_id"]}, {"$set": {"is_deleted": True}})
     return {"ok": True}
+
+# ---------- data requests (permintaan data) ----------
+async def data_request_or_404(item_id):
+    item = await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+    if not item: raise HTTPException(404, "Item data tidak ditemukan")
+    return item
+
+@api.get("/teams/{team_id}/data-requests")
+async def list_data_requests(team_id: str, user=Depends(current_user)):
+    await require_member(team_id, user)
+    items = await db.data_requests.find({"team_id": team_id}, {"_id": 0}).to_list(2000)
+    items.sort(key=lambda i: i.get("created_at") or "")
+    return items
+
+@api.post("/teams/{team_id}/data-requests")
+async def create_data_request(team_id: str, data: DataRequestCreate, user=Depends(current_user)):
+    await require_member(team_id, user)
+    if data.status not in DATA_REQUEST_STATUSES: raise HTTPException(400, "Status tidak valid")
+    sheets = [s.strip() for s in data.sheets if s.strip()]
+    item = {"id": str(uuid.uuid4()), "team_id": team_id, "name": data.name.strip(), "sheets": sheets,
+            "status": data.status, "pic": data.pic.strip(), "notes": data.notes.strip(),
+            "requested_at": now(), "received_at": now() if data.status in DATA_REQUEST_RECEIVED_STATUSES else None,
+            "attachments": [], "created_by": user["id"], "created_by_name": user["name"], "created_at": now()}
+    await db.data_requests.insert_one(dict(item))
+    item.pop("_id", None)
+    return item
+
+@api.patch("/data-requests/{item_id}")
+async def update_data_request(item_id: str, data: DataRequestPatch, user=Depends(current_user)):
+    item = await data_request_or_404(item_id)
+    await require_member(item["team_id"], user)
+    updates = data.model_dump(exclude_unset=True)
+    if "status" in updates:
+        if updates["status"] not in DATA_REQUEST_STATUSES: raise HTTPException(400, "Status tidak valid")
+        updates["received_at"] = now() if updates["status"] in DATA_REQUEST_RECEIVED_STATUSES else item.get("received_at")
+    if "sheets" in updates: updates["sheets"] = [s.strip() for s in updates["sheets"] if s.strip()]
+    if "name" in updates: updates["name"] = updates["name"].strip()
+    if "pic" in updates: updates["pic"] = updates["pic"].strip()
+    if "notes" in updates: updates["notes"] = updates["notes"].strip()
+    if updates: await db.data_requests.update_one({"id": item_id}, {"$set": updates})
+    return await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+
+@api.delete("/data-requests/{item_id}")
+async def delete_data_request(item_id: str, user=Depends(current_user)):
+    item = await data_request_or_404(item_id)
+    await require_admin(item["team_id"], user)
+    await db.data_requests.delete_one({"id": item_id})
+    return {"ok": True}
+
+@api.delete("/data-requests/{item_id}/attachments/{file_id}")
+async def remove_data_request_attachment(item_id: str, file_id: str, user=Depends(current_user)):
+    item = await data_request_or_404(item_id)
+    await require_member(item["team_id"], user)
+    await db.data_requests.update_one({"id": item_id}, {"$pull": {"attachments": {"id": file_id}}})
+    return {"ok": True}
+
+@api.get("/data-requests/monitoring")
+async def data_requests_monitoring(user=Depends(current_user)):
+    if not can_view_all_teams(user): raise HTTPException(403, "Tidak diizinkan mengakses ringkasan ini")
+    teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+    team_ids = [t["id"] for t in teams]
+    items = await db.data_requests.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(50000)
+    by_team = {}
+    for it in items:
+        by_team.setdefault(it["team_id"], []).append(it)
+    result = []
+    for t in teams:
+        rows = by_team.get(t["id"], [])
+        total = len(rows)
+        counts = {s: 0 for s in DATA_REQUEST_STATUSES}
+        for r in rows: counts[r["status"]] = counts.get(r["status"], 0) + 1
+        pct = round((counts["diterima_lengkap"] / total) * 100) if total else 0
+        result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
+                        "total": total, "counts": counts, "pct_complete": pct, "created_at": t.get("created_at")})
+    result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
+    return result
 
 # ---------- calendar sync (iCal) ----------
 def _ics_escape(text):

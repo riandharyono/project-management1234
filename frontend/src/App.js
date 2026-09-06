@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
 import { CheckCircle2 } from "lucide-react";
 import { client, apiError } from "./lib/api";
-import { canCreateTeam } from "./lib/roles";
+import { canCreateTeam, canViewAllTeams } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -13,6 +13,8 @@ import { Announcements } from "./components/Announcements";
 import { Schedule } from "./components/Schedule";
 import { Questions } from "./components/Questions";
 import { Documents } from "./components/Documents";
+import { DataRequests } from "./components/DataRequests";
+import { DataMonitoring } from "./components/DataMonitoring";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { MembersModal } from "./components/MembersModal";
@@ -140,6 +142,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [searchResults, setSearchResults] = useState([]);
   const [toast, setToast] = useState("");
   const [userAdminOpen, setUserAdminOpen] = useState(false);
+  const [monitoringOpen, setMonitoringOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [boardLoading, setBoardLoading] = useState(!!urlParams.get("team"));
@@ -267,6 +270,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   useEffect(() => {
     const params = new URLSearchParams();
     if (userAdminOpen) params.set("page", "users");
+    else if (monitoringOpen) params.set("page", "monitoring");
     else {
       if (activeTeamId) params.set("team", activeTeamId);
       if (activeTeamId && tab) params.set("tab", tab);
@@ -280,12 +284,13 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     skipUrl.current = false;
     if (replace) window.history.replaceState(null, "", next);
     else window.history.pushState(null, "", next);
-  }, [activeTeamId, tab, taskIdInUrl, userAdminOpen]);
+  }, [activeTeamId, tab, taskIdInUrl, userAdminOpen, monitoringOpen]);
   useEffect(() => {
     const onPop = () => {
       const p = new URLSearchParams(window.location.search);
       skipUrl.current = true;
       setUserAdminOpen(p.get("page") === "users");
+      setMonitoringOpen(p.get("page") === "monitoring");
       setActiveTeamId(p.get("team"));
       setTab(p.get("tab") || "overview");
       const task = p.get("task");
@@ -312,13 +317,13 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   }, [query]);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(""), 2200); };
-  const selectTeam = id => {
+  const selectTeam = (id, initialTab = "tasks") => {
     const cached = boardCache.get(id);
     if (cached) { applyBoard(cached); setBoardLoading(false); }
     else { applyBoard(EMPTY_BOARD); setBoardLoading(true); }
-    setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); setTaskModal(null);
+    setActiveTeamId(id); setTab(initialTab); setUserAdminOpen(false); setMonitoringOpen(false); setTaskModal(null);
   };
-  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setTaskModal(null); setBoardLoading(false); };
+  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setMonitoringOpen(false); setTaskModal(null); setBoardLoading(false); };
   const openTask = (task) => {
     if (task.team_id && task.team_id !== activeTeamId) {
       const cached = boardCache.get(task.team_id);
@@ -326,6 +331,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       setActiveTeamId(task.team_id);
     }
     setUserAdminOpen(false);
+    setMonitoringOpen(false);
     setTab("tasks");
     setTaskModal({ mode: "detail", task });
   };
@@ -352,9 +358,10 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
         onPrefetchTeam={prefetchTeam}
         onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} user={user}
-        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
+        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); setMonitoringOpen(false); }}
+        monitoringOpen={monitoringOpen} onOpenMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); }}
         onOpenProfile={() => setProfileOpen(true)} />
-      <main className="content" data-tab={userAdminOpen ? "users" : (activeTeam ? tab : "hq")}>
+      <main className="content" data-tab={userAdminOpen ? "users" : monitoringOpen ? "monitoring" : (activeTeam ? tab : "hq")}>
         <TopBar team={activeTeam} tab={tab} onTabChange={setTab} onOpenHQ={goHQ} members={members} myRole={activeTeam?.my_role}
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
           onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread} chatUnread={chatUnread}
@@ -367,6 +374,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
 
         {userAdminOpen ? (
           <UserAdminPage currentUser={user} />
+        ) : monitoringOpen ? (
+          <DataMonitoring onOpenTeam={id => selectTeam(id, "data-requests")} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
             onPrefetchTeam={prefetchTeam}
@@ -382,6 +391,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onOpenTask={openTask}
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
+        ) : tab === "data-requests" ? (
+          <DataRequests team={activeTeam} myRole={activeTeam.my_role} />
         ) : tab === "chat" ? (
           <ChatGroup team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "announcements" ? (

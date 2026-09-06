@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Search, Plus, Inbox, Users } from "lucide-react";
+import { Search, Plus, Inbox, Users, BarChart3 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { BrandMark } from "./BrandMark";
-import { canCreateTeam, isSuperAdmin } from "../lib/roles";
+import { canCreateTeam, canViewAllTeams, isSuperAdmin } from "../lib/roles";
 
-export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, onOpenProfile }) {
+export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, monitoringOpen, onOpenMonitoring, onOpenProfile }) {
   const [q, setQ] = useState("");
   const filtered = teams.filter(t => t.name.toLowerCase().includes(q.toLowerCase()));
   return (
@@ -21,9 +21,14 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
         )}
       </div>
       <nav className="ts-nav">
-        <a className={`ts-item ${!activeTeamId && !userAdminOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
+        <a className={`ts-item ${!activeTeamId && !userAdminOpen && !monitoringOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
           <Inbox size={16} /> <span>Tugas saya</span>
         </a>
+        {canViewAllTeams(user) && (
+          <a className={`ts-item ${monitoringOpen ? "active" : ""}`} onClick={onOpenMonitoring} data-testid="sidebar-monitoring-item">
+            <BarChart3 size={16} /> <span>Monitoring Data</span>
+          </a>
+        )}
         {isSuperAdmin(user) && (
           <a className={`ts-item ${userAdminOpen ? "active" : ""}`} onClick={onOpenUserAdmin} data-testid="sidebar-user-admin-item">
             <Users size={16} /> <span>Pengguna</span>

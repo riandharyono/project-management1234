@@ -15,3 +15,4 @@ export const ROLE_OPTIONS = [ROLE_SUPER_ADMIN, ROLE_KOORWAS, ROLE_KETUA_TIM, ROL
 export const roleLabel = role => ROLE_LABELS[role] || role;
 export const isSuperAdmin = user => user?.role === ROLE_SUPER_ADMIN;
 export const canCreateTeam = user => user?.role === ROLE_SUPER_ADMIN || user?.role === ROLE_KETUA_TIM;
+export const canViewAllTeams = user => user?.role === ROLE_SUPER_ADMIN || user?.role === ROLE_KOORWAS;
