@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, ChevronLeft, ChevronRight, CheckCircle2, CalendarClock, Link2, Check } from "lucide-react";
-import { client } from "../lib/api";
+import { client, localISODate } from "../lib/api";
 import { priorityLabel } from "../lib/priority";
 
 const WEEKDAYS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
@@ -11,7 +11,7 @@ const startOfWeek = d => {
   return date;
 };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const key = d => d?.toISOString().slice(0, 10);
+const key = d => d ? localISODate(d) : "";
 
 export function Schedule({ team, lists, onReload, onOpenTask }) {
   const [tasks, setTasks] = useState([]);
@@ -56,7 +56,7 @@ export function Schedule({ team, lists, onReload, onOpenTask }) {
   });
   const weekStart = startOfWeek(cursor);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const upcoming = tasks.filter(t => t.due_date && t.due_date >= today.toISOString().slice(0, 10) && !listsById[t.list_id]?.is_done).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 6);
+  const upcoming = tasks.filter(t => t.due_date && t.due_date >= localISODate(today) && !listsById[t.list_id]?.is_done).sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 6);
 
   const shift = (dir) => {
     if (view === "week") setCursor(c => addDays(c, dir * 7));

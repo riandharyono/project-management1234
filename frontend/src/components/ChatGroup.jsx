@@ -47,7 +47,7 @@ export function ChatGroup({ team, members, currentUser, myRole }) {
       wsRef.current = ws;
       ws.onopen = () => { retryRef.current = 0; setConnected(true); };
       ws.onmessage = (e) => {
-        const data = JSON.parse(e.data);
+        let data; try { data = JSON.parse(e.data); } catch (err) { return; }
         if (data.type === "reaction") setMessages(m => m.map(msg => msg.id === data.message_id ? { ...msg, reactions: data.reactions } : msg));
         else if (data.type === "delete") setMessages(m => m.filter(msg => msg.id !== data.message_id));
         else if (data.type === "clear") setMessages([]);

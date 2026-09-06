@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X, ListTodo, CheckCircle2, Ban } from "lucide-react";
-import { client, apiError, shortDate } from "../lib/api";
+import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban } from "lucide-react";
+import { client, apiError, shortDate, localISODate } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
 import { useConfirm } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { priorityLabel, priorityKey } from "../lib/priority";
 
-export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onCreateTask, onReload }) {
+export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onCreateTask, onReload, boardLoading }) {
   const [localTasks, setLocalTasks] = useState(tasks);
   const [localLists, setLocalLists] = useState(lists);
   const [view, setView] = useState(() => { try { return localStorage.getItem(`pmng_view_${team.id}`) || "kanban"; } catch (e) { return "kanban"; } });
@@ -46,11 +46,13 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const visibleLists = localLists.filter(l => !l.archived).sort((a, b) => a.order - b.order);
   const activeLists = visibleLists.filter(l => !l.is_done && !l.is_cancelled);
   const stageOf = (list) => list.is_done ? "done" : list.is_cancelled ? "cancelled" : activeLists[0]?.id === list.id ? "todo" : "progress";
-  const listStageIcon = (list) => list.is_done
-    ? <CheckCircle2 size={15} />
-    : list.is_cancelled
-    ? <Ban size={15} />
-    : <ListTodo size={15} />;
+  const listStageIcon = (list) => {
+    const stage = stageOf(list);
+    if (stage === "done") return <CheckCircle2 size={15} />;
+    if (stage === "cancelled") return <Ban size={15} />;
+    if (stage === "todo") return <Hourglass size={15} />;
+    return null;
+  };
   const byList = id => localTasks.filter(t => t.list_id === id && !t.archived
     && (!filters.priority || t.priority === filters.priority)
     && (!filters.assignee || (t.assignees || []).includes(filters.assignee))
@@ -61,14 +63,19 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
     const moved = localTasks.find(t => t.id === draggableId);
+    if (!moved) return;
     const rest = localTasks.filter(t => t.id !== draggableId);
     const destTasks = rest.filter(t => t.list_id === destination.droppableId).sort((a, b) => a.order - b.order);
     destTasks.splice(destination.index, 0, { ...moved, list_id: destination.droppableId });
     const reindexed = destTasks.map((t, i) => ({ ...t, order: i }));
     const others = rest.filter(t => t.list_id !== destination.droppableId);
     setLocalTasks([...others, ...reindexed]);
-    await Promise.all(reindexed.map(t => client.patch(`/tasks/${t.id}`, { list_id: t.list_id, order: t.order })));
-    onReload();
+    try {
+      await Promise.all(reindexed.map(t => client.patch(`/tasks/${t.id}`, { list_id: t.list_id, order: t.order })));
+    } catch (e) {
+      setError(apiError(e));
+      onReload();
+    }
   };
 
   const handleColumnDragEnd = async (result) => {
@@ -80,8 +87,12 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     const reindexed = reordered.map((l, i) => ({ ...l, order: i }));
     const archived = localLists.filter(l => l.archived);
     setLocalLists([...reindexed, ...archived]);
-    await Promise.all(reindexed.map(l => client.patch(`/lists/${l.id}`, { order: l.order })));
-    onReload();
+    try {
+      await Promise.all(reindexed.map(l => client.patch(`/lists/${l.id}`, { order: l.order })));
+    } catch (e) {
+      setError(apiError(e));
+      onReload();
+    }
   };
 
   const handleDragEnd = (result) => result.type === "COLUMN" ? handleColumnDragEnd(result) : handleTaskDragEnd(result);
@@ -151,8 +162,14 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
         </div>
       </div>
       {error && <div className="error kb-error" data-testid="kanban-error">{error}</div>}
+      {boardLoading && !visibleLists.length && (
+        <div className="kb-board kb-board-skeleton" data-testid="kanban-loading">
+          {[0, 1, 2, 3].map(i => <div key={i} className="kb-column kb-skeleton-col"><div className="kb-skeleton-line" /><div className="kb-skeleton-card" /><div className="kb-skeleton-card" /></div>)}
+        </div>
+      )}
 
       {view === "kanban" ? (
+        boardLoading && !visibleLists.length ? null : (
         <DragDropContext onDragEnd={handleDragEnd}>
           <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
             {(boardProvided) => (
@@ -162,12 +179,12 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                     {(colProvided) => (
                       <div className={`kb-column stage-${stageOf(list)}`} data-testid={`kanban-column-${list.id}`} ref={colProvided.innerRef} {...colProvided.draggableProps}>
                         <div className="kb-column-head" {...colProvided.dragHandleProps}>
-                          <span className="kb-stage-icon">{listStageIcon(list)}</span>
+                          {listStageIcon(list) && <span className="kb-stage-icon">{listStageIcon(list)}</span>}
                           {renaming === list.id ? (
                             <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={() => renameList(list.id)} onKeyDown={e => e.key === "Enter" && renameList(list.id)} data-testid={`rename-list-input-${list.id}`} />
                           ) : (<b>{list.name}</b>)}
                           <span className="column-count">{byList(list.id).length}</span>
-                          {isAdmin && <button className="icon-button" onClick={() => setMenuFor(menuFor === list.id ? null : list.id)} data-testid={`list-menu-${list.id}`}><MoreHorizontal size={15} /></button>}
+                          {isAdmin && <button className="icon-button kb-col-menu-btn" onClick={() => setMenuFor(menuFor === list.id ? null : list.id)} data-testid={`list-menu-${list.id}`}><MoreHorizontal size={15} /></button>}
                           {menuFor === list.id && (
                             <div className="kb-list-menu" data-testid={`list-menu-dropdown-${list.id}`}>
                               <button onClick={() => { setRenaming(list.id); setRenameValue(list.name); setMenuFor(null); }} data-testid={`rename-list-${list.id}`}><Pencil size={13} /> Ganti nama</button>
@@ -219,6 +236,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
             )}
           </Droppable>
         </DragDropContext>
+        )
       ) : (
         <div className="task-table-wrap" data-testid="task-list-view">
           <table className="task-table">
@@ -236,7 +254,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
               {sortedRows.map(t => {
                 const assigned = members.filter(m => (t.assignees || []).includes(m.id));
                 const chips = (t.labels || []).map(id => (labels || []).find(l => l.id === id)).filter(Boolean);
-                const overdue = t.due_date && t.stage !== "done" && t.due_date < new Date().toISOString().slice(0, 10);
+                const overdue = t.due_date && t.stage !== "done" && t.due_date < localISODate();
                 return (
                   <tr key={t.id} onClick={() => onOpenTask(t)} data-testid={`task-row-${t.id}`}>
                     <td className="task-table-title">{t.title}</td>

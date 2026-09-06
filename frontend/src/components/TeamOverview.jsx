@@ -1,5 +1,5 @@
 import { ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle } from "lucide-react";
-import { shortDate } from "../lib/api";
+import { shortDate, localISODate } from "../lib/api";
 
 const CARDS = [
   { key: "chat", label: "Chat", icon: MessageSquare, tone: "teal" },
@@ -10,7 +10,7 @@ const CARDS = [
 ];
 
 export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
   const open = tasks.filter(t => !listsById[t.list_id]?.is_done && !listsById[t.list_id]?.is_cancelled);
   const total = tasks.length;
   const done = tasks.filter(t => listsById[t.list_id]?.is_done).length;

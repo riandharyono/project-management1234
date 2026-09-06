@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2 } from "lucide-react";
-import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS } from "../lib/api";
+import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, localISODate } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
@@ -41,7 +41,14 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const confirm = useConfirm();
 
   useEffect(() => {
-    client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data));
+    setTask(initialTask);
+    setTitle(initialTask.title);
+    setShowChecklist((initialTask.checklist || []).length > 0);
+    setEditingNotes(false);
+    setPanel(null);
+  }, [initialTask.id]);
+  useEffect(() => {
+    client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)).catch(() => setComments([]));
     client.get(`/tasks/${task.id}/activity`).then(r => setActivity(r.data || [])).catch(() => setActivity([]));
   }, [task.id]);
   useEffect(() => {
@@ -239,17 +246,19 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
         )}
         <div className="td-body">
           <div className="td-main">
-            <button className={`td-status-dot ${list?.is_done ? "done" : ""}`} onClick={toggleComplete} data-testid="task-complete-toggle" />
-            <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" />
-            <p className="td-breadcrumb">di dalam list <b>{list?.name}</b> di <b>{team.name}</b></p>
+            <div className="td-title-row">
+              <button className={`td-status-dot ${list?.is_done ? "done" : ""}`} onClick={toggleComplete} data-testid="task-complete-toggle" />
+              <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" />
+            </div>
+            <p className="td-breadcrumb">di dalam list <span className="td-crumb-link">{list?.name || "…"}</span> di <span className="td-crumb-link">tim {team.name}</span></p>
             <div className="td-creator">
               <Avatar id={task.created_by} name={task.created_by_name} photo={members.find(m => m.id === task.created_by)?.avatar} />
-              <div><b>{task.created_by_name}</b><small>{timeAgo(task.created_at)}</small></div>
+              <div><b>{task.created_by_name}</b><small className="td-time-pill">{timeAgo(task.created_at)}</small></div>
               <span className="td-access"><ShieldCheck size={14} /> Akses</span>
             </div>
 
             <div className="td-section">
-              <div className="td-section-head"><span>ANGGOTA</span></div>
+              <div className="td-section-head is-caps"><span>ANGGOTA</span></div>
               <div className="td-avatars">
                 {assignedMembers.map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} title={m.name} />)}
                 <button className="td-add-avatar" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="task-add-member-button"><Plus size={13} /></button>
@@ -267,7 +276,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             </div>
 
             <div className="td-section">
-              <div className="td-section-head"><span>Catatan</span><button className="notes-edit-button" onClick={() => setEditingNotes(!editingNotes)} data-testid="task-edit-notes-button"><Pencil size={13} /> {editingNotes ? "Selesai" : "Edit"}</button></div>
+              <div className="td-section-head"><span>Catatan</span><button className="notes-edit-button" onClick={() => setEditingNotes(!editingNotes)} data-testid="task-edit-notes-button" title={editingNotes ? "Selesai" : "Edit"}><Pencil size={14} />{editingNotes ? " Selesai" : ""}</button></div>
               {editingNotes ? (
                 <RichTextEditor value={task.description || ""} onSave={saveNotes} testId="task-notes-input" />
               ) : task.description ? (
@@ -303,7 +312,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 <div className="td-section-head">
                   <span>Ceklis</span>
                   <button type="button" className="td-checklist-plus" onClick={() => checklistNewRef.current?.focus()} data-testid="checklist-header-add-button"><Plus size={14} /></button>
-                  <small data-testid="checklist-progress-count">{checklistDone}/{checklistTotal}{checklistTotal > 0 ? ` · ${Math.round((checklistDone / checklistTotal) * 100)}%` : ""}</small>
+                  <small hidden data-testid="checklist-progress-count">{checklistDone}/{checklistTotal}{checklistTotal > 0 ? ` · ${Math.round((checklistDone / checklistTotal) * 100)}%` : ""}</small>
                 </div>
                 {!(task.checklist || []).some(c => (c.subitems || []).length) && checklistTotal > 0 && (
                   <div className="td-progress-row">
@@ -314,7 +323,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 <input ref={checklistAttachInput} type="file" hidden onChange={e => uploadChecklistAttachment(e.target.files[0])} data-testid="checklist-attachment-file-input" />
                 {(task.checklist || []).map(c => {
                   const itemAssignee = members.find(m => m.id === c.assignee_id);
-                  const itemOverdue = c.due_date && !c.done && c.due_date < new Date().toISOString().slice(0, 10);
+                  const itemOverdue = c.due_date && !c.done && c.due_date < localISODate();
                   const subs = c.subitems || [];
                   const hasSubs = subs.length > 0;
                   const subDone = subs.filter(s => s.done).length;
@@ -385,9 +394,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                     )}
                     <div className="td-checklist-add td-sub-add">
                       <input value={subDraft[c.id] || ""} onChange={e => setSubDraft(d => ({ ...d, [c.id]: e.target.value }))}
-                        placeholder="Tambah sub-tugas…" onKeyDown={e => e.key === "Enter" && addSubItem(c.id)}
+                        placeholder="Nama sub tugas…" onKeyDown={e => e.key === "Enter" && addSubItem(c.id)}
                         data-testid={`subchecklist-new-item-input-${c.id}`} />
-                      <button className="secondary" onClick={() => addSubItem(c.id)} data-testid={`subchecklist-add-button-${c.id}`}>+</button>
+                      <button className="td-add-sub-btn" onClick={() => addSubItem(c.id)} data-testid={`subchecklist-add-button-${c.id}`}>Tambah Sub Tugas</button>
                     </div>
                   </div>
                   );

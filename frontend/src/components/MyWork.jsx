@@ -5,7 +5,7 @@ import { EmptyState } from "./EmptyState";
 
 const PRIORITY_DOT = { high: "high", medium: "medium", low: "low", sedang: "medium" };
 
-export function MyWork({ user, teams, onOpenTeam, onOpenTask, onOpenMention, onCreateTeam }) {
+export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, onOpenMention, onCreateTeam }) {
   const [data, setData] = useState(null);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export function MyWork({ user, teams, onOpenTeam, onOpenTask, onOpenMention, onC
       {!!teams.length && (
         <div className="mw-teams" data-testid="hq-team-grid">
           {teams.map(t => (
-            <button key={t.id} className="mw-team-chip" onClick={() => onOpenTeam(t.id)} data-testid={`hq-team-card-${t.id}`}>
+            <button key={t.id} className="mw-team-chip" onClick={() => onOpenTeam(t.id)} onMouseEnter={() => onPrefetchTeam?.(t.id)} data-testid={`hq-team-card-${t.id}`}>
               <i style={{ background: t.color }} />
               <span>{t.name}</span>
               <small>{t.member_count}</small>

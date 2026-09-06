@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Search, Plus, Inbox, Users } from "lucide-react";
 import { Avatar } from "./Avatar";
 
-export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, onOpenProfile }) {
+export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, onOpenProfile }) {
   const [q, setQ] = useState("");
   const filtered = teams.filter(t => t.name.toLowerCase().includes(q.toLowerCase()));
   return (
@@ -27,7 +27,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onCreat
         )}
         <p className="ts-label">TIM</p>
         {filtered.map(t => (
-          <a key={t.id} className={`ts-item ${activeTeamId === t.id ? "active" : ""}`} onClick={() => onSelectTeam(t.id)} data-testid={`sidebar-team-${t.id}`}>
+          <a key={t.id} className={`ts-item ${activeTeamId === t.id ? "active" : ""}`} onClick={() => onSelectTeam(t.id)} onMouseEnter={() => onPrefetchTeam?.(t.id)} onFocus={() => onPrefetchTeam?.(t.id)} data-testid={`sidebar-team-${t.id}`}>
             <i className="ts-dot" style={{ background: t.color }} /> <span>{t.name}</span>
           </a>
         ))}

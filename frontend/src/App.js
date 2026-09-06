@@ -77,6 +77,10 @@ function saveUnreadTeams(userId, set) {
   try { localStorage.setItem(unreadTeamsKey(userId), JSON.stringify([...set])); } catch (e) { /* ignore */ }
 }
 
+const boardCache = new Map();
+const boardPrefetching = new Set();
+const EMPTY_BOARD = { lists: [], tasks: [], members: [], labels: [] };
+
 function Auth({ onLogin }) {
   const [form, setForm] = useState({ email: "", password: "" }), [error, setError] = useState("");
   const submit = async e => { e.preventDefault(); try { const r = await client.post("/auth/login", form); onLogin(r.data); } catch (x) { setError(apiError(x)); } };
@@ -109,9 +113,9 @@ function Auth({ onLogin }) {
 function App() {
   const [user, setUser] = useState(null), [checking, setChecking] = useState(true);
   useEffect(() => { client.get("/auth/me").then(r => setUser(r.data)).catch(() => { }).finally(() => setChecking(false)); }, []);
-  useEffect(() => { const onExpired = () => setUser(null); window.addEventListener("session-expired", onExpired); return () => window.removeEventListener("session-expired", onExpired); }, []);
+  useEffect(() => { const onExpired = () => { boardCache.clear(); boardPrefetching.clear(); setUser(null); }; window.addEventListener("session-expired", onExpired); return () => window.removeEventListener("session-expired", onExpired); }, []);
   if (checking) return <div className="loading-screen">Memuat workspace…</div>;
-  return user ? <Workspace user={user} onLogout={() => { client.post("/auth/logout"); setUser(null); }} onUserUpdate={setUser} /> : <Auth onLogin={setUser} />;
+  return user ? <Workspace user={user} onLogout={() => { client.post("/auth/logout"); boardCache.clear(); boardPrefetching.clear(); setUser(null); }} onUserUpdate={setUser} /> : <Auth onLogin={setUser} />;
 }
 
 function Workspace({ user, onLogout, onUserUpdate }) {
@@ -136,18 +140,53 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [userAdminOpen, setUserAdminOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [boardLoading, setBoardLoading] = useState(!!urlParams.get("team"));
   const skipUrl = useRef(false);
   const bootUrl = useRef(true);
+  const loadGen = useRef(0);
 
   const activeTeam = teams.find(t => t.id === activeTeamId);
 
+  const applyBoard = (data) => {
+    setLists(data.lists || []);
+    setTasks(data.tasks || []);
+    setMembers(data.members || []);
+    setLabels(data.labels || []);
+  };
+  const fetchBoard = (teamId) => client.get(`/teams/${teamId}/board`).then(r => r.data).catch(e => {
+    if (e.response?.status !== 404) throw e;
+    return Promise.all([
+      client.get(`/teams/${teamId}/lists`), client.get(`/teams/${teamId}/tasks`),
+      client.get(`/teams/${teamId}/members`), client.get(`/teams/${teamId}/labels`),
+    ]).then(([l, t, m, la]) => ({ lists: l.data, tasks: t.data, members: m.data, labels: la.data }));
+  });
   const loadTeams = () => client.get("/teams").then(r => {
     setTeams(r.data);
     if (activeTeamId && !r.data.some(t => t.id === activeTeamId)) setActiveTeamId(null);
   });
-  const loadTeamData = (teamId) => Promise.all([
-    client.get(`/teams/${teamId}/lists`), client.get(`/teams/${teamId}/tasks`), client.get(`/teams/${teamId}/members`), client.get(`/teams/${teamId}/labels`)
-  ]).then(([l, t, m, la]) => { setLists(l.data); setTasks(t.data); setMembers(m.data); setLabels(la.data); });
+  const loadTeamData = (teamId, { silent } = {}) => {
+    if (!teamId) return Promise.resolve(EMPTY_BOARD);
+    const gen = ++loadGen.current;
+    if (!silent && !boardCache.has(teamId)) setBoardLoading(true);
+    return fetchBoard(teamId).then(data => {
+      boardCache.set(teamId, data);
+      if (loadGen.current !== gen) return data;
+      applyBoard(data);
+      setBoardLoading(false);
+      return data;
+    }).catch(e => {
+      if (loadGen.current !== gen) return EMPTY_BOARD;
+      setBoardLoading(false);
+      setToast(apiError(e));
+      setTimeout(() => setToast(""), 2200);
+      return EMPTY_BOARD;
+    });
+  };
+  const prefetchTeam = (teamId) => {
+    if (!teamId || boardCache.has(teamId) || boardPrefetching.has(teamId)) return;
+    boardPrefetching.add(teamId);
+    fetchBoard(teamId).then(data => boardCache.set(teamId, data)).catch(() => {}).finally(() => boardPrefetching.delete(teamId));
+  };
   const loadNotif = () => client.get("/notifications", { params: { skip: 0, limit: 20 } }).then(r => setNotif(r.data));
   const enableNotifications = () => {
     if (!("Notification" in window)) return;
@@ -174,7 +213,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     const wsUrl = process.env.REACT_APP_BACKEND_URL.replace(/^http/, "ws") + `/api/ws/chat/${activeTeamId}`;
     const ws = new WebSocket(wsUrl);
     ws.onmessage = e => {
-      const data = JSON.parse(e.data);
+      let data; try { data = JSON.parse(e.data); } catch (err) { return; }
       if (data.type === "message" && data.author_id !== user.id) {
         setChatUnread(true);
         const set = loadUnreadTeams(user.id); set.add(activeTeamId); saveUnreadTeams(user.id, set);
@@ -191,7 +230,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       ws = new WebSocket(wsUrl);
       ws.onopen = () => { retry = 0; };
       ws.onmessage = e => {
-        const data = JSON.parse(e.data);
+        let data; try { data = JSON.parse(e.data); } catch (err) { return; }
         if (data.type !== "notification") return;
         setNotif(prev => prev.items.some(n => n.id === data.item.id) ? prev : { ...prev, items: [data.item, ...prev.items], unread: data.unread });
         notifyBrowser(NOTIF_TITLES[data.item.type] || "Notifikasi Baru", data.item.text, () => setNotifOpen(true));
@@ -206,7 +245,12 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     const total = notif.unread + (chatUnread ? 1 : 0);
     document.title = total > 0 ? `(${total}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
   }, [notif.unread, chatUnread]);
-  useEffect(() => { if (activeTeamId) loadTeamData(activeTeamId); }, [activeTeamId]);
+  useEffect(() => {
+    if (!activeTeamId) { setBoardLoading(false); return; }
+    const cached = boardCache.get(activeTeamId);
+    if (cached) { applyBoard(cached); setBoardLoading(false); loadTeamData(activeTeamId, { silent: true }); }
+    else loadTeamData(activeTeamId);
+  }, [activeTeamId]);
   useEffect(() => {
     const taskId = urlParams.get("task");
     if (!taskId) return;
@@ -266,12 +310,18 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   }, [query]);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(""), 2200); };
-  const selectTeam = id => { setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); setTaskModal(null); };
-  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setTaskModal(null); };
-  const openTask = async (task) => {
+  const selectTeam = id => {
+    const cached = boardCache.get(id);
+    if (cached) { applyBoard(cached); setBoardLoading(false); }
+    else { applyBoard(EMPTY_BOARD); setBoardLoading(true); }
+    setActiveTeamId(id); setTab("tasks"); setUserAdminOpen(false); setTaskModal(null);
+  };
+  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setTaskModal(null); setBoardLoading(false); };
+  const openTask = (task) => {
     if (task.team_id && task.team_id !== activeTeamId) {
+      const cached = boardCache.get(task.team_id);
+      if (cached) { applyBoard(cached); setBoardLoading(false); }
       setActiveTeamId(task.team_id);
-      await loadTeamData(task.team_id);
     }
     setUserAdminOpen(false);
     setTab("tasks");
@@ -282,7 +332,11 @@ function Workspace({ user, onLogout, onUserUpdate }) {
 
   const openNotification = async n => {
     setNotifOpen(false);
-    if (n.team_id && n.team_id !== activeTeamId) { setActiveTeamId(n.team_id); await loadTeamData(n.team_id); }
+    if (n.team_id && n.team_id !== activeTeamId) {
+      const cached = boardCache.get(n.team_id);
+      if (cached) { applyBoard(cached); setBoardLoading(false); }
+      setActiveTeamId(n.team_id);
+    }
     if (n.type === "announcement") { setTab("announcements"); return; }
     if (n.type === "answer") { setTab("questions"); return; }
     if (n.task_id) {
@@ -294,6 +348,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   return (
     <div className="app-frame">
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
+        onPrefetchTeam={prefetchTeam}
         onCreateTeam={() => setCreateTeamOpen(true)} user={user}
         userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
         onOpenProfile={() => setProfileOpen(true)} />
@@ -312,6 +367,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           <UserAdminPage currentUser={user} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
+            onPrefetchTeam={prefetchTeam}
             onOpenTask={openTask}
             onOpenMention={openNotification}
             onCreateTeam={() => setCreateTeamOpen(true)} />
@@ -320,6 +376,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onOpenTask={openTask} />
         ) : tab === "tasks" ? (
           <KanbanBoard team={activeTeam} teams={teams} lists={lists} tasks={tasks} members={members} labels={labels} myRole={activeTeam.my_role}
+            boardLoading={boardLoading}
             onOpenTask={openTask}
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
@@ -339,10 +396,10 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           <NewTaskModal teamId={activeTeamId} lists={lists} listId={taskModal.listId} members={members}
             onClose={() => setTaskModal(null)} onCreated={() => { setTaskModal(null); loadTeamData(activeTeamId); showToast("Tugas berhasil dibuat"); }} />
         )}
-        {taskModal?.mode === "detail" && activeTeam && (
-          <TaskDetailModal task={taskModal.task} team={activeTeam} teams={teams} lists={lists} members={members} teamLabels={labels} myRole={activeTeam.my_role}
+        {taskModal?.mode === "detail" && (activeTeam || teams.find(t => t.id === taskModal.task?.team_id)) && (
+          <TaskDetailModal task={taskModal.task} team={activeTeam || teams.find(t => t.id === taskModal.task?.team_id)} teams={teams} lists={lists} members={members} teamLabels={labels} myRole={(activeTeam || teams.find(t => t.id === taskModal.task?.team_id))?.my_role}
             onLabelCreated={(label) => setLabels(prev => [...prev, label])}
-            currentUser={user} onClose={closeTask} onReload={() => loadTeamData(activeTeamId)} />
+            currentUser={user} onClose={closeTask} onReload={() => loadTeamData(activeTeamId || taskModal.task?.team_id)} />
         )}
         {membersModal && activeTeam && (
           <MembersModal team={activeTeam} mode={membersModal} members={members} myRole={activeTeam.my_role}

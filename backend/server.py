@@ -141,6 +141,14 @@ async def require_admin(team_id, user):
 def task_visible(task, user, role):
     return role == "admin" or not task.get("is_private") or task.get("created_by") == user["id"] or user["id"] in task.get("assignees", [])
 
+async def load_team_members(team_id):
+    rows = await db.team_members.find({"team_id": team_id}, {"_id": 0}).to_list(200)
+    if not rows:
+        return []
+    user_ids = [r["user_id"] for r in rows]
+    users = {u["id"]: public_user(u) for u in await db.users.find({"id": {"$in": user_ids}}, {"_id": 0}).to_list(200)}
+    return [{**users[r["user_id"]], "team_role": r["role"]} for r in rows if r["user_id"] in users]
+
 # ---------- models ----------
 class Credentials(BaseModel):
     email: EmailStr
@@ -317,10 +325,15 @@ async def startup():
     _warn_if_default_secrets()
     await seed_admin()
     await db.tasks.create_index("team_id")
+    await db.tasks.create_index([("team_id", 1), ("archived", 1), ("order", 1)])
+    await db.lists.create_index([("team_id", 1), ("archived", 1), ("order", 1)])
+    await db.labels.create_index("team_id")
     await db.task_activity.create_index("task_id")
     await db.comments.create_index("task_id")
     await db.login_attempts.create_index("identifier")
     await db.team_members.create_index([("team_id", 1), ("user_id", 1)], unique=True)
+    await db.team_members.create_index("user_id")
+    await db.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
     await migrate_legacy_tasks()
     await migrate_task_labels()
     await migrate_list_done_flag()
@@ -413,14 +426,19 @@ async def remove_avatar(user=Depends(current_user)):
 @api.get("/teams")
 async def list_teams(user=Depends(current_user)):
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
-    teams = []
-    for m in memberships:
-        team = await db.teams.find_one({"id": m["team_id"]}, {"_id": 0})
-        if not team: continue
-        count = await db.team_members.count_documents({"team_id": team["id"]})
-        teams.append({**team, "my_role": m["role"], "member_count": count})
-    teams.sort(key=lambda t: t["created_at"])
-    return teams
+    if not memberships:
+        return []
+    role_by_team = {m["team_id"]: m["role"] for m in memberships}
+    team_ids = list(role_by_team.keys())
+    teams = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0}).to_list(200)
+    counts = await db.team_members.aggregate([
+        {"$match": {"team_id": {"$in": team_ids}}},
+        {"$group": {"_id": "$team_id", "n": {"$sum": 1}}},
+    ]).to_list(200)
+    count_map = {c["_id"]: c["n"] for c in counts}
+    result = [{**t, "my_role": role_by_team.get(t["id"]), "member_count": count_map.get(t["id"], 0)} for t in teams]
+    result.sort(key=lambda t: t.get("created_at") or "")
+    return result
 
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
@@ -453,12 +471,23 @@ async def delete_team(team_id: str, user=Depends(current_user)):
 @api.get("/teams/{team_id}/members")
 async def team_members_list(team_id: str, user=Depends(current_user)):
     await require_member(team_id, user)
-    rows = await db.team_members.find({"team_id": team_id}, {"_id": 0}).to_list(200)
-    result = []
-    for r in rows:
-        u = await db.users.find_one({"id": r["user_id"]}, {"_id": 0})
-        if u: result.append({**public_user(u), "team_role": r["role"]})
-    return result
+    return await load_team_members(team_id)
+
+@api.get("/teams/{team_id}/board")
+async def get_team_board(team_id: str, user=Depends(current_user)):
+    role = await require_member(team_id, user)
+    lists, tasks, members, labels = await asyncio.gather(
+        db.lists.find({"team_id": team_id, "archived": False}, {"_id": 0}).sort("order", 1).to_list(100),
+        db.tasks.find({"team_id": team_id, "archived": False}, {"_id": 0}).sort("order", 1).to_list(1000),
+        load_team_members(team_id),
+        db.labels.find({"team_id": team_id}, {"_id": 0}).sort("created_at", 1).to_list(200),
+    )
+    return {
+        "lists": lists,
+        "tasks": [t for t in tasks if task_visible(t, user, role)],
+        "members": members,
+        "labels": labels,
+    }
 
 @api.get("/teams/{team_id}/available-members")
 async def available_members(team_id: str, user=Depends(current_user)):
@@ -552,7 +581,7 @@ async def my_tasks(user=Depends(current_user)):
         {"team_id": {"$in": team_ids}, "archived": False, "assignees": user["id"]},
         {"_id": 0},
     ).to_list(500)
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(timezone(timedelta(hours=7))).date().isoformat()
 
     def enrich(task):
         lst = lists.get(task.get("list_id") or "", {})

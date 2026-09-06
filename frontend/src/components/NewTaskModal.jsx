@@ -8,7 +8,8 @@ export function NewTaskModal({ teamId, lists, listId, members, onClose, onCreate
   const [error, setError] = useState("");
   const submit = async e => {
     e.preventDefault();
-    try { await client.post(`/teams/${teamId}/tasks`, form); onCreated(); }
+    if (!form.title.trim() || !form.list_id) { setError("Judul dan list wajib diisi"); return; }
+    try { await client.post(`/teams/${teamId}/tasks`, { ...form, title: form.title.trim() }); onCreated(); }
     catch (x) { setError(apiError(x)); }
   };
   return (

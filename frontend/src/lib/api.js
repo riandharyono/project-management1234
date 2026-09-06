@@ -23,7 +23,17 @@ export const apiError = e => { const d = e.response?.data?.detail; return Array.
 
 export const fileUrl = id => `${process.env.REACT_APP_BACKEND_URL}/api/files/${id}`;
 
-export const initials = name => (name || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+export const initials = name => {
+  const t = (name || "?").trim();
+  return (t[0] || "?").toUpperCase();
+};
+
+export const localISODate = (d = new Date()) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 
 const PALETTE = ["#1B4A3A", "#2F6F4E", "#3D5A4A", "#245C4A", "#5A6B5E", "#40664F", "#1A3D32", "#4A6748"];
 export const avatarColor = seed => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
@@ -42,7 +52,12 @@ export const timeAgo = iso => {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 };
 
-export const shortDate = iso => iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : "";
+export const shortDate = iso => {
+  if (!iso) return "";
+  const d = iso.length <= 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+};
 
 export const chatTime = iso => iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
 
