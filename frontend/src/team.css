@@ -831,6 +831,9 @@ html, body, #root { overflow-x: hidden; }
 .dr-similar button { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 9px; font-size: 12px; cursor: pointer; }
 .dr-similar button em { color: var(--muted); font-style: normal; }
 
+.mon-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.mon-tabs button { padding: 8px 4px; margin-right: 18px; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; }
+.mon-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
 .mon-list { display: flex; flex-direction: column; gap: 10px; }
 .mon-row {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 13px 16px;

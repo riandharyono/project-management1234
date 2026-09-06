@@ -26,7 +26,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
         </a>
         {canViewAllTeams(user) && (
           <a className={`ts-item ${monitoringOpen ? "active" : ""}`} onClick={onOpenMonitoring} data-testid="sidebar-monitoring-item">
-            <BarChart3 size={16} /> <span>Monitoring Data</span>
+            <BarChart3 size={16} /> <span>Monitoring</span>
           </a>
         )}
         {isSuperAdmin(user) && (

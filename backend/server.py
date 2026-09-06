@@ -959,6 +959,46 @@ async def remove_data_request_attachment(item_id: str, file_id: str, user=Depend
     await db.data_requests.update_one({"id": item_id}, {"$pull": {"attachments": {"id": file_id}}})
     return {"ok": True}
 
+def _task_progress_fraction(task, lst):
+    if lst and lst.get("is_done"): return 1.0
+    if lst and lst.get("is_cancelled"): return 0.0
+    bits = []
+    for c in task.get("checklist") or []:
+        bits.append(bool(c.get("done")))
+        for s in c.get("subitems") or []:
+            bits.append(bool(s.get("done")))
+    return (sum(bits) / len(bits)) if bits else 0.0
+
+@api.get("/teams/tasks-monitoring")
+async def tasks_monitoring(user=Depends(current_user)):
+    if not can_view_all_teams(user): raise HTTPException(403, "Tidak diizinkan mengakses ringkasan ini")
+    teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+    team_ids = [t["id"] for t in teams]
+    lists_by_id = {l["id"]: l async for l in db.lists.find({"team_id": {"$in": team_ids}}, {"_id": 0})}
+    tasks = await db.tasks.find({"team_id": {"$in": team_ids}, "archived": False}, {"_id": 0}).to_list(50000)
+    by_team = {}
+    for t in tasks:
+        by_team.setdefault(t["team_id"], []).append(t)
+    today = datetime.now(timezone(timedelta(hours=7))).date().isoformat()
+    result = []
+    for t in teams:
+        rows = by_team.get(t["id"], [])
+        total = len(rows)
+        progress_sum, done_count, overdue_count = 0.0, 0, 0
+        for task in rows:
+            lst = lists_by_id.get(task.get("list_id"))
+            progress_sum += _task_progress_fraction(task, lst)
+            if lst and lst.get("is_done"): done_count += 1
+            elif not (lst and lst.get("is_cancelled")):
+                due = task.get("due_date")
+                if due and due < today: overdue_count += 1
+        pct = round((progress_sum / total) * 100) if total else 0
+        result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
+                        "total": total, "done": done_count, "overdue": overdue_count,
+                        "pct_complete": pct, "created_at": t.get("created_at")})
+    result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
+    return result
+
 @api.get("/data-requests/monitoring")
 async def data_requests_monitoring(user=Depends(current_user)):
     if not can_view_all_teams(user): raise HTTPException(403, "Tidak diizinkan mengakses ringkasan ini")

@@ -14,7 +14,7 @@ import { Schedule } from "./components/Schedule";
 import { Questions } from "./components/Questions";
 import { Documents } from "./components/Documents";
 import { DataRequests } from "./components/DataRequests";
-import { DataMonitoring } from "./components/DataMonitoring";
+import { MonitoringPage } from "./components/MonitoringPage";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { MembersModal } from "./components/MembersModal";
@@ -375,7 +375,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         {userAdminOpen ? (
           <UserAdminPage currentUser={user} />
         ) : monitoringOpen ? (
-          <DataMonitoring onOpenTeam={id => selectTeam(id, "data-requests")} />
+          <MonitoringPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
             onPrefetchTeam={prefetchTeam}
