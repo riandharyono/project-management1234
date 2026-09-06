@@ -76,6 +76,16 @@ async def broadcast_notif(user_id, payload):
         try: await ws.send_json(payload)
         except Exception: pass
 
+_background_tasks: set = set()
+def spawn_background(coro):
+    # Fan-out notifications (e.g. to every team member on a chat message) shouldn't
+    # make the triggering request wait on all of them. Keeping a reference is required
+    # so asyncio doesn't garbage-collect the task mid-flight.
+    t = asyncio.create_task(coro)
+    _background_tasks.add(t)
+    t.add_done_callback(_background_tasks.discard)
+    return t
+
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY") or None
 VAPID_CLAIMS_BASE = {"sub": f"mailto:{os.environ.get('VAPID_CONTACT_EMAIL', 'admin@example.com')}"}
 
@@ -1117,6 +1127,12 @@ async def post_chat(team_id: str, data: ChatInput, user=Depends(current_user)):
            "reactions": {}, "author": user["name"], "author_id": user["id"], "created_at": now()}
     await db.chat_messages.insert_one(msg); msg.pop("_id", None)
     await broadcast_chat(team_id, {**msg, "type": "message"})
+    spawn_background(_notify_chat_recipients(team_id, user, data, msg))
+    return msg
+
+async def _notify_chat_recipients(team_id, user, data, msg):
+    # Runs after the response is sent — every team member gets pushed on every message,
+    # so this loop shouldn't make the sender wait on everyone else's push delivery.
     for m in data.mentions:
         if m != user["id"]: await notify(m, "mention", f"{user['name']} menyebut Anda di Chat Grup", team_id=team_id)
     body_preview = msg["body"][:80] if msg["body"].strip() else (f"Mengirim lampiran: {data.attachment['filename']}" if data.attachment else "Mengirim pesan")
@@ -1124,7 +1140,6 @@ async def post_chat(team_id: str, data: ChatInput, user=Depends(current_user)):
     for uid in member_ids:
         if uid != user["id"] and uid not in data.mentions:
             await send_push(uid, f"{user['name']} di Chat Grup", body_preview)
-    return msg
 
 @api.post("/chat/{message_id}/react")
 async def react_chat(message_id: str, data: ReactionInput, user=Depends(current_user)):
