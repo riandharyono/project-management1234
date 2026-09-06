@@ -84,8 +84,15 @@ async def send_push(user_id, title, body, url="/"):
     subs = await db.push_subscriptions.find({"user_id": user_id}, {"_id": 0}).to_list(20)
     for sub in subs:
         try:
-            webpush(subscription_info=sub["subscription"], data=json.dumps({"title": title, "body": body, "url": url}),
-                    vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims=dict(VAPID_CLAIMS_BASE))
+            # webpush() does a blocking HTTP call with no timeout of its own. Run it off
+            # the event loop with a hard timeout — otherwise a slow/unreachable push
+            # endpoint freezes the single worker for every user, not just this request.
+            await asyncio.wait_for(asyncio.to_thread(
+                webpush, subscription_info=sub["subscription"], data=json.dumps({"title": title, "body": body, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims=dict(VAPID_CLAIMS_BASE), timeout=10,
+            ), timeout=15)
+        except asyncio.TimeoutError:
+            logging.error("push failed: timed out")
         except WebPushException as e:
             if getattr(e.response, "status_code", None) in (404, 410):
                 await db.push_subscriptions.delete_one({"endpoint": sub["endpoint"]})
