@@ -228,6 +228,8 @@ class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
 class MemberUpdate(BaseModel): role: str
+class MemberPasswordUpdate(BaseModel):
+    new_password: str = Field(min_length=6)
 class MemberAdd(BaseModel): user_id: str
 class MemberCreate(BaseModel):
     name: str = Field(min_length=1)
@@ -1230,6 +1232,13 @@ async def update_member(member_id: str, data: MemberUpdate, user=Depends(current
     if data.role not in USER_ROLES: raise HTTPException(400, "Role tidak valid")
     result = await db.users.update_one({"id": member_id}, {"$set": {"role": data.role}})
     if not result.matched_count: raise HTTPException(404, "Member tidak ditemukan")
+    return {"ok": True}
+
+@api.patch("/members/{member_id}/password")
+async def update_member_password(member_id: str, data: MemberPasswordUpdate, user=Depends(current_user)):
+    if user["role"] != ROLE_SUPER_ADMIN: raise HTTPException(403, "Hanya super admin yang dapat mengubah password akun")
+    result = await db.users.update_one({"id": member_id}, {"$set": {"password_hash": hash_password(data.new_password)}})
+    if not result.matched_count: raise HTTPException(404, "Pengguna tidak ditemukan")
     return {"ok": True}
 
 @api.delete("/members/{member_id}")

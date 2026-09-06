@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UserPlus, Trash2, ShieldCheck } from "lucide-react";
+import { KeyRound, UserPlus, Trash2, ShieldCheck } from "lucide-react";
 import { client, apiError } from "../lib/api";
 import { ROLE_ANGGOTA_TIM, ROLE_OPTIONS, ROLE_SUPER_ADMIN, roleLabel } from "../lib/roles";
 import { Avatar } from "./Avatar";
@@ -11,6 +11,9 @@ export function UserAdminPage({ currentUser }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: ROLE_ANGGOTA_TIM });
   const [error, setError] = useState("");
+  const [pwFor, setPwFor] = useState(null);
+  const [pwValue, setPwValue] = useState("");
+  const [pwError, setPwError] = useState("");
 
   const load = () => client.get("/members").then(r => setItems(r.data));
   useEffect(() => { load(); }, []);
@@ -28,6 +31,14 @@ export function UserAdminPage({ currentUser }) {
   const remove = async id => {
     const ok = await confirm({ title: "Hapus akun ini?", body: "Pengguna akan keluar dari semua tim. Tindakan ini permanen.", confirmLabel: "Hapus akun", danger: true });
     if (ok) { await client.delete(`/members/${id}`); load(); }
+  };
+  const openPassword = id => { setPwFor(id); setPwValue(""); setPwError(""); };
+  const submitPassword = async e => {
+    e.preventDefault();
+    try {
+      await client.patch(`/members/${pwFor}/password`, { new_password: pwValue });
+      setPwFor(null); setPwValue(""); setPwError("");
+    } catch (x) { setPwError(apiError(x)); }
   };
 
   return (
@@ -50,14 +61,26 @@ export function UserAdminPage({ currentUser }) {
       )}
       <div className="members-list" data-testid="user-admin-list">
         {items.map(u => (
-          <div className="member-row" key={u.id} data-testid={`user-admin-row-${u.id}`}>
-            <Avatar id={u.id} name={u.name} photo={u.avatar} />
-            <div><b>{u.name}</b><small>{u.email}</small></div>
-            {u.role === ROLE_SUPER_ADMIN && <ShieldCheck size={14} className="muted" />}
-            <select value={u.role} onChange={e => setRole(u.id, e.target.value)} disabled={u.id === currentUser.id} data-testid={`user-admin-role-${u.id}`}>
-              {ROLE_OPTIONS.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
-            </select>
-            {u.id !== currentUser.id && <button className="danger-link" onClick={() => remove(u.id)} data-testid={`user-admin-delete-${u.id}`}><Trash2 size={13} /> Hapus</button>}
+          <div className="member-row-wrap" key={u.id}>
+            <div className="member-row" data-testid={`user-admin-row-${u.id}`}>
+              <Avatar id={u.id} name={u.name} photo={u.avatar} />
+              <div><b>{u.name}</b><small>{u.email}</small></div>
+              {u.role === ROLE_SUPER_ADMIN && <ShieldCheck size={14} className="muted" />}
+              <select value={u.role} onChange={e => setRole(u.id, e.target.value)} disabled={u.id === currentUser.id} data-testid={`user-admin-role-${u.id}`}>
+                {ROLE_OPTIONS.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
+              </select>
+              <button className="icon-button" onClick={() => openPassword(u.id)} title="Ubah password" data-testid={`user-admin-password-${u.id}`}><KeyRound size={13} /></button>
+              {u.id !== currentUser.id && <button className="danger-link" onClick={() => remove(u.id)} data-testid={`user-admin-delete-${u.id}`}><Trash2 size={13} /> Hapus</button>}
+            </div>
+            {pwFor === u.id && (
+              <form className="inline-form" onSubmit={submitPassword} data-testid={`user-admin-password-form-${u.id}`}>
+                <input type="password" autoFocus placeholder="Password baru (minimal 6 karakter)" value={pwValue}
+                  onChange={e => setPwValue(e.target.value)} minLength={6} required data-testid={`user-admin-password-input-${u.id}`} />
+                {pwError && <div className="error" data-testid={`user-admin-password-error-${u.id}`}>{pwError}</div>}
+                <div><button className="primary" data-testid={`user-admin-password-submit-${u.id}`}>Simpan Password</button>
+                  <button type="button" className="secondary" onClick={() => setPwFor(null)}>Batal</button></div>
+              </form>
+            )}
           </div>
         ))}
         {!items.length && <p className="muted">Belum ada pengguna.</p>}
