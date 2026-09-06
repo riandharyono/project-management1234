@@ -94,6 +94,16 @@ async def send_push(user_id, title, body, url="/"):
         except Exception as e:
             logging.error(f"push failed (unexpected): {e}")
 
+def _notif_url(type_, team_id=None, task_id=None):
+    # Mirrors the tab-selection order in the frontend's openNotification() so a
+    # clicked push notification lands in the same place as clicking it in-app.
+    if not team_id: return "/"
+    if type_ == "announcement": return f"/?team={team_id}&tab=announcements"
+    if type_ in ("answer", "question"): return f"/?team={team_id}&tab=questions"
+    if type_ == "mention" and not task_id: return f"/?team={team_id}&tab=chat"
+    if task_id: return f"/?team={team_id}&tab=tasks&task={task_id}"
+    return f"/?team={team_id}"
+
 async def notify(user_id, type_, text, team_id=None, task_id=None):
     if not user_id: return
     doc = {"id": str(uuid.uuid4()), "user_id": user_id, "type": type_, "text": text, "team_id": team_id, "task_id": task_id, "read": False, "created_at": now()}
@@ -101,7 +111,7 @@ async def notify(user_id, type_, text, team_id=None, task_id=None):
     unread = await db.notifications.count_documents({"user_id": user_id, "read": False})
     doc.pop("_id", None)
     await broadcast_notif(user_id, {"type": "notification", "item": doc, "unread": unread})
-    await send_push(user_id, NOTIF_PUSH_TITLES.get(type_, "Notifikasi Baru"), text)
+    await send_push(user_id, NOTIF_PUSH_TITLES.get(type_, "Notifikasi Baru"), text, url=_notif_url(type_, team_id, task_id))
 
 async def log_activity(task_id, user, action, detail="", team_id=None):
     doc = {
@@ -1304,13 +1314,17 @@ async def question_scheduler_loop():
             today_str = local_now.strftime("%Y-%m-%d")
             due = await db.question_schedules.find({"days": weekday, "time": hhmm, "last_fired_date": {"$ne": today_str}}, {"_id": 0}).to_list(200)
             for sched in due:
+                # Atomically claim this schedule before firing it, so a concurrent worker/tick
+                # racing on the same due item can't send the same routine question twice.
+                claimed = await db.question_schedules.find_one_and_update(
+                    {"id": sched["id"], "last_fired_date": {"$ne": today_str}}, {"$set": {"last_fired_date": today_str}})
+                if not claimed: continue
                 item = {"id": str(uuid.uuid4()), "team_id": sched["team_id"], "title": sched["title"], "body": sched["body"],
                          "author": sched["created_by_name"], "author_id": sched["created_by"], "answers": [],
                          "secret": sched["secret"], "recipients": sched["recipients"], "created_at": now()}
                 await db.questions.insert_one(item)
                 for r in sched["recipients"]:
                     await notify(r, "question", f"Pertanyaan rutin: \"{sched['title']}\"", team_id=sched["team_id"])
-                await db.question_schedules.update_one({"id": sched["id"]}, {"$set": {"last_fired_date": today_str}})
         except Exception as e:
             logging.error(f"question_scheduler_loop error: {e}")
         await asyncio.sleep(60)
@@ -1324,11 +1338,15 @@ async def deadline_reminder_loop():
                                           "last_reminder_date": {"$ne": today_str}}, {"_id": 0}).to_list(500)
             for t in tasks:
                 if t["list_id"] in done_list_ids: continue
+                # Atomically claim this task's reminder before sending it, so a concurrent
+                # worker/tick racing on the same overdue task can't double-notify assignees.
+                claimed = await db.tasks.find_one_and_update(
+                    {"id": t["id"], "last_reminder_date": {"$ne": today_str}}, {"$set": {"last_reminder_date": today_str}})
+                if not claimed: continue
                 overdue = t["due_date"] < today_str
                 text = f"Tugas \"{t['title']}\" {'sudah lewat tenggat' if overdue else 'jatuh tempo hari ini'}"
                 for a in t.get("assignees", []):
                     await notify(a, "deadline", text, team_id=t["team_id"], task_id=t["id"])
-                await db.tasks.update_one({"id": t["id"]}, {"$set": {"last_reminder_date": today_str}})
         except Exception as e:
             logging.error(f"deadline_reminder_loop error: {e}")
         await asyncio.sleep(300)

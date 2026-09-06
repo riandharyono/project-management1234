@@ -28,8 +28,14 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "/";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const c of clients) { if ("focus" in c) return c.focus(); }
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
+      for (const c of clients) {
+        if (!("focus" in c)) continue;
+        if ("navigate" in c) {
+          try { const navigated = await c.navigate(url); return navigated.focus(); } catch (e) { /* fall through to plain focus */ }
+        }
+        return c.focus();
+      }
       if (self.clients.openWindow) return self.clients.openWindow(url);
     })
   );

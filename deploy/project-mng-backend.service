@@ -8,8 +8,17 @@
 #   5. Cek status: sudo systemctl status project-mng-backend
 #   6. Lihat log: sudo journalctl -u project-mng-backend -f
 #
-# PENTING: tidak memakai --reload (itu untuk development saja) dan memakai
-# beberapa worker untuk menangani lebih banyak request bersamaan.
+# PENTING: tidak memakai --reload (itu untuk development saja).
+#
+# Sengaja memakai --workers 1: chat/notifikasi real-time dan pengingat
+# terjadwal (tenggat, pertanyaan rutin) disimpan di memori proses & jalan
+# sebagai background task per proses. Dengan >1 worker, tiap proses uvicorn
+# adalah proses OS terpisah dengan memori sendiri-sendiri — WebSocket yang
+# tersambung ke worker A tidak akan menerima broadcast yang dipicu request
+# di worker B (notifikasi/chat kadang tidak sampai), dan loop pengingat
+# akan berjalan dobel di tiap proses (notifikasi terkirim dua kali). Untuk
+# beban 15 pengguna, satu worker (async, non-blocking I/O ke MongoDB) lebih
+# dari cukup dan menghindari kedua bug tsb.
 
 [Unit]
 Description=Project Management API (FastAPI/Uvicorn)
@@ -21,7 +30,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/project-mng/backend
 EnvironmentFile=/var/www/project-mng/backend/.env
-ExecStart=/var/www/project-mng/backend/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=/var/www/project-mng/backend/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=3
 StandardOutput=journal

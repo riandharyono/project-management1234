@@ -346,7 +346,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       setActiveTeamId(n.team_id);
     }
     if (n.type === "announcement") { setTab("announcements"); return; }
-    if (n.type === "answer") { setTab("questions"); return; }
+    if (n.type === "answer" || n.type === "question") { setTab("questions"); return; }
+    if (n.type === "mention" && !n.task_id) { setTab("chat"); return; }
     if (n.task_id) {
       setTab("tasks");
       try { const r = await client.get(`/tasks/${n.task_id}`); setTaskModal({ mode: "detail", task: r.data }); } catch (e) { }
