@@ -102,6 +102,32 @@ let webpackConfig = {
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
       }
+
+      // CRA runs a minimal "dependencies" Babel pass over node_modules/**/*.{js,mjs}
+      // (babel-preset-react-app/dependencies) purely to inject runtime helpers.
+      // That pass applies our browserslist-derived @babel/preset-env split, which
+      // can enable @babel/plugin-transform-parameters without @babel/plugin-transform-classes
+      // for packages already shipping modern syntax (e.g. docx's prebuilt dist),
+      // producing invalid output ("super() in an arrow function ... without compiling
+      // classes"). Those packages don't need this helper-injection pass at all, so
+      // exclude them from it rather than reintroducing full class transforms for
+      // everything in node_modules.
+      const oneOfRules = webpackConfig.module.rules.find(rule => Array.isArray(rule.oneOf))?.oneOf;
+      const dependenciesBabelRule = oneOfRules?.find(
+        rule => rule.loader?.includes('babel-loader') &&
+          rule.options?.presets?.some(p => Array.isArray(p) && typeof p[0] === 'string' && p[0].includes('babel-preset-react-app/dependencies'))
+      );
+      if (dependenciesBabelRule) {
+        const skippedPackages = [/node_modules[\\/]docx[\\/]/];
+        const previousExclude = dependenciesBabelRule.exclude;
+        dependenciesBabelRule.exclude = (filepath) => {
+          if (skippedPackages.some(re => re.test(filepath))) return true;
+          if (typeof previousExclude === 'function') return previousExclude(filepath);
+          if (previousExclude instanceof RegExp) return previousExclude.test(filepath);
+          return false;
+        };
+      }
+
       return webpackConfig;
     },
   },
