@@ -58,10 +58,10 @@ export function Questions({ team, members, currentUser, myRole }) {
   return (
     <div className="page">
       <div className="page-heading">
-        <div><p className="eyebrow">PERTANYAAN</p><h1>Pertanyaan tim</h1><p className="muted">Ajukan pertanyaan dan dapatkan jawaban dari anggota tim.</p></div>
+        <div><p className="eyebrow">CHECK-IN</p><h1>Check-in tim</h1><p className="muted">Ajukan check-in dan dapatkan jawaban dari anggota tim.</p></div>
         <div className="kb-toolbar-actions">
           <button className="secondary" onClick={() => setMode(mode === "schedule" ? null : "schedule")} data-testid="schedule-question-button"><Clock size={14} /> Jadwalkan</button>
-          <button className="primary" onClick={() => setMode(mode === "once" ? null : "once")} data-testid="create-question-button"><Plus size={16} /> Ajukan Pertanyaan</button>
+          <button className="primary" onClick={() => setMode(mode === "once" ? null : "once")} data-testid="create-question-button"><Plus size={16} /> Ajukan Check-in</button>
         </div>
       </div>
       {mode === "once" && (
@@ -74,7 +74,7 @@ export function Questions({ team, members, currentUser, myRole }) {
       )}
       {mode === "schedule" && (
         <form className="inline-form schedule-form" onSubmit={submitSchedule} data-testid="question-schedule-form">
-          <label className="sf-label">Pertanyaan rutin apa yang ingin kamu tanyakan?</label>
+          <label className="sf-label">Check-in rutin apa yang ingin kamu tanyakan?</label>
           <input placeholder="Berapa data penjualan hari ini? Apa yang kamu kerjakan minggu ini?, dll" value={schedForm.title}
             onChange={e => setSchedForm({ ...schedForm, title: e.target.value })} data-testid="schedule-title-input" required />
 

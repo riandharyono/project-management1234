@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Search, Plus, Inbox, Users } from "lucide-react";
 import { Avatar } from "./Avatar";
+import { BrandMark } from "./BrandMark";
 
 export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, onOpenProfile }) {
   const [q, setQ] = useState("");
@@ -8,13 +9,15 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
   return (
     <aside className="team-sidebar">
       <div className="ts-brand">
-        <div className="brand-mark small">P</div>
-        <div className="ts-brand-text"><b>Project</b><small>Workspace</small></div>
+        <BrandMark size={28} />
+        <div className="ts-brand-text"><b>Northstar</b><small>Workspace</small></div>
       </div>
       <div className="ts-search">
         <Search size={14} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari tim" data-testid="sidebar-team-search" />
-        <button className="icon-button" onClick={onCreateTeam} data-testid="sidebar-create-team-button"><Plus size={15} /></button>
+        {user.role === "admin" && (
+          <button className="icon-button" onClick={onCreateTeam} data-testid="sidebar-create-team-button"><Plus size={15} /></button>
+        )}
       </div>
       <nav className="ts-nav">
         <a className={`ts-item ${!activeTeamId && !userAdminOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">

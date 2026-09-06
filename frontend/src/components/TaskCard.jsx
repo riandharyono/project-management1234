@@ -1,5 +1,5 @@
 import { Clock, CheckCircle2, AlignJustify, Paperclip, Lock } from "lucide-react";
-import { fileUrl, shortDate, localISODate } from "../lib/api";
+import { fileUrl, shortDate, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { priorityKey } from "../lib/priority";
 
@@ -20,10 +20,10 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
   const checklistDone = bits.filter(Boolean).length;
   const checklistTotal = bits.length;
   const pct = checklistTotal ? Math.round((checklistDone / checklistTotal) * 100) : 0;
-  const overdue = task.due_date && !done && stage !== "cancelled" && task.due_date < localISODate();
+  const dueReached = isDueReached(task.due_date, { done, cancelled: stage === "cancelled" });
   const chartBars = bits.length > 12 ? bits.filter((_, i) => i % Math.ceil(bits.length / 12) === 0).slice(0, 12) : bits;
   return (
-    <article className="kb-card" onClick={onOpen} data-testid={`task-card-${task.id}`}>
+    <article className={`kb-card ${dueReached ? "is-overdue" : ""} ${done ? "is-done-card" : ""}`} onClick={onOpen} data-testid={`task-card-${task.id}`}>
       <span hidden data-testid={`task-stage-badge-${task.id}`}>{stage}</span>
       {task.cover && <img src={fileUrl(task.cover)} className="kb-card-cover" alt="" />}
       {task.is_private && <Lock size={12} className="kb-private-icon" />}
@@ -42,7 +42,7 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
       )}
       <div className="kb-card-foot">
         {task.due_date && (
-          <span className={`due ${overdue ? "overdue" : done ? "is-done" : "upcoming"}`}>
+          <span className={`due ${dueReached ? "overdue" : done ? "is-done" : "upcoming"}`}>
             {done ? <CheckCircle2 size={12} /> : <Clock size={12} />}
             {shortDate(task.due_date)}
           </span>

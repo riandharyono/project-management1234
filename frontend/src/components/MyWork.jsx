@@ -30,7 +30,9 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
           <h1>{greeting}, {user.name.split(" ")[0]}</h1>
           <p className="muted">Tugas yang ditugaskan ke Anda, lintas tim.</p>
         </div>
-        <button className="primary" onClick={onCreateTeam} data-testid="hq-create-team-button"><Plus size={16} /> Buat Tim</button>
+        {user.role === "admin" && (
+          <button className="primary" onClick={onCreateTeam} data-testid="hq-create-team-button"><Plus size={16} /> Buat Tim</button>
+        )}
       </div>
 
       {!!teams.length && (
@@ -55,7 +57,7 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
                 icon={<Inbox size={22} />}
                 title="Belum ada tugas untuk Anda"
                 body="Tugas yang ditugaskan ke Anda akan muncul di sini, dikelompokkan menurut tenggat."
-                action={teams.length ? null : <button className="primary" onClick={onCreateTeam}>Buat tim pertama</button>}
+                action={teams.length || user.role !== "admin" ? null : <button className="primary" onClick={onCreateTeam}>Buat tim pertama</button>}
                 testId="my-work-empty"
               />
             )}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
 import { CheckCircle2 } from "lucide-react";
 import { client, apiError } from "./lib/api";
+import { BrandMark } from "./components/BrandMark";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { TeamOverview } from "./components/TeamOverview";
@@ -21,7 +22,7 @@ import { UserAdminPage } from "./components/UserAdminPage";
 import { MyWork } from "./components/MyWork";
 import { CommandPalette } from "./components/CommandPalette";
 
-const NOTIF_TITLES = { mention: "Disebut di Chat", announcement: "Pengumuman Baru", answer: "Pertanyaan Dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Pertanyaan Rutin" };
+const NOTIF_TITLES = { mention: "Disebut di Chat", announcement: "Pengumuman Baru", answer: "Check-in dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Check-in rutin" };
 const ORIGINAL_TITLE = document.title;
 
 let audioCtx = null;
@@ -87,24 +88,24 @@ function Auth({ onLogin }) {
   return (
     <main className="auth-shell">
       <section className="auth-brand">
-        <div className="brand-mark">P</div>
-        <p className="eyebrow">WORKSPACE</p>
+        <BrandMark size={40} />
+        <p className="eyebrow">NORTHSTAR</p>
         <h1>Kerja tim, <em>lebih terarah.</em></h1>
         <p className="auth-copy">Satu ruang kerja untuk menyusun prioritas, menjaga ritme, dan menyelesaikan hal penting bersama tim Anda.</p>
         <div className="auth-signal"><CheckCircle2 size={18} /> Semua progres tim, terlihat jelas</div>
       </section>
       <section className="auth-panel">
-        <div className="mobile-logo"><div className="brand-mark">P</div><b>Project</b></div>
+        <div className="mobile-logo"><BrandMark size={28} /><b>Northstar</b></div>
         <p className="eyebrow">SELAMAT DATANG</p>
-        <h2>Masuk ke ruang kerja Anda</h2>
+        <h2>Masuk ke Northstar</h2>
         <p className="muted">Lanjutkan pekerjaan terbaik Anda hari ini.</p>
         <form onSubmit={submit} data-testid="auth-form">
           <label>Email<input data-testid="auth-email-input" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="nama@perusahaan.com" /></label>
           <label>Password<input data-testid="auth-password-input" type="password" required value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Minimal 6 karakter" /></label>
           {error && <div className="error" data-testid="auth-error">{error}</div>}
-          <button className="primary wide" data-testid="auth-submit-button">Masuk ke workspace<span>→</span></button>
+          <button className="primary wide" data-testid="auth-submit-button">Masuk<span>→</span></button>
         </form>
-        <p className="fineprint">Belum punya akun? Hubungi admin workspace Anda untuk dibuatkan akun.</p>
+        <p className="fineprint">Belum punya akun? Hubungi admin Anda untuk dibuatkan akun.</p>
       </section>
     </main>
   );
@@ -349,7 +350,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     <div className="app-frame">
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
         onPrefetchTeam={prefetchTeam}
-        onCreateTeam={() => setCreateTeamOpen(true)} user={user}
+        onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)} user={user}
         userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); }}
         onOpenProfile={() => setProfileOpen(true)} />
       <main className="content" data-tab={userAdminOpen ? "users" : (activeTeam ? tab : "hq")}>
@@ -370,7 +371,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onPrefetchTeam={prefetchTeam}
             onOpenTask={openTask}
             onOpenMention={openNotification}
-            onCreateTeam={() => setCreateTeamOpen(true)} />
+            onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)} />
         ) : tab === "overview" ? (
           <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab}
             onOpenTask={openTask} />
@@ -407,7 +408,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onTeamUpdated={() => loadTeams()}
             onTeamDeleted={() => { setMembersModal(null); goHQ(); loadTeams(); showToast("Tim berhasil dihapus"); }} />
         )}
-        {createTeamOpen && (
+        {createTeamOpen && user.role === "admin" && (
           <CreateTeamModal onClose={() => setCreateTeamOpen(false)} onCreated={(team) => { setCreateTeamOpen(false); loadTeams(); setActiveTeamId(team.id); setTab("tasks"); }} />
         )}
         {profileOpen && (
@@ -421,7 +422,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           team={activeTeam}
           onSelectTeam={selectTeam}
           onOpenTask={openTask}
-          onCreateTeam={() => setCreateTeamOpen(true)}
+          onCreateTeam={() => user.role === "admin" && setCreateTeamOpen(true)}
+          canCreateTeam={user.role === "admin"}
           onCreateTask={() => { if (activeTeamId) setTaskModal({ mode: "new", listId: lists[0]?.id }); }}
           onGoHQ={goHQ}
           onTab={setTab}

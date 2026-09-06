@@ -9,7 +9,7 @@ const TABS = [
   { key: "chat", label: "Chat", icon: MessageSquare },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
-  { key: "questions", label: "Pertanyaan", icon: HelpCircle },
+  { key: "questions", label: "Check-in", icon: HelpCircle },
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
@@ -33,7 +33,7 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
         <div className="tt-crumb">
           <span onClick={onOpenHQ} data-testid="breadcrumb-home">Beranda</span>
           {team && <><b>›</b><span className="tt-current">{team.name}</span></>}
-          {team && tab === "tasks" && <><b>›</b><span className="tt-current">Tugas - Kanban</span></>}
+          {team && tab === "tasks" && <><b>›</b><span className="tt-current">Papan</span></>}
           {team && tab !== "overview" && tab !== "tasks" && activeTabLabel && <><b>›</b><span className="tt-current">{activeTabLabel}</span></>}
         </div>
         <div className="tt-search" onClick={onOpenPalette} role="button">

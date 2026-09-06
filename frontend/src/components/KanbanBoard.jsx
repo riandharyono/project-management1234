@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban } from "lucide-react";
-import { client, apiError, shortDate, localISODate } from "../lib/api";
+import { client, apiError, shortDate, isDueReached } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
 import { useConfirm } from "./ConfirmDialog";
@@ -194,12 +194,12 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                           )}
                         </div>
                         <Droppable droppableId={list.id} type="TASK">
-                          {(provided) => (
-                            <div className="kb-column-body" ref={provided.innerRef} {...provided.droppableProps}>
+                          {(provided, dropSnapshot) => (
+                            <div className={`kb-column-body ${dropSnapshot.isDraggingOver ? "is-over" : ""}`} ref={provided.innerRef} {...provided.droppableProps}>
                               {byList(list.id).map((t, idx) => (
                                 <Draggable draggableId={t.id} index={idx} key={t.id}>
-                                  {(p) => (
-                                    <div ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps}>
+                                  {(p, dragSnapshot) => (
+                                    <div className={`kb-drag ${dragSnapshot.isDragging ? "is-dragging" : ""}`} ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps}>
                                       <TaskCard task={t} members={members} labels={labels} stage={stageOf(list)} onOpen={() => onOpenTask(t)} onQuickMenu={() => setQuickMenuTask(t)} />
                                     </div>
                                   )}
@@ -254,9 +254,9 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
               {sortedRows.map(t => {
                 const assigned = members.filter(m => (t.assignees || []).includes(m.id));
                 const chips = (t.labels || []).map(id => (labels || []).find(l => l.id === id)).filter(Boolean);
-                const overdue = t.due_date && t.stage !== "done" && t.due_date < localISODate();
+                const overdue = isDueReached(t.due_date, { done: t.stage === "done", cancelled: t.stage === "cancelled" });
                 return (
-                  <tr key={t.id} onClick={() => onOpenTask(t)} data-testid={`task-row-${t.id}`}>
+                  <tr key={t.id} className={overdue ? "is-overdue" : ""} onClick={() => onOpenTask(t)} data-testid={`task-row-${t.id}`}>
                     <td className="task-table-title">{t.title}</td>
                     <td><span className="badge-status">{t.listName}</span></td>
                     <td><span className={`kb-priority-dot ${priorityKey(t.priority)}`} /> {priorityLabel(t.priority)}</td>

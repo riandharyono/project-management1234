@@ -15,7 +15,7 @@ const LABELS = {
   announcement: "Pengumuman",
   deadline: "Tenggat",
   answer: "Jawaban",
-  question: "Pertanyaan",
+  question: "Check-in",
 };
 
 export function NotificationsPanel({ items, hasMore, onRead, onReadAll, onSelect, onLoadMore }) {

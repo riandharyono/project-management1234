@@ -35,7 +35,10 @@ export const localISODate = (d = new Date()) => {
   return `${y}-${m}-${day}`;
 };
 
-const PALETTE = ["#1B4A3A", "#2F6F4E", "#3D5A4A", "#245C4A", "#5A6B5E", "#40664F", "#1A3D32", "#4A6748"];
+export const isDueReached = (dueDate, { done = false, cancelled = false } = {}) =>
+  !!dueDate && !done && !cancelled && dueDate <= localISODate();
+
+const PALETTE = ["#4F46E5", "#3730A3", "#1E293B", "#4338CA", "#0F172A", "#6366F1", "#312E81", "#334155"];
 export const avatarColor = seed => { let h = 0; for (const c of String(seed)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
 
 export const isImageFile = filename => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(filename || "");

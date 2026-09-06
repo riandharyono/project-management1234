@@ -1,98 +1,92 @@
 {
-  "project_name": "Project Management",
+  "project_name": "Northstar",
   "created_by": "R",
   "theme_preference": "light",
-  "design_system_name": "Cicle",
+  "design_system_name": "Ink",
   "typography": {
-    "headings": "Manrope",
-    "body": "IBM Plex Sans, sans-serif",
-    "mono": "IBM Plex Mono, monospace",
+    "headings": "Plus Jakarta Sans",
+    "body": "Plus Jakarta Sans, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
     "hierarchy": {
-      "h1": "24px / 700",
+      "h1": "28px / 700",
       "h2": "16px / 700",
       "h3": "13.5px / 700",
       "body": "13px / 1.5",
       "small": "11.5px / 600"
     },
-    "guidelines": "Manrope for titles, IBM Plex Sans for everything else. Keep type quiet like Cicle: 13–14px body, 13.5px column names, 14px card titles. Do not use mono on kanban chrome, breadcrumbs, or section labels."
+    "guidelines": "Plus Jakarta Sans for all UI type. Tight tracking on the Northstar wordmark. Do not use Manrope, IBM Plex, or Cicle-like mono labels on chrome."
   },
   "colors": {
-    "archetype": "Cicle-like workspace — light gray board, white cards, forest green, warm yellow selection",
+    "archetype": "Ink workspace — charcoal sidebar, indigo accent, cool gray board, hairline cards",
     "variables": {
-      "--paper": "#EFEFEF",
+      "--paper": "#F4F5F8",
       "--surface": "#FFFFFF",
-      "--sidebar": "#FFFFFF",
-      "--sidebar-panel": "#6B7585",
-      "--ink": "#2A2A2A",
-      "--muted": "#8A8A8A",
-      "--line": "#E4E4E4",
-      "--accent": "#1B4A3A",
-      "--accent-hover": "#14382C",
-      "--accent-tint": "#E7F0EC",
-      "--select": "#F6E7B0",
-      "--column": "#E6E6E6",
-      "--action": "#6B7585",
-      "--action-hover": "#5A6372",
-      "--success": "#2E9B5A",
-      "--success-tint": "#E3F6EA",
-      "--danger": "#E45B5B",
-      "--danger-tint": "#FDECEC",
-      "--warning": "#D4A017",
-      "--warning-tint": "#FBF3D5",
-      "--violet": "#7C5CFC",
-      "--violet-tint": "#F0ECFF",
-      "--teal": "#2F6F4E",
-      "--teal-tint": "#E3F0EA",
-      "--rose": "#E0447A",
-      "--rose-tint": "#FDE6EE"
+      "--sidebar": "#12141A",
+      "--sidebar-panel": "#1C2030",
+      "--ink": "#14161C",
+      "--muted": "#6B7285",
+      "--line": "#E4E6EE",
+      "--accent": "#4F46E5",
+      "--accent-hover": "#4338CA",
+      "--accent-tint": "#EEF0FF",
+      "--select": "#EEF0FF",
+      "--column": "#EBEDF3",
+      "--action": "#EEF0FF",
+      "--action-hover": "#E0E4FF"
     },
     "specific_adjustments": {
-      "sidebar_bg": "#FFFFFF",
-      "sidebar_text_active": "#2A2A2A",
-      "sidebar_text_inactive": "#6B6B6B",
-      "sidebar_active_row": "warm yellow #F6E7B0, no left accent bar",
-      "primary_button_bg": "#1B4A3A",
-      "primary_button_hover": "#14382C",
-      "task_action_buttons": "#6B7585 gray, white text, 8px radius",
-      "borders": "#E4E4E4",
-      "muted_text": "#8A8A8A",
-      "notif_badge": "#E8B923"
+      "sidebar_bg": "#12141A charcoal",
+      "sidebar_text_active": "#EEF0FF on indigo fill #2A3170 with 2px indigo inset bar",
+      "sidebar_text_inactive": "#9AA3B8",
+      "primary_button_bg": "#4F46E5",
+      "primary_button_hover": "#4338CA",
+      "task_action_buttons": "outline chips, not solid gray Cicle buttons",
+      "borders": "#E4E6EE hairline",
+      "muted_text": "#6B7285",
+      "notif_badge": "indigo accent"
     },
-    "guidelines": "Match Cicle contrast: almost-white sidebar, #EFEFEF board, #E6E6E6 columns, white cards with a 1px-soft shadow (no card border). Selected team is warm yellow, not a blue tint. Avatars are circular forest green. Task-detail action buttons are medium gray, not navy."
+    "guidelines": "Never use forest green, warm yellow selection, or Cicle gray action stacks. Sidebar is always charcoal. Cards have a 1px border and no soft Cicle shadow. Selected nav is indigo, not yellow."
   },
   "spacing_and_layout": {
-    "strategy": "Airy Cicle board — gray columns, white cards, compact chrome",
+    "strategy": "Dense Ink board — hairline cards, compact chrome, metadata strip on task detail",
     "radius_scale": {
-      "sm": "8px (buttons, cards, pills)",
-      "md": "10px (columns, panels)",
-      "lg": "12px (modals)",
-      "pill": "20px (sidebar search, comment input)"
+      "sm": "6px",
+      "md": "8px",
+      "lg": "10px"
     },
-    "guidelines": "Kanban has no page heading. Columns are 272px, 10px padding, 10px radius, no border. Cards 14px padding, 8px radius, soft shadow. Topbar row1 48px, tabs 42px with black underline. Task modal is wide, white, gray action stack on the right."
+    "guidelines": "Columns 272px with 8px radius and a hairline. Cards 14px padding, 8px radius, 1px border. Topbar 48px. Task modal is a single column with a horizontal property/action chip row under the title — never a right-hand gray button stack."
   },
   "motion": {
-    "guidelines": "Every interactive element gets a targeted transition (never `transition: all`): buttons lift on hover and scale down slightly on press; tabs and nav items animate background/color; kanban cards, overview cards, and list rows fade+rise in on mount (`riseIn` keyframe); modals and dropdowns fade+scale in (`modalIn`); the unread notification dot pulses (`pulseDot`). Keyframes live in index.css and are reused across App.css/team.css/extra.css."
+    "guidelines": "Every interactive element gets a targeted transition (never `transition: all`): buttons lift on hover and scale down slightly on press; tabs and nav items animate background/color; kanban cards, overview cards, and list rows fade+rise in on mount (`riseIn` keyframe); modals and dropdowns fade+scale in (`modalIn`); the unread notification dot pulses (`pulseDot`)."
   },
   "components": {
     "kanban_cards": {
-      "guidelines": "White cards on gray columns, no border, soft shadow. Title 14px. Due date is plain gray unless overdue (red pill, white text) or done (green pill, white text). Circular avatar bottom-left. No visible priority dot. Menu appears on hover."
+      "guidelines": "White cards, 1px line border, no default shadow. Hover lifts 2px. Overdue cards get a red strip and tint. Due chip is red when due today or past."
     },
     "sidebar": {
-      "guidelines": "White sidebar, pill search. Active item is warm yellow (#F6E7B0) with dark text and no inset bar. Team dots stay gray/team-color."
+      "guidelines": "Charcoal sidebar, Northstar wordmark (4-point star + name), indigo active row. Never a yellow selected row."
     },
     "topbar": {
-      "guidelines": "48px first row. Breadcrumb: Beranda › tim › Tugas - Kanban. Tabs underline in ink, not accent. Filter/Kanban/Arsip sit in the kanban toolbar. Account actions live in the avatar menu."
+      "guidelines": "Breadcrumb: Beranda › tim › Papan. Tabs are indigo-tinted pills, not a black underline."
     },
     "task_detail_modal": {
-      "guidelines": "Spacious white modal. Status circle + title + 'di dalam list X di tim Y'. Gray KELOLA TUGAS / AKSI buttons. Light filled dropzone, not dashed. Comment input is a pill."
+      "guidelines": "Single column. Title, short crumb (list · team), metadata chips (people, dates, labels), then outline property/action chips. Panels open inline. No KELOLA TUGAS gray stack."
     }
+  },
+  "copy": {
+    "product": "Northstar",
+    "kanban_tab_crumb": "Papan",
+    "checklist": "Subtugas",
+    "questions": "Check-in",
+    "default_lists": ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
   },
   "instructions_to_main_agent": [
     "1. Do NOT touch or remove any existing `data-testid` attributes in the JS files.",
     "2. Do NOT change the LABEL_COLORS swatch palette values (CreateTeamModal.jsx / TaskDetailModal.jsx) — they are embedded in generated data-testid strings.",
     "3. All visual styling lives in App.css, extra.css, team.css and the font import in index.css — prefer editing those over adding inline styles or Tailwind classes to JSX.",
     "4. Keep class names stable; only change declarations inside existing rules or add new rules for a genuinely new class.",
-    "5. Reuse the CSS custom properties defined in App.css :root (--paper, --surface, --ink, --muted, --line, --accent, --accent-hover, --accent-tint, --select, --column, --action, --action-hover, --success, --danger, --warning, --violet, --teal, --rose, --r-sm, --r-md, --r-lg, --font-heading, --font-body, --font-mono) instead of hardcoding new hex values."
+    "5. Reuse the CSS custom properties defined in App.css :root (--paper, --surface, --ink, --muted, --line, --accent, --accent-hover, --accent-tint, --select, --column, --action, --action-hover, --success, --danger, --warning, --violet, --teal, --rose, --r-sm, --r-md, --r-lg, --font-heading, --font-body, --font-mono) instead of hardcoding new hex values.",
+    "6. Do not restyle back toward Cicle (forest green, yellow nav, gray action stack, IBM Plex/Manrope)."
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
     "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends.",

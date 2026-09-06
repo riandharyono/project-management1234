@@ -46,7 +46,7 @@ export function CopyMoveModal({ task, teams, mode, onClose, onDone }) {
             <div className="keep-options">
               <label className="keep-row"><input type="checkbox" checked={keep.keep_labels} onChange={() => toggleKeep("keep_labels")} data-testid="keep-labels" /> Label ({(task.labels || []).length})</label>
               <label className="keep-row"><input type="checkbox" checked={keep.keep_assignees} onChange={() => toggleKeep("keep_assignees")} data-testid="keep-assignees" /> Anggota ({(task.assignees || []).length})</label>
-              <label className="keep-row"><input type="checkbox" checked={keep.keep_checklist} onChange={() => toggleKeep("keep_checklist")} data-testid="keep-checklist" /> Ceklis (item, lampiran, tenggat & anggota ceklis ikut) ({(task.checklist || []).length})</label>
+              <label className="keep-row"><input type="checkbox" checked={keep.keep_checklist} onChange={() => toggleKeep("keep_checklist")} data-testid="keep-checklist" /> Subtugas (item, lampiran, tenggat & anggota ikut) ({(task.checklist || []).length})</label>
               <label className="keep-row"><input type="checkbox" checked={keep.keep_attachments} onChange={() => toggleKeep("keep_attachments")} data-testid="keep-attachments" /> Lampiran ({(task.attachments || []).length})</label>
             </div>
           </>

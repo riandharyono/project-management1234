@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, MessageSquare } from "lucide-react";
+import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, MessageSquare, HelpCircle, Megaphone } from "lucide-react";
 import { client } from "../lib/api";
 
 const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
-  { key: "tasks", label: "Tugas", icon: ClipboardList },
+  { key: "tasks", label: "Papan", icon: ClipboardList },
   { key: "chat", label: "Chat", icon: MessageSquare },
+  { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
+  { key: "questions", label: "Check-in", icon: HelpCircle },
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
-export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onTab, onOpenDocuments }) {
+export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onTab, onOpenDocuments, canCreateTeam }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState({ tasks: [], documents: [], teams: [] });
   const [active, setActive] = useState(0);
@@ -39,8 +41,8 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
     const needle = q.trim().toLowerCase();
     const list = [
       { id: "act-hq", label: "Ke Tugas saya", icon: Inbox, run: onGoHQ },
-      { id: "act-new-team", label: "Buat tim baru", icon: Plus, run: onCreateTeam },
     ];
+    if (canCreateTeam) list.push({ id: "act-new-team", label: "Buat tim baru", icon: Plus, run: onCreateTeam });
     if (team) {
       list.push({ id: "act-new-task", label: `Buat tugas di ${team.name}`, icon: Plus, run: onCreateTask });
       TABS.forEach(tab => list.push({ id: `act-tab-${tab.key}`, label: `Buka ${tab.label}`, icon: tab.icon, run: () => onTab(tab.key) }));
@@ -48,7 +50,7 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
     teams.forEach(t => list.push({ id: `team-${t.id}`, label: `Buka tim ${t.name}`, icon: Users, run: () => onSelectTeam(t.id) }));
     if (!needle) return list.slice(0, 8);
     return list.filter(a => a.label.toLowerCase().includes(needle));
-  }, [q, team, teams, onGoHQ, onCreateTeam, onCreateTask, onTab, onSelectTeam]);
+  }, [q, team, teams, onGoHQ, onCreateTeam, onCreateTask, onTab, onSelectTeam, canCreateTeam]);
 
   const rows = useMemo(() => {
     const out = [];

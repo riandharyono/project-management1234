@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2 } from "lucide-react";
-import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, localISODate } from "../lib/api";
+import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2, MoreHorizontal } from "lucide-react";
+import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
@@ -32,6 +32,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [editingItemText, setEditingItemText] = useState("");
   const [attachingItemId, setAttachingItemId] = useState(null);
   const [copyMoveMode, setCopyMoveMode] = useState(null);
+  const [activityExpanded, setActivityExpanded] = useState(false);
   const attachInput = useRef(null);
   const coverInput = useRef(null);
   const checklistAttachInput = useRef(null);
@@ -46,6 +47,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setShowChecklist((initialTask.checklist || []).length > 0);
     setEditingNotes(false);
     setPanel(null);
+    setActivityExpanded(false);
   }, [initialTask.id]);
   useEffect(() => {
     client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)).catch(() => setComments([]));
@@ -250,30 +252,144 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
               <button className={`td-status-dot ${list?.is_done ? "done" : ""}`} onClick={toggleComplete} data-testid="task-complete-toggle" />
               <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" />
             </div>
-            <p className="td-breadcrumb">di dalam list <span className="td-crumb-link">{list?.name || "…"}</span> di <span className="td-crumb-link">tim {team.name}</span></p>
+            <p className="td-breadcrumb"><span className="td-crumb-link">{list?.name || "…"}</span> · {team.name}</p>
             <div className="td-creator">
               <Avatar id={task.created_by} name={task.created_by_name} photo={members.find(m => m.id === task.created_by)?.avatar} />
               <div><b>{task.created_by_name}</b><small className="td-time-pill">{timeAgo(task.created_at)}</small></div>
               <span className="td-access"><ShieldCheck size={14} /> Akses</span>
             </div>
 
-            <div className="td-section">
-              <div className="td-section-head is-caps"><span>ANGGOTA</span></div>
+            <div className="td-meta">
               <div className="td-avatars">
                 {assignedMembers.map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} title={m.name} />)}
                 <button className="td-add-avatar" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="task-add-member-button"><Plus size={13} /></button>
               </div>
-              {panel === "members" && (
-                <div className="td-panel" data-testid="task-members-panel">
-                  {members.map(m => (
-                    <label key={m.id} className="td-panel-row">
-                      <input type="checkbox" checked={(task.assignees || []).includes(m.id)} onChange={() => toggleAssignee(m.id)} data-testid={`task-member-toggle-${m.id}`} />
-                      <Avatar id={m.id} name={m.name} photo={m.avatar} />{m.name}
-                    </label>
-                  ))}
-                </div>
-              )}
+              {task.start_date && <span className="td-meta-chip">Mulai {shortDate(task.start_date)}</span>}
+              {task.due_date && <span className={`td-meta-chip ${isDueReached(task.due_date, { done: !!list?.is_done }) ? "overdue" : ""}`}>Tenggat {shortDate(task.due_date)}{task.due_time ? ` ${task.due_time}` : ""}</span>}
+              {(task.labels || []).map(id => {
+                const l = (teamLabels || []).find(x => x.id === id);
+                return l ? <span key={l.id} className="kb-label-chip" style={{ background: l.color + "22", color: l.color }}>{l.name}</span> : null;
+              })}
             </div>
+            {panel === "members" && (
+              <div className="td-panel" data-testid="task-members-panel">
+                {members.map(m => (
+                  <label key={m.id} className="td-panel-row">
+                    <input type="checkbox" checked={(task.assignees || []).includes(m.id)} onChange={() => toggleAssignee(m.id)} data-testid={`task-member-toggle-${m.id}`} />
+                    <Avatar id={m.id} name={m.name} photo={m.avatar} />{m.name}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <aside className="td-sidebar">
+            <p className="td-sidebar-label">Properti</p>
+            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="sidebar-anggota-button"><UserPlus size={14} /> Anggota</button>
+            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "label" ? null : "label")} data-testid="sidebar-label-button"><Tag size={14} /> Label</button>
+            <button className="td-sidebar-btn" onClick={toggleDatePanel} data-testid="sidebar-tanggal-button"><CalendarClock size={14} /> Tanggal</button>
+            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "repeat" ? null : "repeat")} data-testid="sidebar-ulangi-button"><Repeat size={14} /> Ulangi</button>
+            <button className="td-sidebar-btn" onClick={() => setShowChecklist(true)} data-testid="sidebar-ceklis-button"><CheckSquare size={14} /> Subtugas</button>
+            <button className="td-sidebar-btn" onClick={() => attachInput.current.click()} data-testid="sidebar-upload-button"><Paperclip size={14} /> Unggah</button>
+            <button className="td-sidebar-btn" onClick={() => coverInput.current.click()} data-testid="sidebar-cover-button"><ImageIcon size={14} /> Cover</button>
+            <input ref={coverInput} type="file" hidden onChange={e => handleUpload(e.target.files, "cover")} data-testid="task-cover-file-input" />
+            <p className="td-sidebar-label">Aksi</p>
+            <button className="td-sidebar-btn" onClick={() => setCopyMoveMode("move")} data-testid="sidebar-pindahkan-button"><ArrowRightLeft size={14} /> Pindahkan</button>
+            <button className="td-sidebar-btn" onClick={() => setCopyMoveMode("copy")} data-testid="sidebar-salin-button"><Copy size={14} /> Salin</button>
+            <button className="td-sidebar-btn" onClick={togglePrivate} data-testid="sidebar-rahasiakan-button">{task.is_private ? <Unlock size={14} /> : <Lock size={14} />} {task.is_private ? "Publikasikan" : "Rahasiakan"}</button>
+            <button className="td-sidebar-btn" onClick={archiveTask} data-testid="sidebar-arsipkan-button"><Archive size={14} /> Arsipkan</button>
+            <button className="td-sidebar-btn danger" onClick={deleteTask} data-testid="delete-task-button"><Trash2 size={14} /> Hapus</button>
+            {panel === "label" && (
+              <div className="td-panel" data-testid="label-panel">
+                <div className="td-label-chips">
+                  {(teamLabels || []).map(l => {
+                    const active = (task.labels || []).includes(l.id);
+                    if (renamingLabel === l.id) {
+                      return (
+                        <div key={l.id} className="td-label-row td-label-rename-row">
+                          <input autoFocus value={renameText} onChange={e => setRenameText(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && saveRenameLabel()} onBlur={saveRenameLabel}
+                            data-testid={`rename-label-input-${l.id}`} />
+                        </div>
+                      );
+                    }
+                    if (confirmDeleteLabel === l.id) {
+                      return (
+                        <div key={l.id} className="td-label-row td-label-confirm-row">
+                          <span className="small">Hapus "{l.name}" dari semua tugas?</span>
+                          <button type="button" className="td-label-icon danger" onClick={() => deleteLabel(l.id)} data-testid={`confirm-delete-team-label-${l.id}`}>Ya</button>
+                          <button type="button" className="td-label-icon" onClick={() => setConfirmDeleteLabel(null)} data-testid={`cancel-delete-team-label-${l.id}`}>Batal</button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={l.id} className="td-label-row">
+                        <button type="button" className={`td-label-toggle ${active ? "active" : ""}`}
+                          style={{ background: l.color + "22", color: l.color, borderColor: active ? l.color : "transparent" }}
+                          onClick={() => patch({ labels: active ? (task.labels || []).filter(id => id !== l.id) : [...(task.labels || []), l.id] })}
+                          data-testid={`team-label-${l.id}`}>{l.name}</button>
+                        {myRole === "admin" && (
+                          <>
+                            <button type="button" className="td-label-icon" onClick={() => startRenameLabel(l)} data-testid={`rename-team-label-${l.id}`}><Pencil size={11} /></button>
+                            <button type="button" className="td-label-icon" onClick={() => setConfirmDeleteLabel(l.id)} data-testid={`delete-team-label-${l.id}`}><Trash2 size={11} /></button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!(teamLabels || []).length && <p className="muted small">Belum ada label tim.</p>}
+                </div>
+                {myRole === "admin" && (
+                  <>
+                    <input value={labelDraft} onChange={e => setLabelDraft(e.target.value)} placeholder="Buat label baru untuk tim" data-testid="label-name-input" />
+                    <div className="td-label-swatches">
+                      {LABEL_COLORS.map(c => (
+                        <button key={c} style={{ background: c }} onClick={async () => {
+                          if (!labelDraft.trim()) return;
+                          const r = await client.post(`/teams/${team.id}/labels`, { name: labelDraft.trim(), color: c });
+                          onLabelCreated?.(r.data);
+                          patch({ labels: [...(task.labels || []), r.data.id] });
+                          setLabelDraft("");
+                        }} data-testid={`label-swatch-${c}`} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {panel === "date" && dateDraft && (
+              <div className="td-panel td-date-panel" data-testid="date-panel">
+                <p className="td-panel-title">Ubah Tanggal</p>
+                <label className="td-panel-row">
+                  <input type="checkbox" checked={dateDraft.startEnabled} onChange={e => setDateDraft(d => ({ ...d, startEnabled: e.target.checked }))} data-testid="start-date-toggle" />
+                  Tanggal Mulai
+                </label>
+                {dateDraft.startEnabled && (
+                  <input type="date" value={dateDraft.start_date} onChange={e => setDateDraft(d => ({ ...d, start_date: e.target.value }))} data-testid="start-date-input" />
+                )}
+                <label className="td-panel-row">
+                  <input type="checkbox" checked={dateDraft.dueEnabled} onChange={e => setDateDraft(d => ({ ...d, dueEnabled: e.target.checked }))} data-testid="due-date-toggle" />
+                  Tenggat
+                </label>
+                {dateDraft.dueEnabled && (
+                  <div className="td-date-fields">
+                    <input type="date" value={dateDraft.due_date} onChange={e => setDateDraft(d => ({ ...d, due_date: e.target.value }))} data-testid="task-due-date-input" />
+                    <input type="time" value={dateDraft.due_time} onChange={e => setDateDraft(d => ({ ...d, due_time: e.target.value }))} data-testid="task-due-time-input" />
+                  </div>
+                )}
+                <div className="td-date-actions">
+                  <button className="primary" onClick={saveDates} data-testid="save-date-button">Simpan</button>
+                  <button className="btn-danger" onClick={clearDates} data-testid="clear-due-date-button">Hapus</button>
+                </div>
+              </div>
+            )}
+            {panel === "repeat" && (
+              <div className="td-panel" data-testid="repeat-panel">
+                <select value={task.repeat} onChange={e => patch({ repeat: e.target.value })} data-testid="task-repeat-select">
+                  {Object.entries(REPEAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            )}
+            </aside>
 
             <div className="td-section">
               <div className="td-section-head"><span>Catatan</span><button className="notes-edit-button" onClick={() => setEditingNotes(!editingNotes)} data-testid="task-edit-notes-button" title={editingNotes ? "Selesai" : "Edit"}><Pencil size={14} />{editingNotes ? " Selesai" : ""}</button></div>
@@ -310,7 +426,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             {showChecklist && (
               <div className="td-section">
                 <div className="td-section-head">
-                  <span>Ceklis</span>
+                  <span>Subtugas</span>
                   <button type="button" className="td-checklist-plus" onClick={() => checklistNewRef.current?.focus()} data-testid="checklist-header-add-button"><Plus size={14} /></button>
                   <small hidden data-testid="checklist-progress-count">{checklistDone}/{checklistTotal}{checklistTotal > 0 ? ` · ${Math.round((checklistDone / checklistTotal) * 100)}%` : ""}</small>
                 </div>
@@ -323,7 +439,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                 <input ref={checklistAttachInput} type="file" hidden onChange={e => uploadChecklistAttachment(e.target.files[0])} data-testid="checklist-attachment-file-input" />
                 {(task.checklist || []).map(c => {
                   const itemAssignee = members.find(m => m.id === c.assignee_id);
-                  const itemOverdue = c.due_date && !c.done && c.due_date < localISODate();
+                  const itemOverdue = isDueReached(c.due_date, { done: c.done });
                   const subs = c.subitems || [];
                   const hasSubs = subs.length > 0;
                   const subDone = subs.filter(s => s.done).length;
@@ -419,127 +535,26 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
               <MentionBox members={members} onSend={sendComment} placeholder="Tulis komentar, ketik @ untuk menandai anggota…" testId="comment-input" />
               {!!activity.length && (
                 <div className="td-activity" data-testid="task-activity">
-                  {activity.map(a => (
+                  {(activityExpanded ? activity : activity.slice(0, 3)).map(a => (
                     <p key={a.id} className="td-activity-row">
                       <b>{a.user_name}</b> {a.detail || a.action} <small>{timeAgo(a.created_at)}</small>
                     </p>
                   ))}
+                  {activity.length > 3 && !activityExpanded && (
+                    <button type="button" className="td-activity-more" onClick={() => setActivityExpanded(true)} data-testid="see-all-activity">
+                      <MoreHorizontal size={16} /> See all history log
+                    </button>
+                  )}
+                  {activity.length > 3 && activityExpanded && (
+                    <button type="button" className="td-activity-more" onClick={() => setActivityExpanded(false)} data-testid="collapse-activity">
+                      Tutup log
+                    </button>
+                  )}
                 </div>
               )}
             </div>
             {error && <div className="error" data-testid="task-detail-error">{error}</div>}
           </div>
-
-          <aside className="td-sidebar">
-            <p className="td-sidebar-label">KELOLA TUGAS</p>
-            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "members" ? null : "members")} data-testid="sidebar-anggota-button"><UserPlus size={14} /> Anggota</button>
-            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "label" ? null : "label")} data-testid="sidebar-label-button"><Tag size={14} /> Label</button>
-            <button className="td-sidebar-btn" onClick={toggleDatePanel} data-testid="sidebar-tanggal-button"><CalendarClock size={14} /> Tanggal</button>
-            <button className="td-sidebar-btn" onClick={() => setPanel(panel === "repeat" ? null : "repeat")} data-testid="sidebar-ulangi-button"><Repeat size={14} /> Ulangi</button>
-            <button className="td-sidebar-btn" onClick={() => setShowChecklist(true)} data-testid="sidebar-ceklis-button"><CheckSquare size={14} /> Ceklis</button>
-            <button className="td-sidebar-btn" onClick={() => attachInput.current.click()} data-testid="sidebar-upload-button"><Paperclip size={14} /> Unggah File</button>
-            <button className="td-sidebar-btn" onClick={() => coverInput.current.click()} data-testid="sidebar-cover-button"><ImageIcon size={14} /> Cover</button>
-            <input ref={coverInput} type="file" hidden onChange={e => handleUpload(e.target.files, "cover")} data-testid="task-cover-file-input" />
-
-            {panel === "label" && (
-              <div className="td-panel" data-testid="label-panel">
-                <div className="td-label-chips">
-                  {(teamLabels || []).map(l => {
-                    const active = (task.labels || []).includes(l.id);
-                    if (renamingLabel === l.id) {
-                      return (
-                        <div key={l.id} className="td-label-row td-label-rename-row">
-                          <input autoFocus value={renameText} onChange={e => setRenameText(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && saveRenameLabel()} onBlur={saveRenameLabel}
-                            data-testid={`rename-label-input-${l.id}`} />
-                        </div>
-                      );
-                    }
-                    if (confirmDeleteLabel === l.id) {
-                      return (
-                        <div key={l.id} className="td-label-row td-label-confirm-row">
-                          <span className="small">Hapus "{l.name}" dari semua tugas?</span>
-                          <button type="button" className="td-label-icon danger" onClick={() => deleteLabel(l.id)} data-testid={`confirm-delete-team-label-${l.id}`}>Ya</button>
-                          <button type="button" className="td-label-icon" onClick={() => setConfirmDeleteLabel(null)} data-testid={`cancel-delete-team-label-${l.id}`}>Batal</button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={l.id} className="td-label-row">
-                        <button type="button" className={`td-label-toggle ${active ? "active" : ""}`}
-                          style={{ background: l.color + "22", color: l.color, borderColor: active ? l.color : "transparent" }}
-                          onClick={() => patch({ labels: active ? (task.labels || []).filter(id => id !== l.id) : [...(task.labels || []), l.id] })}
-                          data-testid={`team-label-${l.id}`}>{l.name}</button>
-                        {myRole === "admin" && (
-                          <>
-                            <button type="button" className="td-label-icon" onClick={() => startRenameLabel(l)} data-testid={`rename-team-label-${l.id}`}><Pencil size={11} /></button>
-                            <button type="button" className="td-label-icon" onClick={() => setConfirmDeleteLabel(l.id)} data-testid={`delete-team-label-${l.id}`}><Trash2 size={11} /></button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {!(teamLabels || []).length && <p className="muted small">Belum ada label tim.</p>}
-                </div>
-                {myRole === "admin" && (
-                  <>
-                    <input value={labelDraft} onChange={e => setLabelDraft(e.target.value)} placeholder="Buat label baru untuk tim" data-testid="label-name-input" />
-                    <div className="td-label-swatches">
-                      {LABEL_COLORS.map(c => (
-                        <button key={c} style={{ background: c }} onClick={async () => {
-                          if (!labelDraft.trim()) return;
-                          const r = await client.post(`/teams/${team.id}/labels`, { name: labelDraft.trim(), color: c });
-                          onLabelCreated?.(r.data);
-                          patch({ labels: [...(task.labels || []), r.data.id] });
-                          setLabelDraft("");
-                        }} data-testid={`label-swatch-${c}`} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-            {panel === "date" && dateDraft && (
-              <div className="td-panel td-date-panel" data-testid="date-panel">
-                <p className="td-panel-title">Ubah Tanggal</p>
-                <label className="td-panel-row">
-                  <input type="checkbox" checked={dateDraft.startEnabled} onChange={e => setDateDraft(d => ({ ...d, startEnabled: e.target.checked }))} data-testid="start-date-toggle" />
-                  Tanggal Mulai
-                </label>
-                {dateDraft.startEnabled && (
-                  <input type="date" value={dateDraft.start_date} onChange={e => setDateDraft(d => ({ ...d, start_date: e.target.value }))} data-testid="start-date-input" />
-                )}
-                <label className="td-panel-row">
-                  <input type="checkbox" checked={dateDraft.dueEnabled} onChange={e => setDateDraft(d => ({ ...d, dueEnabled: e.target.checked }))} data-testid="due-date-toggle" />
-                  Tenggat
-                </label>
-                {dateDraft.dueEnabled && (
-                  <div className="td-date-fields">
-                    <input type="date" value={dateDraft.due_date} onChange={e => setDateDraft(d => ({ ...d, due_date: e.target.value }))} data-testid="task-due-date-input" />
-                    <input type="time" value={dateDraft.due_time} onChange={e => setDateDraft(d => ({ ...d, due_time: e.target.value }))} data-testid="task-due-time-input" />
-                  </div>
-                )}
-                <div className="td-date-actions">
-                  <button className="primary" onClick={saveDates} data-testid="save-date-button">Simpan</button>
-                  <button className="btn-danger" onClick={clearDates} data-testid="clear-due-date-button">Hapus</button>
-                </div>
-              </div>
-            )}
-            {panel === "repeat" && (
-              <div className="td-panel" data-testid="repeat-panel">
-                <select value={task.repeat} onChange={e => patch({ repeat: e.target.value })} data-testid="task-repeat-select">
-                  {Object.entries(REPEAT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-            )}
-
-            <p className="td-sidebar-label">AKSI</p>
-            <button className="td-sidebar-btn" onClick={() => setCopyMoveMode("move")} data-testid="sidebar-pindahkan-button"><ArrowRightLeft size={14} /> Pindahkan</button>
-            <button className="td-sidebar-btn" onClick={() => setCopyMoveMode("copy")} data-testid="sidebar-salin-button"><Copy size={14} /> Salin</button>
-            <button className="td-sidebar-btn" onClick={togglePrivate} data-testid="sidebar-rahasiakan-button">{task.is_private ? <Unlock size={14} /> : <Lock size={14} />} {task.is_private ? "Publikasikan" : "Rahasiakan"}</button>
-            <button className="td-sidebar-btn" onClick={archiveTask} data-testid="sidebar-arsipkan-button"><Archive size={14} /> Arsipkan</button>
-            <button className="td-sidebar-btn danger" onClick={deleteTask} data-testid="delete-task-button"><Trash2 size={14} /> Hapus Tugas</button>
-          </aside>
         </div>
       </section>
       {copyMoveMode && (

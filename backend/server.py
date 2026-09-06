@@ -251,7 +251,7 @@ class ReactionInput(BaseModel):
 class DocumentPatch(BaseModel):
     folder: Optional[str] = None
 
-DEFAULT_LISTS = ["To Do List", "Dikerjakan", "Selesai", "Batal"]
+DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 
 async def seed_admin():
     await db.users.create_index("email", unique=True)
@@ -271,6 +271,28 @@ async def create_team_internal(name, color, owner):
                                      "is_done": name_ == "Selesai", "is_cancelled": name_ == "Batal", "created_at": now()})
     team.pop("_id", None)
     return team
+
+async def purge_team(team_id):
+    task_ids = [t["id"] async for t in db.tasks.find({"team_id": team_id}, {"_id": 0, "id": 1})]
+    if task_ids:
+        await db.comments.delete_many({"task_id": {"$in": task_ids}})
+        await db.task_activity.delete_many({"task_id": {"$in": task_ids}})
+    for coll in ["tasks", "lists", "team_members", "chat_messages", "announcements", "questions", "documents", "labels"]:
+        await db[coll].delete_many({"team_id": team_id})
+    await db.notifications.delete_many({"team_id": team_id})
+    await db.teams.delete_one({"id": team_id})
+
+async def purge_member_created_teams():
+    admin_ids = {u["id"] for u in await db.users.find({"role": "admin"}, {"_id": 0, "id": 1}).to_list(1000)}
+    teams = await db.teams.find({}, {"_id": 0, "id": 1, "created_by": 1, "name": 1}).to_list(1000)
+    removed = 0
+    for t in teams:
+        creator = t.get("created_by")
+        if creator and creator not in admin_ids:
+            await purge_team(t["id"])
+            removed += 1
+            logging.info("Removed member-created team %s (%s)", t.get("name"), t["id"])
+    return removed
 
 async def migrate_legacy_tasks():
     admin = await db.users.find_one({"email": os.environ["ADMIN_EMAIL"].lower()}, {"_id": 0})
@@ -337,6 +359,7 @@ async def startup():
     await migrate_legacy_tasks()
     await migrate_task_labels()
     await migrate_list_done_flag()
+    await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
     _reminder_task = asyncio.create_task(deadline_reminder_loop())
@@ -442,6 +465,8 @@ async def list_teams(user=Depends(current_user)):
 
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(403, "Hanya admin yang dapat membuat tim")
     team = await create_team_internal(data.name, data.color, user)
     return {**team, "my_role": "admin", "member_count": 1}
 
@@ -461,11 +486,7 @@ async def update_team(team_id: str, data: TeamInput, user=Depends(current_user))
 @api.delete("/teams/{team_id}")
 async def delete_team(team_id: str, user=Depends(current_user)):
     await require_admin(team_id, user)
-    task_ids = [t["id"] async for t in db.tasks.find({"team_id": team_id}, {"_id": 0, "id": 1})]
-    await db.comments.delete_many({"task_id": {"$in": task_ids}})
-    for coll in ["tasks", "lists", "team_members", "chat_messages", "announcements", "questions", "documents", "labels"]:
-        await db[coll].delete_many({"team_id": team_id})
-    await db.teams.delete_one({"id": team_id})
+    await purge_team(team_id)
     return {"ok": True}
 
 @api.get("/teams/{team_id}/members")

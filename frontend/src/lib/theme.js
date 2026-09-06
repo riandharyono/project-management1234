@@ -1,6 +1,7 @@
 export function applyTheme(theme) {
   const next = theme === "dark" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", next);
+  document.documentElement.style.colorScheme = next;
   try { localStorage.setItem("pmng_theme", next); } catch (e) { /* ignore */ }
   return next;
 }

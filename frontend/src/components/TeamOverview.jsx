@@ -5,7 +5,7 @@ const CARDS = [
   { key: "chat", label: "Chat", icon: MessageSquare, tone: "teal" },
   { key: "announcements", label: "Pengumuman", icon: Megaphone, tone: "amber" },
   { key: "schedule", label: "Jadwal", icon: CalendarClock, tone: "violet" },
-  { key: "questions", label: "Pertanyaan", icon: HelpCircle, tone: "pink" },
+  { key: "questions", label: "Check-in", icon: HelpCircle, tone: "pink" },
   { key: "documents", label: "Dokumen", icon: FolderOpen, tone: "indigo" },
 ];
 
@@ -45,7 +45,7 @@ export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask })
               ))}
               {dueToday.map(t => (
                 <button key={t.id} className="overview-task-row" onClick={e => { e.stopPropagation(); onOpenTask?.(t); }}>
-                  <span className="badge-status">Hari ini</span>
+                  <span className="due overdue">Hari ini</span>
                   <span className="ot-title">{t.title}</span>
                 </button>
               ))}

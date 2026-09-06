@@ -116,10 +116,14 @@ class TestTeamsLists:
         lr = admin.get(f"{BASE}/teams/{t['id']}/lists")
         assert lr.status_code == 200
         names = [x["name"] for x in lr.json()]
-        assert names == ["To Do List", "Dikerjakan", "Selesai", "Batal"], names
+        assert names == ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"], names
 
         gr = admin.get(f"{BASE}/teams/{t['id']}")
         assert gr.status_code == 200 and gr.json()["name"] == name
+
+    def test_member_cannot_create_team(self, member):
+        r = member.post(f"{BASE}/teams", json={"name": f"TEST_MemberTeam_{uuid.uuid4().hex[:6]}", "color": "#123456"})
+        assert r.status_code == 403, r.text
 
     def test_non_member_forbidden(self, member):
         assert TestTeamsLists.created_team
