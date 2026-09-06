@@ -12,6 +12,7 @@ export function ExportSuratModal({ team, items, onClose }) {
   const [perihal, setPerihal] = useState(team?.name || "");
   const [linkUpload, setLinkUpload] = useState("");
   const [jabatan, setJabatan] = useState("koorwas");
+  const [tandaTangan, setTandaTangan] = useState("elektronik");
   const [bidang, setBidang] = useState(BIDANG_OPTIONS[0]);
   const [bidangCustom, setBidangCustom] = useState("");
   const [nama, setNama] = useState("");
@@ -34,7 +35,7 @@ export function ExportSuratModal({ team, items, onClose }) {
         penandatangan: {
           jabatan,
           bidang: jabatan === "koorwas" ? (bidang === "Isi sendiri" ? bidangCustom : bidang) : undefined,
-          nama, nip,
+          nama, nip, tandaTangan,
         },
         tenggatUploadData, picNama, picWa,
         logoBytes: new Uint8Array(logoBytes),
@@ -98,6 +99,12 @@ export function ExportSuratModal({ team, items, onClose }) {
           </label>
           <label>NIP
             <input value={nip} onChange={e => setNip(e.target.value)} placeholder="NIP" required data-testid="surat-nip-input" />
+          </label>
+          <label>JENIS TANDA TANGAN
+            <select value={tandaTangan} onChange={e => setTandaTangan(e.target.value)} data-testid="surat-tandatangan-select">
+              <option value="elektronik">Elektronik</option>
+              <option value="manual">Manual</option>
+            </select>
           </label>
 
           <label>NAMA PIC

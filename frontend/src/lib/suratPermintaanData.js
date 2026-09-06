@@ -1,6 +1,6 @@
 import {
   Document, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, AlignmentType, BorderStyle, ImageRun, VerticalAlign, ShadingType,
+  WidthType, AlignmentType, BorderStyle, ImageRun, VerticalAlign,
 } from "docx";
 
 const CONTENT_WIDTH = 9071; // twips, A4 minus BPKP letter margins
@@ -9,12 +9,6 @@ const NO_BORDER = {
   bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
   left: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
   right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
-};
-const CELL_BORDER = {
-  top: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  bottom: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  left: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
-  right: { style: BorderStyle.SINGLE, size: 4, color: "999999" },
 };
 
 const BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -32,17 +26,6 @@ function plainCell(text, size, opts = {}) {
     columnSpan: opts.span,
     verticalAlign: VerticalAlign.TOP,
     children: [new Paragraph({ alignment: opts.align, spacing: { line: 264 }, children: [new TextRun({ text: text || "", bold: opts.bold })] })],
-  });
-}
-
-function dataCell(text, size, opts = {}) {
-  return new TableCell({
-    width: { size, type: WidthType.DXA },
-    borders: CELL_BORDER,
-    shading: opts.header ? { type: ShadingType.CLEAR, fill: "E4E6EE" } : undefined,
-    verticalAlign: VerticalAlign.CENTER,
-    margins: { top: 60, bottom: 60, left: 80, right: 80 },
-    children: [new Paragraph({ alignment: opts.align || AlignmentType.LEFT, children: [new TextRun({ text: text || "-", bold: !!opts.header })] })],
   });
 }
 
@@ -97,34 +80,87 @@ export function buildSuratDocument({
           plainCell(formatIndoDate(new Date().toISOString().slice(0, 10)), 3291, { align: AlignmentType.RIGHT }),
         ],
       }),
-      new TableRow({ children: [plainCell("Lampiran", 1300), plainCell(":", 180), plainCell("Satu Berkas", 7591, { span: 2 })] }),
+      new TableRow({ children: [plainCell("Lampiran", 1300), plainCell(":", 180), plainCell("-", 7591, { span: 2 })] }),
       new TableRow({ children: [plainCell("Hal", 1300), plainCell(":", 180), plainCell(halText, 7591, { span: 2 })] }),
     ],
   });
 
-  const dataRows = (items || []).map((it, idx) => new TableRow({
-    children: [
-      dataCell(String(idx + 1), 500, { align: AlignmentType.CENTER }),
-      dataCell(it.name, 3800),
-      dataCell((it.sheets || []).join(", ") || "-", 1800),
-      dataCell(it.notes || "-", 2971),
-    ],
-  }));
-  const dataTable = new Table({
-    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
-    columnWidths: [500, 3800, 1800, 2971],
-    rows: [
-      new TableRow({
+  const outstanding = items && items.length ? items : [];
+
+  // Opening paragraph: intro clause + the requested data, bolded.
+  const introRuns = [new TextRun(
+    `Menindaklanjuti Surat Tugas Nomor ${nomorSuratTugas || "-"}, dalam rangka ${perihal || team?.name || "-"} di Wilayah Provinsi Papua Barat, kami mengharapkan ${penerimaSurat || "-"} memberikan informasi dan data kepada kami berupa`
+  )];
+  let dataParagraphs;
+  if (outstanding.length <= 1) {
+    const it = outstanding[0];
+    const label = it ? it.name : "data yang diperlukan sesuai kebutuhan penugasan";
+    const detail = it ? [it.sheets?.length ? `Sheet ${it.sheets.join(", ")}` : null, it.notes || null].filter(Boolean).join(" — ") : "";
+    dataParagraphs = [
+      new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { after: 200, line: 300 },
         children: [
-          dataCell("No", 500, { align: AlignmentType.CENTER, header: true }),
-          dataCell("Uraian Data / Dokumen", 3800, { header: true }),
-          dataCell("Sheet KKE", 1800, { header: true }),
-          dataCell("Catatan", 2971, { header: true }),
+          ...introRuns,
+          new TextRun(" "),
+          new TextRun({ text: label, bold: true }),
+          new TextRun(detail ? ` (${detail}).` : "."),
         ],
       }),
-      ...(dataRows.length ? dataRows : [new TableRow({ children: [dataCell("-", 500, { align: AlignmentType.CENTER }), dataCell("-", 3800), dataCell("-", 1800), dataCell("-", 2971)] })]),
+    ];
+  } else {
+    dataParagraphs = [
+      new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 100, line: 300 }, children: [...introRuns, new TextRun(":")] }),
+      ...outstanding.map((it, idx) => {
+        const detail = [it.sheets?.length ? `Sheet ${it.sheets.join(", ")}` : null, it.notes || null].filter(Boolean).join(" — ");
+        return new Paragraph({
+          spacing: { after: 60 },
+          indent: { left: 400 },
+          children: [
+            new TextRun(`${idx + 1}. `),
+            new TextRun({ text: it.name, bold: true }),
+            ...(detail ? [new TextRun(` (${detail})`)] : []),
+          ],
+        });
+      }),
+      new Paragraph({ spacing: { after: 200 } }),
+    ];
+  }
+
+  const closingParagraph = new Paragraph({
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { after: 300, line: 300 },
+    children: [
+      new TextRun("Data tersebut agar dapat disampaikan dan dapat kami terima paling lambat "),
+      new TextRun({ text: formatIndoDate(tenggatUploadData), bold: true }),
+      new TextRun(" melalui tautan "),
+      new TextRun({ text: linkUpload || "-", bold: true }),
+      new TextRun(". Informasi lebih lanjut dapat menghubungi narahubung kami yaitu "),
+      new TextRun({ text: `${picNama || "-"} (HP/WA ${picWa || "-"})`, bold: true }),
+      new TextRun("."),
     ],
   });
+
+  const thanksParagraph = new Paragraph({
+    spacing: { after: 500 },
+    children: [new TextRun("Demikian permintaan ini kami sampaikan. Atas perhatian dan kerja sama yang baik, kami mengucapkan terima kasih.")],
+  });
+
+  const signatureBlock = penandatangan.tandaTangan === "manual"
+    ? [
+        new Paragraph({ children: [new TextRun(`${jabatanLabel},`)] }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ text: "" }),
+        new Paragraph({ children: [new TextRun(penandatangan.nama || "-")] }),
+        new Paragraph({ children: [new TextRun(`NIP ${penandatangan.nip || "-"}`)] }),
+      ]
+    : [
+        new Paragraph({ children: [new TextRun(`${jabatanLabel},`)] }),
+        new Paragraph({ spacing: { after: 400 }, children: [new TextRun({ text: "Ditandatangani secara elektronik oleh", italics: true })] }),
+        new Paragraph({ children: [new TextRun(penandatangan.nama || "-")] }),
+        new Paragraph({ children: [new TextRun(`NIP ${penandatangan.nip || "-"}`)] }),
+      ];
 
   const body = [
     kopSurat, kopDivider, infoTable,
@@ -133,24 +169,10 @@ export function buildSuratDocument({
     new Paragraph({ text: penerimaSurat || "-" }),
     new Paragraph({ text: "di" }),
     new Paragraph({ text: "Tempat", spacing: { after: 200 } }),
-    new Paragraph({
-      alignment: AlignmentType.JUSTIFIED,
-      spacing: { after: 200, line: 300 },
-      children: [new TextRun(
-        `Menindaklanjuti Surat Tugas Kepala Perwakilan BPKP Provinsi Papua Barat Nomor ${nomorSuratTugas || "-"} tentang ${perihal || "-"}, kami mengharapkan data berikut dapat disampaikan paling lambat tanggal ${formatIndoDate(tenggatUploadData)}.`
-      )],
-    }),
-    new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: "Data yang diminta:", bold: true })] }),
-    dataTable,
-    new Paragraph({ spacing: { before: 200, after: 100, line: 300 }, alignment: AlignmentType.JUSTIFIED, children: [new TextRun(
-      `Unggah data melalui tautan: ${linkUpload || "-"}. Mohon folder diberi nama sesuai pemerintah daerah pengirim. Apabila tautan tidak dapat diakses, data dapat dikirim ke pos-el tim atau diserahkan langsung ke Kantor Perwakilan BPKP Provinsi Papua Barat.`
-    )] }),
-    new Paragraph({ spacing: { after: 100 }, children: [new TextRun(`PIC tim: ${picNama || "-"}, HP/WA ${picWa || "-"}.`)] }),
-    new Paragraph({ spacing: { after: 400 }, children: [new TextRun("Atas perhatian dan kerja sama Saudara, kami ucapkan terima kasih.")] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun(`${jabatanLabel},`)] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 600 }, children: [new TextRun({ text: "Ditandatangani secara elektronik", italics: true })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: (penandatangan.nama || "-").toUpperCase(), bold: true })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun(`NIP ${penandatangan.nip || "-"}`)] }),
+    ...dataParagraphs,
+    closingParagraph,
+    thanksParagraph,
+    ...signatureBlock,
   ];
 
   return new Document({
