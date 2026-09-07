@@ -251,6 +251,9 @@ class TaskUpdate(BaseModel):
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
+class LinkAttachmentInput(BaseModel):
+    name: str = ""
+    url: str = Field(min_length=1)
 class MemberUpdate(BaseModel): role: str
 class MemberPasswordUpdate(BaseModel):
     new_password: str = Field(min_length=6)
@@ -848,6 +851,15 @@ async def delete_task(task_id: str, user=Depends(current_user)):
     await db.comments.delete_many({"task_id": task_id})
     return {"ok": True}
 
+@api.post("/tasks/{task_id}/attachments")
+async def add_attachment_link(task_id: str, data: LinkAttachmentInput, user=Depends(current_user)):
+    task, role = await load_visible_task(task_id, user)
+    if not data.url.strip().lower().startswith(("http://", "https://")): raise HTTPException(400, "Link harus diawali http:// atau https://")
+    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": data.url.strip(), "created_at": now()}
+    await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": entry}})
+    await log_activity(task_id, user, "attachment", f"menambahkan lampiran {entry['name'] or entry['url']}", team_id=task["team_id"])
+    return entry
+
 @api.delete("/tasks/{task_id}/attachments/{file_id}")
 async def remove_attachment(task_id: str, file_id: str, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)
@@ -874,12 +886,9 @@ async def add_comment(task_id: str, data: CommentInput, user=Depends(current_use
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 
 @api.post("/files/upload")
-async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), data_request_id: Optional[str] = Query(None), kind: str = Query("attachment"), folder: str = Query(""), file: UploadFile = File(...), user=Depends(current_user)):
+async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(None), kind: str = Query("attachment"), folder: str = Query(""), file: UploadFile = File(...), user=Depends(current_user)):
     await require_member(team_id, user)
     if task_id: await load_visible_task(task_id, user)
-    if data_request_id:
-        item = await data_request_or_404(data_request_id)
-        if item["team_id"] != team_id: raise HTTPException(404, "Item data tidak ditemukan")
     ext = re.sub(r"[^A-Za-z0-9]", "", file.filename.rsplit(".", 1)[-1])[:10] or "bin" if "." in file.filename else "bin"
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
@@ -892,13 +901,13 @@ async def upload_file(team_id: str = Query(...), task_id: Optional[str] = Query(
     await db.files.insert_one(record)
     entry = {"id": record["id"], "filename": record["original_filename"], "content_type": record["content_type"], "size": record["size"], "created_at": record["created_at"]}
     if kind == "attachment" and task_id:
+        # Used by per-checklist-item attachments (TaskDetailModal's uploadChecklistAttachment);
+        # the freeform task "Lampiran" section itself now only takes links, via /tasks/{id}/attachments.
         await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": entry}})
         await log_activity(task_id, user, "attachment", f"mengunggah {entry['filename']}", team_id=team_id)
     elif kind == "cover" and task_id:
         await db.tasks.update_one({"id": task_id}, {"$set": {"cover": record["id"]}})
         await log_activity(task_id, user, "cover", "mengganti cover", team_id=team_id)
-    elif kind == "data_request" and data_request_id:
-        await db.data_requests.update_one({"id": data_request_id}, {"$push": {"attachments": entry}})
     else:
         await db.documents.insert_one({"id": str(uuid.uuid4()), "team_id": team_id, "file_id": record["id"], "filename": entry["filename"],
                                          "content_type": entry["content_type"], "size": entry["size"], "uploaded_by_name": user["name"], "task_id": task_id,
@@ -1015,6 +1024,15 @@ async def delete_data_request(item_id: str, user=Depends(current_user)):
     await require_admin(item["team_id"], user)
     await db.data_requests.delete_one({"id": item_id})
     return {"ok": True}
+
+@api.post("/data-requests/{item_id}/attachments")
+async def add_data_request_attachment_link(item_id: str, data: LinkAttachmentInput, user=Depends(current_user)):
+    item = await data_request_or_404(item_id)
+    await require_member(item["team_id"], user)
+    if not data.url.strip().lower().startswith(("http://", "https://")): raise HTTPException(400, "Link harus diawali http:// atau https://")
+    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": data.url.strip(), "created_at": now()}
+    await db.data_requests.update_one({"id": item_id}, {"$push": {"attachments": entry}})
+    return entry
 
 @api.delete("/data-requests/{item_id}/attachments/{file_id}")
 async def remove_data_request_attachment(item_id: str, file_id: str, user=Depends(current_user)):

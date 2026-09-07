@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2, MoreHorizontal } from "lucide-react";
+import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, Link2, ExternalLink, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2, MoreHorizontal } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
@@ -33,7 +33,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [attachingItemId, setAttachingItemId] = useState(null);
   const [copyMoveMode, setCopyMoveMode] = useState(null);
   const [activityExpanded, setActivityExpanded] = useState(false);
-  const attachInput = useRef(null);
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const linkUrlRef = useRef(null);
   const coverInput = useRef(null);
   const checklistAttachInput = useRef(null);
   const checklistNewRef = useRef(null);
@@ -123,6 +125,15 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     await client.delete(`/tasks/${task.id}/attachments/${id}`);
     dirtyRef.current = true;
     setTask(t => ({ ...t, attachments: (t.attachments || []).filter(a => a.id !== id) }));
+  };
+  const addAttachmentLink = async () => {
+    if (!linkUrl.trim()) return;
+    try {
+      const r = await client.post(`/tasks/${task.id}/attachments`, { name: linkName.trim(), url: linkUrl.trim() });
+      dirtyRef.current = true;
+      setTask(t => ({ ...t, attachments: [...(t.attachments || []), r.data] }));
+      setLinkName(""); setLinkUrl("");
+    } catch (e) { setError(apiError(e)); }
   };
 
   const saveChecklist = (checklist) => {
@@ -289,7 +300,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <button className="td-sidebar-btn" onClick={toggleDatePanel} data-testid="sidebar-tanggal-button"><CalendarClock size={14} /> Tanggal</button>
             <button className="td-sidebar-btn" onClick={() => setPanel(panel === "repeat" ? null : "repeat")} data-testid="sidebar-ulangi-button"><Repeat size={14} /> Ulangi</button>
             <button className="td-sidebar-btn" onClick={() => setShowChecklist(true)} data-testid="sidebar-ceklis-button"><CheckSquare size={14} /> Subtugas</button>
-            <button className="td-sidebar-btn" onClick={() => attachInput.current.click()} data-testid="sidebar-upload-button"><Paperclip size={14} /> Unggah</button>
+            <button className="td-sidebar-btn" onClick={() => linkUrlRef.current?.focus()} data-testid="sidebar-upload-button"><Link2 size={14} /> Lampiran</button>
             <button className="td-sidebar-btn" onClick={() => coverInput.current.click()} data-testid="sidebar-cover-button"><ImageIcon size={14} /> Cover</button>
             <input ref={coverInput} type="file" hidden onChange={e => handleUpload(e.target.files, "cover")} data-testid="task-cover-file-input" />
             <p className="td-sidebar-label">Aksi</p>
@@ -504,19 +515,23 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             )}
 
             <div className="td-section">
-              <div className="td-section-head"><span>Lampiran</span><button className="icon-button" onClick={() => attachInput.current.click()} data-testid="task-add-attachment-button"><Plus size={14} /></button></div>
-              <input ref={attachInput} type="file" multiple hidden onChange={e => handleUpload(e.target.files, "attachment")} data-testid="task-attachment-file-input" />
-              <div className="td-dropzone" onClick={() => attachInput.current.click()}
-                onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files, "attachment"); }} data-testid="task-attachment-dropzone">
-                Klik atau lepaskan file disini untuk mengunggah
+              <div className="td-section-head"><span>Lampiran</span><button className="icon-button" onClick={() => linkUrlRef.current?.focus()} data-testid="task-add-attachment-button"><Plus size={14} /></button></div>
+              <div className="td-link-add">
+                <input ref={linkUrlRef} value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://drive.google.com/…"
+                  onKeyDown={e => e.key === "Enter" && addAttachmentLink()} data-testid="task-attachment-url-input" />
+                <input value={linkName} onChange={e => setLinkName(e.target.value)} placeholder="Nama dokumen (opsional)"
+                  onKeyDown={e => e.key === "Enter" && addAttachmentLink()} data-testid="task-attachment-name-input" />
+                <button className="secondary" onClick={addAttachmentLink} data-testid="task-attachment-add-button">Tambah</button>
               </div>
               {!!(task.attachments || []).length && (
                 <div className="td-attachments" data-testid="task-attachments-list">
                   {task.attachments.map(a => (
                     <div className="td-attachment" key={a.id} data-testid={`task-attachment-${a.id}`}>
-                      <FileText size={15} />
-                      <div><b>{a.filename}</b><small>{formatSize(a.size)}</small></div>
-                      <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" data-testid={`download-attachment-${a.id}`}><Download size={14} /></a>
+                      {a.url ? <Link2 size={15} /> : <FileText size={15} />}
+                      <div><b>{a.name || a.filename || a.url}</b>{a.url ? <small>{a.url}</small> : <small>{formatSize(a.size)}</small>}</div>
+                      <a href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer" data-testid={`download-attachment-${a.id}`}>
+                        {a.url ? <ExternalLink size={14} /> : <Download size={14} />}
+                      </a>
                       <button onClick={() => removeAttachment(a.id)} data-testid={`remove-attachment-${a.id}`}><X size={13} /></button>
                     </div>
                   ))}

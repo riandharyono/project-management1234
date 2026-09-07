@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2 } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
@@ -24,8 +24,10 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", pic: "", notes: "" });
   const [attachingId, setAttachingId] = useState(null);
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
+  const [linkNameDraft, setLinkNameDraft] = useState("");
+  const [attachError, setAttachError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
-  const fileInput = useRef(null);
   const confirm = useConfirm();
 
   const load = () => client.get(`/teams/${team.id}/data-requests`).then(r => { setItems(r.data); setLoading(false); });
@@ -69,14 +71,17 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     load();
   };
 
-  const openAttach = itemId => { setAttachingId(itemId); fileInput.current?.click(); };
-  const uploadAttachment = async file => {
-    if (!file || !attachingId) return;
-    const fd = new FormData(); fd.append("file", file);
-    const qs = new URLSearchParams({ team_id: team.id, data_request_id: attachingId, kind: "data_request" });
-    await client.post(`/files/upload?${qs}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-    setAttachingId(null);
-    load();
+  const openAttach = itemId => {
+    setAttachingId(cur => cur === itemId ? null : itemId);
+    setLinkUrlDraft(""); setLinkNameDraft(""); setAttachError("");
+  };
+  const addAttachmentLink = async () => {
+    if (!linkUrlDraft.trim() || !attachingId) return;
+    try {
+      await client.post(`/data-requests/${attachingId}/attachments`, { name: linkNameDraft.trim(), url: linkUrlDraft.trim() });
+      setAttachingId(null); setLinkUrlDraft(""); setLinkNameDraft("");
+      load();
+    } catch (e) { setAttachError(apiError(e)); }
   };
   const removeAttachment = async (item, fileId) => {
     await client.delete(`/data-requests/${item.id}/attachments/${fileId}`);
@@ -123,8 +128,6 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
           </div>
         </>
       )}
-
-      <input ref={fileInput} type="file" hidden onChange={e => uploadAttachment(e.target.files[0])} data-testid="data-request-attachment-input" />
 
       {openSheet === "__new__" && (
         <AddForm team={team} items={items} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
@@ -192,11 +195,22 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                   <div className="dr-evidence">
                     {(item.attachments || []).map(a => (
                       <span className="dr-file" key={a.id}>
-                        <a href={fileUrl(a.id)} target="_blank" rel="noreferrer" title={`${a.filename} (${formatSize(a.size)})`}>{a.filename}</a>
+                        <a href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer" title={a.url ? (a.name || a.url) : `${a.filename} (${formatSize(a.size)})`}>{a.url ? (a.name || a.url) : a.filename}</a>
                         <button onClick={() => removeAttachment(item, a.id)} data-testid={`remove-attachment-${item.id}-${a.id}`}><X size={10} /></button>
                       </span>
                     ))}
-                    <button className="icon-button tiny" onClick={() => openAttach(item.id)} title="Unggah bukti" data-testid={`attach-data-request-${item.id}`}><Paperclip size={13} /></button>
+                    <button className="icon-button tiny" onClick={() => openAttach(item.id)} title="Tambah link bukti" data-testid={`attach-data-request-${item.id}`}><Link2 size={13} /></button>
+                    {attachingId === item.id && (
+                      <div className="dr-link-form" data-testid={`data-request-link-form-${item.id}`}>
+                        <input autoFocus value={linkUrlDraft} onChange={e => setLinkUrlDraft(e.target.value)} placeholder="https://drive.google.com/…"
+                          onKeyDown={e => e.key === "Enter" && addAttachmentLink()} data-testid={`data-request-link-url-${item.id}`} />
+                        <input value={linkNameDraft} onChange={e => setLinkNameDraft(e.target.value)} placeholder="Nama dokumen (opsional)"
+                          onKeyDown={e => e.key === "Enter" && addAttachmentLink()} data-testid={`data-request-link-name-${item.id}`} />
+                        <button className="icon-button tiny" onClick={addAttachmentLink} data-testid={`data-request-link-submit-${item.id}`}><Check size={13} /></button>
+                        <button className="icon-button tiny" onClick={() => setAttachingId(null)}><X size={13} /></button>
+                        {attachError && <div className="error" data-testid={`data-request-link-error-${item.id}`}>{attachError}</div>}
+                      </div>
+                    )}
                   </div>
                   {canDelete && <button className="icon-button" onClick={() => removeItem(item)} data-testid={`delete-data-request-${item.id}`}><Trash2 size={13} /></button>}
                 </div>
