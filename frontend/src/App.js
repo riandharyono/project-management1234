@@ -8,7 +8,6 @@ import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { TeamOverview } from "./components/TeamOverview";
 import { KanbanBoard } from "./components/KanbanBoard";
-import { ChatGroup } from "./components/ChatGroup";
 import { Announcements } from "./components/Announcements";
 import { Schedule } from "./components/Schedule";
 import { Questions } from "./components/Questions";
@@ -25,7 +24,7 @@ import { UserAdminPage } from "./components/UserAdminPage";
 import { MyWork } from "./components/MyWork";
 import { CommandPalette } from "./components/CommandPalette";
 
-const NOTIF_TITLES = { mention: "Disebut di Chat", announcement: "Pengumuman Baru", answer: "Check-in dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Check-in rutin" };
+const NOTIF_TITLES = { mention: "Anda Disebut", announcement: "Pengumuman Baru", answer: "Check-in dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Check-in rutin" };
 const ORIGINAL_TITLE = document.title;
 
 let audioCtx = null;
@@ -71,14 +70,6 @@ function notifyBrowser(title, body, onClick) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const n = new Notification(title, { body, tag: title + body });
   if (onClick) n.onclick = () => { window.focus(); onClick(); n.close(); };
-}
-
-const unreadTeamsKey = userId => `pmng_unread_chat_${userId}`;
-function loadUnreadTeams(userId) {
-  try { return new Set(JSON.parse(localStorage.getItem(unreadTeamsKey(userId)) || "[]")); } catch (e) { return new Set(); }
-}
-function saveUnreadTeams(userId, set) {
-  try { localStorage.setItem(unreadTeamsKey(userId), JSON.stringify([...set])); } catch (e) { /* ignore */ }
 }
 
 const boardCache = new Map();
@@ -143,7 +134,6 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [labels, setLabels] = useState([]);
   const [notif, setNotif] = useState({ items: [], unread: 0 });
   const [notifOpen, setNotifOpen] = useState(false);
-  const [chatUnread, setChatUnread] = useState(() => loadUnreadTeams(user.id).has(activeTeamId));
   const [notifPermission, setNotifPermission] = useState("Notification" in window ? Notification.permission : "unsupported");
   const [taskModal, setTaskModal] = useState(null);
   const [membersModal, setMembersModal] = useState(null);
@@ -219,25 +209,6 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     Notification.requestPermission().then(p => { setNotifPermission(p); if (p === "granted") subscribeWebPush(); });
   }, []);
   useEffect(() => {
-    const unreadSet = loadUnreadTeams(user.id);
-    if (activeTeamId && tab === "chat" && unreadSet.has(activeTeamId)) {
-      unreadSet.delete(activeTeamId); saveUnreadTeams(user.id, unreadSet);
-    }
-    setChatUnread(activeTeamId ? unreadSet.has(activeTeamId) : false);
-    if (!activeTeamId || tab === "chat" || !process.env.REACT_APP_BACKEND_URL) return;
-    const wsUrl = process.env.REACT_APP_BACKEND_URL.replace(/^http/, "ws") + `/api/ws/chat/${activeTeamId}`;
-    const ws = new WebSocket(wsUrl);
-    ws.onmessage = e => {
-      let data; try { data = JSON.parse(e.data); } catch (err) { return; }
-      if (data.type === "message" && data.author_id !== user.id) {
-        setChatUnread(true);
-        const set = loadUnreadTeams(user.id); set.add(activeTeamId); saveUnreadTeams(user.id, set);
-        notifyBrowser(`Pesan baru dari ${data.author}`, data.body, () => { setTab("chat"); });
-      }
-    };
-    return () => ws.close();
-  }, [activeTeamId, tab, user.id]);
-  useEffect(() => {
     if (!process.env.REACT_APP_BACKEND_URL) return;
     let closed = false, retry = 0, ws;
     const connect = () => {
@@ -257,9 +228,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     return () => { closed = true; ws?.close(); };
   }, []);
   useEffect(() => {
-    const total = notif.unread + (chatUnread ? 1 : 0);
-    document.title = total > 0 ? `(${total}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
-  }, [notif.unread, chatUnread]);
+    document.title = notif.unread > 0 ? `(${notif.unread}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
+  }, [notif.unread]);
   useEffect(() => {
     if (!activeTeamId) { setBoardLoading(false); return; }
     const cached = boardCache.get(activeTeamId);
@@ -357,7 +327,6 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     }
     if (n.type === "announcement") { setTab("announcements"); return; }
     if (n.type === "answer" || n.type === "question") { setTab("questions"); return; }
-    if (n.type === "mention" && !n.task_id) { setTab("chat"); return; }
     if (n.task_id) {
       setTab("tasks");
       try { const r = await client.get(`/tasks/${n.task_id}`); setTaskModal({ mode: "detail", task: r.data }); } catch (e) { }
@@ -375,7 +344,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       <main className="content" data-tab={userAdminOpen ? "users" : monitoringOpen ? "monitoring" : (activeTeam ? tab : "hq")}>
         <TopBar team={activeTeam} tab={tab} onTabChange={setTab} onOpenHQ={goHQ} members={members} myRole={activeTeam?.my_role}
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
-          onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread} chatUnread={chatUnread}
+          onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread}
           notifPermission={notifPermission} onEnableNotif={enableNotifications}
           onToggleNotif={() => setNotifOpen(!notifOpen)} user={user} onLogout={onLogout} onOpenProfile={() => setProfileOpen(true)}
           query={query} setQuery={setQuery} searchResults={searchResults}
@@ -404,8 +373,6 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
           <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} />
-        ) : tab === "chat" ? (
-          <ChatGroup team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "announcements" ? (
           <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (

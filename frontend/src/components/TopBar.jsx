@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { applyTheme, readTheme } from "../lib/theme";
 
@@ -7,14 +7,13 @@ const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Tugas", icon: ClipboardList },
   { key: "data-requests", label: "Permintaan Data", icon: ClipboardCheck },
-  { key: "chat", label: "Chat", icon: MessageSquare },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Check-in", icon: HelpCircle },
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
-export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, chatUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult, onOpenPalette }) {
+export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOpenAddMember, onOpenAccess, onOpenSettings, notifUnread, notifPermission, onEnableNotif, onToggleNotif, user, onLogout, onOpenProfile, query, setQuery, searchResults, onSelectSearchResult, onOpenPalette }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState(readTheme);
   const menuRef = useRef(null);
@@ -76,7 +75,7 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
           <div className="tt-tabs">
             {TABS.map(t => (
               <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => onTabChange(t.key)} data-testid={`tab-${t.key}`}>
-                <span className="tab-icon-wrap"><t.icon size={14} />{t.key === "chat" && chatUnread && <i className="tab-unread-dot" data-testid="chat-unread-dot" />}</span> {t.label}
+                <span className="tab-icon-wrap"><t.icon size={14} /></span> {t.label}
               </button>
             ))}
           </div>

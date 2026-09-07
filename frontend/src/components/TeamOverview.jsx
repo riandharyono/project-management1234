@@ -1,8 +1,7 @@
-import { ClipboardList, MessageSquare, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle } from "lucide-react";
+import { ClipboardList, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle } from "lucide-react";
 import { shortDate, localISODate } from "../lib/api";
 
 const CARDS = [
-  { key: "chat", label: "Chat", icon: MessageSquare, tone: "teal" },
   { key: "announcements", label: "Pengumuman", icon: Megaphone, tone: "amber" },
   { key: "schedule", label: "Jadwal", icon: CalendarClock, tone: "violet" },
   { key: "questions", label: "Check-in", icon: HelpCircle, tone: "pink" },

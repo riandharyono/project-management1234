@@ -92,7 +92,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
                 <button className="td-sidebar-btn danger" onClick={() => setConfirmDelete(true)} data-testid="delete-team-button"><Trash2 size={14} /> Hapus Tim</button>
               ) : (
                 <div className="team-delete-confirm" data-testid="delete-team-confirm">
-                  <p className="small">Yakin hapus tim "{team.name}"? Semua tugas, list, chat, pengumuman, dan dokumen di tim ini akan terhapus permanen dan tidak bisa dikembalikan.</p>
+                  <p className="small">Yakin hapus tim "{team.name}"? Semua tugas, list, pengumuman, dan dokumen di tim ini akan terhapus permanen dan tidak bisa dikembalikan.</p>
                   <div>
                     <button className="secondary" onClick={() => setConfirmDelete(false)} data-testid="cancel-delete-team-button">Batal</button>
                     <button className="td-sidebar-btn danger" onClick={deleteTeam} data-testid="confirm-delete-team-button">Ya, Hapus Permanen</button>

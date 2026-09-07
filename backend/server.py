@@ -77,16 +77,6 @@ async def broadcast_notif(user_id, payload):
         try: await ws.send_json(payload)
         except Exception: pass
 
-_background_tasks: set = set()
-def spawn_background(coro):
-    # Fan-out notifications (e.g. to every team member on a chat message) shouldn't
-    # make the triggering request wait on all of them. Keeping a reference is required
-    # so asyncio doesn't garbage-collect the task mid-flight.
-    t = asyncio.create_task(coro)
-    _background_tasks.add(t)
-    t.add_done_callback(_background_tasks.discard)
-    return t
-
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY") or None
 VAPID_CLAIMS_BASE = {"sub": f"mailto:{os.environ.get('VAPID_CONTACT_EMAIL', 'admin@example.com')}"}
 
@@ -118,7 +108,6 @@ def _notif_url(type_, team_id=None, task_id=None):
     if not team_id: return "/"
     if type_ == "announcement": return f"/?team={team_id}&tab=announcements"
     if type_ in ("answer", "question"): return f"/?team={team_id}&tab=questions"
-    if type_ == "mention" and not task_id: return f"/?team={team_id}&tab=chat"
     if task_id: return f"/?team={team_id}&tab=tasks&task={task_id}"
     return f"/?team={team_id}"
 
@@ -141,15 +130,8 @@ async def log_activity(task_id, user, action, detail="", team_id=None):
     doc.pop("_id", None)
     return doc
 
-NOTIF_PUSH_TITLES = {"mention": "Disebut di Chat", "announcement": "Pengumuman Baru", "answer": "Pertanyaan Dijawab",
+NOTIF_PUSH_TITLES = {"mention": "Anda Disebut", "announcement": "Pengumuman Baru", "answer": "Pertanyaan Dijawab",
                       "assignment": "Ditugaskan ke Anda", "deadline": "Tenggat Tugas", "question": "Pertanyaan Rutin"}
-
-chat_connections: dict = {}
-
-async def broadcast_chat(team_id, message):
-    for ws in list(chat_connections.get(team_id, [])):
-        try: await ws.send_json(message)
-        except Exception: pass
 
 async def user_from_token(raw):
     if not raw: return None
@@ -298,18 +280,12 @@ class QuestionScheduleInput(BaseModel):
     time: str = Field(pattern=r"^\d{2}:\d{2}$")
     recipients: List[str] = []
     secret: bool = False
-class ChatInput(BaseModel):
-    body: str = ""
-    mentions: List[str] = []
-    attachment: Optional[dict] = None
 class LabelInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
 class LabelPatch(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
-class ReactionInput(BaseModel):
-    emoji: str = Field(min_length=1)
 class DocumentPatch(BaseModel):
     folder: Optional[str] = None
 class DataRequestCreate(BaseModel):
@@ -358,7 +334,7 @@ async def purge_team(team_id):
     if task_ids:
         await db.comments.delete_many({"task_id": {"$in": task_ids}})
         await db.task_activity.delete_many({"task_id": {"$in": task_ids}})
-    for coll in ["tasks", "lists", "team_members", "chat_messages", "announcements", "questions", "documents", "labels", "data_requests"]:
+    for coll in ["tasks", "lists", "team_members", "announcements", "questions", "documents", "labels", "data_requests"]:
         await db[coll].delete_many({"team_id": team_id})
     await db.notifications.delete_many({"team_id": team_id})
     await db.teams.delete_one({"id": team_id})
@@ -1104,85 +1080,6 @@ async def team_calendar_ics(team_id: str, token: str):
                   f"DTSTART;VALUE=DATE:{date_val}", f"SUMMARY:{_ics_escape(t['title'])}", f"DESCRIPTION:{_ics_escape(t.get('description', ''))}", "END:VEVENT"]
     lines.append("END:VCALENDAR")
     return Response(content="\r\n".join(lines), media_type="text/calendar; charset=utf-8")
-
-# ---------- chat ----------
-@api.get("/teams/{team_id}/chat")
-async def get_chat(team_id: str, limit: int = Query(200, ge=1, le=500), user=Depends(current_user)):
-    await require_member(team_id, user)
-    msgs = await db.chat_messages.find({"team_id": team_id}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    msgs.reverse()
-    for m in msgs: m.setdefault("reactions", {})
-    return msgs
-
-@api.delete("/teams/{team_id}/chat")
-async def clear_chat(team_id: str, user=Depends(current_user)):
-    await require_admin(team_id, user)
-    await db.chat_messages.delete_many({"team_id": team_id})
-    await broadcast_chat(team_id, {"type": "clear"})
-    return {"ok": True}
-
-@api.post("/teams/{team_id}/chat")
-async def post_chat(team_id: str, data: ChatInput, user=Depends(current_user)):
-    await require_member(team_id, user)
-    if not data.body.strip() and not data.attachment: raise HTTPException(400, "Pesan tidak boleh kosong")
-    msg = {"id": str(uuid.uuid4()), "team_id": team_id, "body": data.body, "mentions": data.mentions, "attachment": data.attachment,
-           "reactions": {}, "author": user["name"], "author_id": user["id"], "created_at": now()}
-    await db.chat_messages.insert_one(msg); msg.pop("_id", None)
-    await broadcast_chat(team_id, {**msg, "type": "message"})
-    spawn_background(_notify_chat_recipients(team_id, user, data, msg))
-    return msg
-
-async def _notify_chat_recipients(team_id, user, data, msg):
-    # Runs after the response is sent — every team member gets pushed on every message,
-    # so this loop shouldn't make the sender wait on everyone else's push delivery.
-    for m in data.mentions:
-        if m != user["id"]: await notify(m, "mention", f"{user['name']} menyebut Anda di Chat Grup", team_id=team_id)
-    body_preview = msg["body"][:80] if msg["body"].strip() else (f"Mengirim lampiran: {data.attachment['filename']}" if data.attachment else "Mengirim pesan")
-    member_ids = {m["user_id"] async for m in db.team_members.find({"team_id": team_id}, {"_id": 0, "user_id": 1})}
-    for uid in member_ids:
-        if uid != user["id"] and uid not in data.mentions:
-            await send_push(uid, f"{user['name']} di Chat Grup", body_preview)
-
-@api.post("/chat/{message_id}/react")
-async def react_chat(message_id: str, data: ReactionInput, user=Depends(current_user)):
-    msg = await db.chat_messages.find_one({"id": message_id}, {"_id": 0})
-    if not msg: raise HTTPException(404, "Pesan tidak ditemukan")
-    await require_member(msg["team_id"], user)
-    reactions = msg.get("reactions", {})
-    users = reactions.get(data.emoji, [])
-    if user["id"] in users: users.remove(user["id"])
-    else: users.append(user["id"])
-    if users: reactions[data.emoji] = users
-    elif data.emoji in reactions: del reactions[data.emoji]
-    await db.chat_messages.update_one({"id": message_id}, {"$set": {"reactions": reactions}})
-    payload = {"type": "reaction", "message_id": message_id, "reactions": reactions}
-    await broadcast_chat(msg["team_id"], payload)
-    return payload
-
-@api.delete("/chat/{message_id}")
-async def delete_chat_message(message_id: str, user=Depends(current_user)):
-    msg = await db.chat_messages.find_one({"id": message_id}, {"_id": 0})
-    if not msg: raise HTTPException(404, "Pesan tidak ditemukan")
-    role = await require_member(msg["team_id"], user)
-    if msg["author_id"] != user["id"] and role != "admin": raise HTTPException(403, "Tidak diizinkan menghapus pesan ini")
-    await db.chat_messages.delete_one({"id": message_id})
-    await broadcast_chat(msg["team_id"], {"type": "delete", "message_id": message_id})
-    return {"ok": True}
-
-@app.websocket("/api/ws/chat/{team_id}")
-async def chat_websocket(websocket: WebSocket, team_id: str):
-    user = await user_from_token(websocket.cookies.get("access_token"))
-    if not user or not await can_access_team(team_id, user["id"]):
-        await websocket.close(code=4401); return
-    await websocket.accept()
-    chat_connections.setdefault(team_id, []).append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        chat_connections.get(team_id, []).remove(websocket) if websocket in chat_connections.get(team_id, []) else None
 
 @app.websocket("/api/ws/notifications")
 async def notif_websocket(websocket: WebSocket):

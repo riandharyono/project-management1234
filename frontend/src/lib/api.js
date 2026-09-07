@@ -62,16 +62,4 @@ export const shortDate = iso => {
   return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 };
 
-export const chatTime = iso => iso ? new Date(iso).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
-
-export const isSameDay = (a, b) => a && b && new Date(a).toDateString() === new Date(b).toDateString();
-
-export const dayLabel = iso => {
-  if (!iso) return "";
-  const d = new Date(iso), today = new Date(), yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  if (isSameDay(iso, today)) return "Hari ini";
-  if (isSameDay(iso, yesterday)) return "Kemarin";
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined });
-};
-
 export const LABEL_COLORS = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a"];
