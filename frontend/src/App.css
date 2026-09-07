@@ -147,6 +147,14 @@ h1, h2, h3, p { margin: 0; }
 .auth-panel input:focus, .modal input:focus, .modal textarea:focus, .modal select:focus {
   border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint);
 }
+.password-field { position: relative; display: flex; }
+.password-field input { flex: 1; padding-right: 40px; }
+.password-toggle {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm);
+  background: transparent; border: none; color: var(--muted); cursor: pointer;
+}
+.password-toggle:hover { color: var(--ink); background: var(--surface); }
 
 .primary, .secondary {
   border: 0; border-radius: var(--r-sm); padding: 9px 14px; font-weight: 700; font-size: 12.5px;

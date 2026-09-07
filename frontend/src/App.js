@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { client, apiError } from "./lib/api";
 import { canCreateTeam, canViewAllTeams } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
@@ -87,6 +87,7 @@ const EMPTY_BOARD = { lists: [], tasks: [], members: [], labels: [] };
 
 function Auth({ onLogin }) {
   const [form, setForm] = useState({ email: "", password: "" }), [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const submit = async e => { e.preventDefault(); try { const r = await client.post("/auth/login", form); onLogin(r.data); } catch (x) { setError(apiError(x)); } };
   return (
     <main className="auth-shell">
@@ -104,7 +105,16 @@ function Auth({ onLogin }) {
         <p className="muted">Lanjutkan pekerjaan terbaik Anda hari ini.</p>
         <form onSubmit={submit} data-testid="auth-form">
           <label>Email<input data-testid="auth-email-input" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="nama@perusahaan.com" /></label>
-          <label>Password<input data-testid="auth-password-input" type="password" required value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Minimal 6 karakter" /></label>
+          <label>Password
+            <div className="password-field">
+              <input data-testid="auth-password-input" type={showPassword ? "text" : "password"} required value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Minimal 6 karakter" />
+              <button type="button" className="password-toggle" onClick={() => setShowPassword(v => !v)}
+                data-testid="auth-password-toggle" aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}>
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </label>
           {error && <div className="error" data-testid="auth-error">{error}</div>}
           <button className="primary wide" data-testid="auth-submit-button">Masuk<span>→</span></button>
         </form>
