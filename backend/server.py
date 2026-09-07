@@ -318,9 +318,10 @@ async def seed_admin():
     email, password = os.environ["ADMIN_EMAIL"].lower(), os.environ["ADMIN_PASSWORD"]
     existing = await db.users.find_one({"email": email}, {"_id": 0})
     if not existing:
+        # One-time bootstrap only — deliberately never re-syncs the password on later
+        # startups, otherwise any password change (self-service or a manual DB reset)
+        # gets silently reverted to ADMIN_PASSWORD on the next restart/deploy.
         await db.users.insert_one({"id": str(uuid.uuid4()), "email": email, "name": "Workspace Admin", "role": ROLE_SUPER_ADMIN, "password_hash": hash_password(password), "created_at": now()})
-    elif not verify_password(password, existing["password_hash"]):
-        await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
 
 async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
