@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { HelpCircle, Plus, ChevronDown, ChevronUp, Clock, Trash2, Pencil } from "lucide-react";
 import { client, initials, avatarColor, fileUrl, timeAgo, apiError } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { MentionTextarea } from "./MentionTextarea";
+import { MentionText } from "./MentionText";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 
@@ -11,12 +13,12 @@ export function Questions({ team, members, currentUser, myRole }) {
   const [items, setItems] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [mode, setMode] = useState(null); // null | "once" | "schedule"
-  const [form, setForm] = useState({ title: "", body: "" });
+  const [form, setForm] = useState({ title: "", body: "", mentions: [] });
   const [schedForm, setSchedForm] = useState({ title: "", body: "", days: [0], time: "09:00", recipients: [], secret: false });
   const [expanded, setExpanded] = useState(null);
   const [answerText, setAnswerText] = useState("");
   const [editingQId, setEditingQId] = useState(null);
-  const [editQForm, setEditQForm] = useState({ title: "", body: "" });
+  const [editQForm, setEditQForm] = useState({ title: "", body: "", mentions: [] });
   const [error, setError] = useState("");
   const confirm = useConfirm();
 
@@ -28,7 +30,7 @@ export function Questions({ team, members, currentUser, myRole }) {
 
   const submit = async e => {
     e.preventDefault();
-    try { await client.post(`/teams/${team.id}/questions`, form); setForm({ title: "", body: "" }); setMode(null); load(); }
+    try { await client.post(`/teams/${team.id}/questions`, form); setForm({ title: "", body: "", mentions: [] }); setMode(null); load(); }
     catch (x) { setError(apiError(x)); }
   };
   const submitSchedule = async e => {
@@ -43,7 +45,7 @@ export function Questions({ team, members, currentUser, myRole }) {
   const toggleDay = d => setSchedForm(f => ({ ...f, days: f.days.includes(d) ? f.days.filter(x => x !== d) : [...f.days, d].sort() }));
   const toggleRecipient = id => setSchedForm(f => ({ ...f, recipients: f.recipients.includes(id) ? f.recipients.filter(x => x !== id) : [...f.recipients, id] }));
   const answer = async id => { if (!answerText.trim()) return; await client.post(`/questions/${id}/answers`, { body: answerText }); setAnswerText(""); load(); };
-  const startEditQuestion = q => { setEditingQId(q.id); setEditQForm({ title: q.title, body: q.body }); setExpanded(q.id); };
+  const startEditQuestion = q => { setEditingQId(q.id); setEditQForm({ title: q.title, body: q.body, mentions: q.mentions || [] }); setExpanded(q.id); };
   const saveEditQuestion = async () => {
     try { await client.patch(`/questions/${editingQId}`, editQForm); setEditingQId(null); load(); }
     catch (x) { setError(apiError(x)); }
@@ -67,7 +69,8 @@ export function Questions({ team, members, currentUser, myRole }) {
       {mode === "once" && (
         <form className="inline-form" onSubmit={submit} data-testid="question-form">
           <input placeholder="Judul pertanyaan" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} data-testid="question-title-input" />
-          <textarea placeholder="Detail pertanyaan" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} data-testid="question-body-input" />
+          <MentionTextarea members={members} value={form.body} onChange={(body, mentions) => setForm({ ...form, body, mentions })}
+            placeholder="Detail pertanyaan, ketik @ untuk menandai anggota…" testId="question-body-input" />
           {error && <div className="error">{error}</div>}
           <div><button className="primary" data-testid="submit-question-button">Kirim</button><button type="button" className="secondary" onClick={() => setMode(null)}>Batal</button></div>
         </form>
@@ -141,10 +144,11 @@ export function Questions({ team, members, currentUser, myRole }) {
                 {editingQId === q.id ? (
                   <div className="inline-form" data-testid={`question-edit-form-${q.id}`}>
                     <input value={editQForm.title} onChange={e => setEditQForm({ ...editQForm, title: e.target.value })} data-testid={`question-edit-title-${q.id}`} />
-                    <textarea value={editQForm.body} onChange={e => setEditQForm({ ...editQForm, body: e.target.value })} data-testid={`question-edit-body-${q.id}`} />
+                    <MentionTextarea members={members} value={editQForm.body} onChange={(body, mentions) => setEditQForm({ ...editQForm, body, mentions })}
+                      testId={`question-edit-body-${q.id}`} />
                     <div><button className="primary" onClick={saveEditQuestion} data-testid={`save-question-${q.id}`}>Simpan</button><button type="button" className="secondary" onClick={() => setEditingQId(null)} data-testid={`cancel-edit-question-${q.id}`}>Batal</button></div>
                   </div>
-                ) : <p>{q.body}</p>}
+                ) : <p><MentionText body={q.body} mentionIds={q.mentions} members={members} /></p>}
                 {q.answers.map(a => (
                   <div className="comment" key={a.id}><Avatar id={a.author_id} name={a.author} photo={members.find(m => m.id === a.author_id)?.avatar} /><p><b>{a.author}</b>{a.body}<small>{timeAgo(a.created_at)}</small></p></div>
                 ))}

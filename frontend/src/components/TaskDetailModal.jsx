@@ -106,7 +106,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
       if (done) patch({ list_id: done.id });
     }
   };
-  const saveNotes = (html) => { if (html !== (task.description || "")) patch({ description: html }); };
+  const saveNotes = (html, mentions) => { if (html !== (task.description || "")) patch({ description: html, description_mentions: mentions }); };
   const saveTitle = () => { if (title.trim() && title !== task.title) patch({ title: title.trim() }); };
 
   const handleUpload = async (files, kind) => {
@@ -405,7 +405,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <div className="td-section">
               <div className="td-section-head"><span>Catatan</span><button className="notes-edit-button" onClick={() => setEditingNotes(!editingNotes)} data-testid="task-edit-notes-button" title={editingNotes ? "Selesai" : "Edit"}><Pencil size={14} />{editingNotes ? " Selesai" : ""}</button></div>
               {editingNotes ? (
-                <RichTextEditor value={task.description || ""} onSave={saveNotes} testId="task-notes-input" />
+                <RichTextEditor value={task.description || ""} onSave={saveNotes} members={members} testId="task-notes-input" />
               ) : task.description ? (
                 <div className="td-notes" data-testid="task-notes-text" dangerouslySetInnerHTML={{ __html: sanitizeNotesHtml(task.description) }} />
               ) : (

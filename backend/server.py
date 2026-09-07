@@ -248,6 +248,7 @@ class TaskUpdate(BaseModel):
     archived: Optional[bool] = None
     cover: Optional[str] = None
     checklist: Optional[List[dict]] = None
+    description_mentions: Optional[List[str]] = None
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
@@ -266,15 +267,19 @@ class MemberCreate(BaseModel):
 class AnnouncementInput(BaseModel):
     title: str = Field(min_length=1)
     body: str = ""
+    mentions: List[str] = []
 class AnnouncementPatch(BaseModel):
     title: Optional[str] = None
     body: Optional[str] = None
+    mentions: Optional[List[str]] = None
 class QuestionInput(BaseModel):
     title: str = Field(min_length=1)
     body: str = ""
+    mentions: List[str] = []
 class QuestionPatch(BaseModel):
     title: Optional[str] = None
     body: Optional[str] = None
+    mentions: Optional[List[str]] = None
 class AnswerInput(BaseModel): body: str = Field(min_length=1)
 class QuestionScheduleInput(BaseModel):
     title: str = Field(min_length=1)
@@ -815,6 +820,11 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
             await log_activity(task_id, user, "assignees", "memperbarui anggota tugas", team_id=task["team_id"])
         if "description" in updates:
             await log_activity(task_id, user, "notes", "memperbarui catatan", team_id=task["team_id"])
+        if "description_mentions" in updates:
+            prior = set(task.get("description_mentions", []))
+            for uid in updates["description_mentions"]:
+                if uid not in prior and uid != user["id"]:
+                    await notify(uid, "mention", f"{user['name']} menyebut Anda di catatan \"{task['title']}\"", team_id=task["team_id"], task_id=task_id)
     return await db.tasks.find_one({"id": task_id}, {"_id": 0})
 
 @api.post("/tasks/{task_id}/duplicate")
@@ -1155,7 +1165,7 @@ async def get_announcements(team_id: str, user=Depends(current_user)):
 @api.post("/teams/{team_id}/announcements")
 async def post_announcement(team_id: str, data: AnnouncementInput, user=Depends(current_user)):
     await require_member(team_id, user)
-    item = {"id": str(uuid.uuid4()), "team_id": team_id, "title": data.title, "body": data.body, "author": user["name"], "author_id": user["id"], "created_at": now()}
+    item = {"id": str(uuid.uuid4()), "team_id": team_id, "title": data.title, "body": data.body, "mentions": data.mentions, "author": user["name"], "author_id": user["id"], "created_at": now()}
     await db.announcements.insert_one(item); item.pop("_id", None)
     members = await db.team_members.find({"team_id": team_id}, {"_id": 0}).to_list(200)
     for m in members:
@@ -1191,8 +1201,11 @@ async def get_questions(team_id: str, user=Depends(current_user)):
 @api.post("/teams/{team_id}/questions")
 async def post_question(team_id: str, data: QuestionInput, user=Depends(current_user)):
     await require_member(team_id, user)
-    item = {"id": str(uuid.uuid4()), "team_id": team_id, "title": data.title, "body": data.body, "author": user["name"], "author_id": user["id"], "answers": [], "created_at": now()}
-    await db.questions.insert_one(item); item.pop("_id", None); return item
+    item = {"id": str(uuid.uuid4()), "team_id": team_id, "title": data.title, "body": data.body, "mentions": data.mentions, "author": user["name"], "author_id": user["id"], "answers": [], "created_at": now()}
+    await db.questions.insert_one(item); item.pop("_id", None)
+    for m in data.mentions:
+        if m != user["id"]: await notify(m, "mention", f"{user['name']} menyebut Anda di pertanyaan \"{data.title}\"", team_id=team_id)
+    return item
 
 @api.patch("/questions/{question_id}")
 async def update_question(question_id: str, data: QuestionPatch, user=Depends(current_user)):

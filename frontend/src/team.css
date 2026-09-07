@@ -374,6 +374,8 @@ html[data-theme="dark"] .kb-card.is-overdue {
 .td-notes { font-size: 13.5px; color: var(--ink); line-height: 1.65; white-space: pre-wrap; }
 .td-notes ul, .td-notes ol { margin: 4px 0; padding-left: 22px; }
 .rte { border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.rte-wrap { position: relative; }
+.rte-mention-dropdown { position: absolute; bottom: auto; z-index: 20; }
 .rte-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--paper); padding: 6px; border-bottom: 1px solid var(--line); }
 .rte-toolbar button { border: 0; background: none; color: var(--muted); padding: 6px; border-radius: 5px; display: grid; place-items: center; }
 .rte-toolbar button:hover { background: var(--line); color: var(--ink); }

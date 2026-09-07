@@ -36,7 +36,7 @@ export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLab
     patch({ labels: current.includes(id) ? current.filter(x => x !== id) : [...current, id] });
   };
   const saveTitle = () => { if (titleDraft.trim() && titleDraft !== task.title) patch({ title: titleDraft.trim() }); setPanel(null); };
-  const saveNotes = (html) => { if (html !== (task.description || "")) patch({ description: html }); };
+  const saveNotes = (html, mentions) => { if (html !== (task.description || "")) patch({ description: html, description_mentions: mentions }); };
   const sendComment = async (body, mentions) => {
     await client.post(`/tasks/${task.id}/comments`, { body, mentions });
     dirtyRef.current = true;
@@ -127,7 +127,7 @@ export function TaskQuickMenu({ task: initialTask, team, teams, members, teamLab
         <button className="td-sidebar-btn" onClick={() => setPanel(panel === "notes" ? null : "notes")} data-testid="quick-notes-button"><FileText size={14} /> Ubah Catatan</button>
         {panel === "notes" && (
           <div className="td-panel" data-testid="quick-notes-panel">
-            <RichTextEditor value={task.description} onSave={saveNotes} testId="quick-notes-editor" />
+            <RichTextEditor value={task.description} onSave={saveNotes} members={members} testId="quick-notes-editor" />
           </div>
         )}
 

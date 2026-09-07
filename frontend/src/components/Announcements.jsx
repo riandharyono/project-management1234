@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
 import { client, timeAgo, apiError } from "../lib/api";
 import { Avatar } from "./Avatar";
+import { MentionTextarea } from "./MentionTextarea";
+import { MentionText } from "./MentionText";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 
 export function Announcements({ team, members, currentUser, myRole }) {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", body: "" });
+  const [form, setForm] = useState({ title: "", body: "", mentions: [] });
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ title: "", body: "" });
+  const [editForm, setEditForm] = useState({ title: "", body: "", mentions: [] });
   const [error, setError] = useState("");
   const confirm = useConfirm();
 
@@ -21,10 +23,10 @@ export function Announcements({ team, members, currentUser, myRole }) {
 
   const submit = async e => {
     e.preventDefault();
-    try { await client.post(`/teams/${team.id}/announcements`, form); setForm({ title: "", body: "" }); setOpen(false); load(); }
+    try { await client.post(`/teams/${team.id}/announcements`, form); setForm({ title: "", body: "", mentions: [] }); setOpen(false); load(); }
     catch (x) { setError(apiError(x)); }
   };
-  const startEdit = a => { setEditingId(a.id); setEditForm({ title: a.title, body: a.body }); };
+  const startEdit = a => { setEditingId(a.id); setEditForm({ title: a.title, body: a.body, mentions: a.mentions || [] }); };
   const saveEdit = async () => {
     try { await client.patch(`/announcements/${editingId}`, editForm); setEditingId(null); load(); }
     catch (x) { setError(apiError(x)); }
@@ -45,7 +47,8 @@ export function Announcements({ team, members, currentUser, myRole }) {
       {open && (
         <form className="inline-form" onSubmit={submit} data-testid="announcement-form">
           <input placeholder="Judul pengumuman" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} data-testid="announcement-title-input" />
-          <textarea placeholder="Isi pengumuman" value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} data-testid="announcement-body-input" />
+          <MentionTextarea members={members} value={form.body} onChange={(body, mentions) => setForm({ ...form, body, mentions })}
+            placeholder="Isi pengumuman, ketik @ untuk menandai anggota…" testId="announcement-body-input" />
           {error && <div className="error">{error}</div>}
           <div><button className="primary" data-testid="submit-announcement-button">Kirim</button><button type="button" className="secondary" onClick={() => setOpen(false)}>Batal</button></div>
         </form>
@@ -57,7 +60,8 @@ export function Announcements({ team, members, currentUser, myRole }) {
             {editingId === a.id ? (
               <div className="inline-form" data-testid={`announcement-edit-form-${a.id}`}>
                 <input value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} data-testid={`announcement-edit-title-${a.id}`} />
-                <textarea value={editForm.body} onChange={e => setEditForm({ ...editForm, body: e.target.value })} data-testid={`announcement-edit-body-${a.id}`} />
+                <MentionTextarea members={members} value={editForm.body} onChange={(body, mentions) => setEditForm({ ...editForm, body, mentions })}
+                  testId={`announcement-edit-body-${a.id}`} />
                 <div><button className="primary" onClick={saveEdit} data-testid={`save-announcement-${a.id}`}>Simpan</button><button type="button" className="secondary" onClick={() => setEditingId(null)} data-testid={`cancel-edit-announcement-${a.id}`}>Batal</button></div>
               </div>
             ) : (
@@ -71,7 +75,7 @@ export function Announcements({ team, members, currentUser, myRole }) {
                     </div>
                   )}
                 </div>
-                <p>{a.body}</p>
+                <p><MentionText body={a.body} mentionIds={a.mentions} members={members} /></p>
                 <div className="announcement-meta"><Avatar id={a.author_id} name={a.author} photo={members?.find(m => m.id === a.author_id)?.avatar} />{a.author} · {timeAgo(a.created_at)}</div>
               </div>
             )}
