@@ -4,6 +4,7 @@ import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { client, apiError } from "./lib/api";
 import { canCreateTeam, canViewAllTeams } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
+import loginPhoto from "./assets/login-photo.jpg";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { TeamOverview } from "./components/TeamOverview";
@@ -82,7 +83,7 @@ function Auth({ onLogin }) {
   const submit = async e => { e.preventDefault(); try { const r = await client.post("/auth/login", form); onLogin(r.data); } catch (x) { setError(apiError(x)); } };
   return (
     <main className="auth-shell">
-      <section className="auth-brand">
+      <section className="auth-brand" style={{ backgroundImage: `linear-gradient(180deg, rgba(30,20,60,.5) 0%, rgba(20,14,48,.72) 55%, rgba(14,10,36,.92) 100%), url(${loginPhoto})` }}>
         <BrandMark size={40} />
         <p className="eyebrow">FALLENSTAR</p>
         <h1>Kerja tim, <em>lebih terarah.</em></h1>

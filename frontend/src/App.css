@@ -118,7 +118,8 @@ h1, h2, h3, p { margin: 0; }
 /* ===== Auth ===== */
 .auth-shell { min-height: 100vh; display: grid; grid-template-columns: 1.05fr .95fr; background: var(--surface); }
 .auth-brand {
-  padding: 10vh 10vw; background: var(--accent); color: #fff;
+  padding: 10vh 10vw; background-color: var(--accent); color: #fff;
+  background-size: cover; background-position: center;
   position: relative; overflow: hidden;
 }
 .auth-brand .ns-mark { color: #fff; }
