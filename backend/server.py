@@ -17,6 +17,7 @@ app = FastAPI(title="Project Management API")
 api = APIRouter(prefix="/api")
 JWT_ALGORITHM = "HS256"
 APP_NAME = os.environ["APP_NAME"]
+MAX_LOGIN_ATTEMPTS = 10
 
 ROLE_SUPER_ADMIN = "super_admin"
 ROLE_KOORWAS = "koorwas"
@@ -458,9 +459,10 @@ async def login(data: Credentials, response: Response):
     user = await db.users.find_one({"email": email}, {"_id": 0})
     if not user or not verify_password(data.password, user["password_hash"]):
         failures = (attempt or {}).get("failures", 0) + 1
-        locked_until = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat() if failures >= 5 else ""
+        locked_until = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat() if failures >= MAX_LOGIN_ATTEMPTS else ""
         await db.login_attempts.update_one({"identifier": identifier}, {"$set": {"identifier": identifier, "failures": failures, "locked_until": locked_until}}, upsert=True)
-        raise HTTPException(401, "Email atau password salah")
+        if failures >= MAX_LOGIN_ATTEMPTS: raise HTTPException(429, "Terlalu banyak percobaan. Coba lagi beberapa menit.")
+        raise HTTPException(401, f"Email atau password salah (percobaan ke-{failures} dari {MAX_LOGIN_ATTEMPTS})")
     await db.login_attempts.delete_one({"identifier": identifier})
     response.set_cookie("access_token", token(user["id"], user["email"]), httponly=True, secure=True, samesite="none", max_age=900)
     response.set_cookie("refresh_token", token(user["id"], user["email"], "refresh", 7), httponly=True, secure=True, samesite="none", max_age=604800)
