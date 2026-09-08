@@ -191,6 +191,8 @@ class TeamInput(BaseModel):
     color: str = "#2879ed"
     laporan_deadline: Optional[str] = None
     kke_deadline: Optional[str] = None
+    laporan_link: Optional[str] = None
+    kke_link: Optional[str] = None
 class SuratDefaultsInput(BaseModel):
     penerima_surat: str = ""
     nomor_surat_tugas: str = ""
@@ -327,9 +329,10 @@ async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
     await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
-async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None):
+async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None):
     team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now(),
-            "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline}
+            "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline,
+            "laporan_link": laporan_link, "kke_link": kke_link}
     await db.teams.insert_one(team)
     await db.team_members.insert_one({"id": str(uuid.uuid4()), "team_id": team["id"], "user_id": owner["id"], "role": "admin", "joined_at": now()})
     for i, name_ in enumerate(DEFAULT_LISTS):
@@ -540,7 +543,7 @@ async def list_teams(user=Depends(current_user)):
 async def create_team(data: TeamInput, user=Depends(current_user)):
     if not can_create_team(user):
         raise HTTPException(403, "Role Anda tidak dapat membuat tim")
-    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline)
+    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link)
     return {**team, "my_role": "admin", "member_count": 1}
 
 def _task_progress_fraction(task, lst):
@@ -580,7 +583,8 @@ async def tasks_monitoring(user=Depends(current_user)):
         result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
                         "total": total, "done": done_count, "overdue": overdue_count,
                         "pct_complete": pct, "created_at": t.get("created_at"),
-                        "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline")})
+                        "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline"),
+                        "laporan_link": t.get("laporan_link"), "kke_link": t.get("kke_link")})
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
 
@@ -597,6 +601,7 @@ async def update_team(team_id: str, data: TeamInput, user=Depends(current_user))
     await db.teams.update_one({"id": team_id}, {"$set": {
         "name": data.name, "color": data.color,
         "laporan_deadline": data.laporan_deadline, "kke_deadline": data.kke_deadline,
+        "laporan_link": data.laporan_link, "kke_link": data.kke_link,
     }})
     return await db.teams.find_one({"id": team_id}, {"_id": 0})
 

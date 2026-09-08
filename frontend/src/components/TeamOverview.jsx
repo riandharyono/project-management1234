@@ -1,4 +1,4 @@
-import { ClipboardList, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle } from "lucide-react";
+import { ClipboardList, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle, Link2 } from "lucide-react";
 import { shortDate, localISODate } from "../lib/api";
 
 const CARDS = [
@@ -45,16 +45,20 @@ export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask })
         </div>
         <button className="primary" onClick={() => onNavigate("tasks")} data-testid="overview-goto-tasks">Buka papan</button>
       </div>
-      {(team.laporan_deadline || team.kke_deadline) && (
+      {(team.laporan_deadline || team.kke_deadline || team.laporan_link || team.kke_link) && (
         <div className="overview-deadlines" data-testid="overview-deadlines">
-          {team.laporan_deadline && (
+          {(team.laporan_deadline || team.laporan_link) && (
             <div className={`overview-deadline ${deadlineTone(team.laporan_deadline, today)}`} data-testid="overview-deadline-laporan">
-              <span>Tenggat Upload Laporan</span><b>{shortDate(team.laporan_deadline)}</b>
+              <span>Tenggat Upload Laporan</span>
+              {team.laporan_deadline && <b>{shortDate(team.laporan_deadline)}</b>}
+              {team.laporan_link && <a href={team.laporan_link} target="_blank" rel="noreferrer" data-testid="overview-laporan-link"><Link2 size={11} /> Link upload</a>}
             </div>
           )}
-          {team.kke_deadline && (
+          {(team.kke_deadline || team.kke_link) && (
             <div className={`overview-deadline ${deadlineTone(team.kke_deadline, today)}`} data-testid="overview-deadline-kke">
-              <span>Tenggat KKE</span><b>{shortDate(team.kke_deadline)}</b>
+              <span>Tenggat KKE</span>
+              {team.kke_deadline && <b>{shortDate(team.kke_deadline)}</b>}
+              {team.kke_link && <a href={team.kke_link} target="_blank" rel="noreferrer" data-testid="overview-kke-link"><Link2 size={11} /> Link upload</a>}
             </div>
           )}
         </div>

@@ -11,6 +11,8 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
   const [teamColor, setTeamColor] = useState(team.color);
   const [laporanDeadline, setLaporanDeadline] = useState(team.laporan_deadline || "");
   const [kkeDeadline, setKkeDeadline] = useState(team.kke_deadline || "");
+  const [laporanLink, setLaporanLink] = useState(team.laporan_link || "");
+  const [kkeLink, setKkeLink] = useState(team.kke_link || "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const isAdmin = myRole === "admin";
@@ -33,6 +35,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
       await client.patch(`/teams/${team.id}`, {
         name: teamName.trim(), color: teamColor,
         laporan_deadline: laporanDeadline || null, kke_deadline: kkeDeadline || null,
+        laporan_link: laporanLink.trim() || null, kke_link: kkeLink.trim() || null,
       });
       onTeamUpdated();
     }
@@ -83,7 +86,9 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
             <label className="sf-label">NAMA TIM<input value={teamName} onChange={e => setTeamName(e.target.value)} data-testid="team-name-input" /></label>
             <label className="sf-label">WARNA<div className="td-label-swatches">{LABEL_COLORS.map(c => <button type="button" key={c} style={{ background: c, outline: teamColor === c ? "2px solid #10213b" : "none" }} onClick={() => setTeamColor(c)} data-testid={`team-edit-color-${c}`} />)}</div></label>
             <label className="sf-label">TENGGAT UPLOAD LAPORAN<input type="date" value={laporanDeadline} onChange={e => setLaporanDeadline(e.target.value)} data-testid="team-laporan-deadline-input" /></label>
+            <label className="sf-label">LINK UPLOAD LAPORAN<input value={laporanLink} onChange={e => setLaporanLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-laporan-link-input" /></label>
             <label className="sf-label">TENGGAT KKE<input type="date" value={kkeDeadline} onChange={e => setKkeDeadline(e.target.value)} data-testid="team-kke-deadline-input" /></label>
+            <label className="sf-label">LINK UPLOAD KKE<input value={kkeLink} onChange={e => setKkeLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-kke-link-input" /></label>
             <button className="primary" onClick={saveTeam} disabled={!teamName.trim()} data-testid="save-team-button">Simpan Perubahan</button>
 
             <div className="team-danger-zone">
