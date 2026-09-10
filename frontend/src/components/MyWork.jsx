@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, CalendarDays, CheckSquare, Inbox, MessageCircle, Plus } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckSquare, ChevronRight, Inbox, MessageCircle, Plus } from "lucide-react";
 import { client, shortDate, timeAgo } from "../lib/api";
 import { canCreateTeam } from "../lib/roles";
 import { EmptyState } from "./EmptyState";
+import { groupTeamsByYear, isCurrentOrUpcomingYear } from "../lib/years";
 
 const PRIORITY_DOT = { high: "high", medium: "medium", low: "low", sedang: "medium" };
 
@@ -36,17 +37,7 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
         )}
       </div>
 
-      {!!teams.length && (
-        <div className="mw-teams" data-testid="hq-team-grid">
-          {teams.map(t => (
-            <button key={t.id} className="mw-team-chip" onClick={() => onOpenTeam(t.id)} onMouseEnter={() => onPrefetchTeam?.(t.id)} data-testid={`hq-team-card-${t.id}`}>
-              <i style={{ background: t.color }} />
-              <span>{t.name}</span>
-              <small>{t.member_count}</small>
-            </button>
-          ))}
-        </div>
-      )}
+      {!!teams.length && <HqTeamList teams={teams} onOpenTeam={onOpenTeam} onPrefetchTeam={onPrefetchTeam} />}
 
       {!data ? (
         <p className="muted">Memuat tugas…</p>
@@ -88,6 +79,58 @@ export function MyWork({ user, teams, onOpenTeam, onPrefetchTeam, onOpenTask, on
           </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+function HqTeamList({ teams, onOpenTeam, onPrefetchTeam }) {
+  const [openArchives, setOpenArchives] = useState(new Set());
+  const groups = groupTeamsByYear(teams);
+  const currentGroups = groups.filter(([year]) => isCurrentOrUpcomingYear(year));
+  const archiveGroups = groups.filter(([year]) => !isCurrentOrUpcomingYear(year));
+  return (
+    <div className="mw-teams-wrap" data-testid="hq-team-grid">
+      {currentGroups.map(([year, list]) => (
+        <div key={year} className="mw-year-block">
+          {(groups.length > 1 || archiveGroups.length > 0) && <p className="mw-year-label">Tim {year}</p>}
+          <div className="mw-teams">
+            {list.map(t => (
+              <button key={t.id} className="mw-team-chip" onClick={() => onOpenTeam(t.id)} onMouseEnter={() => onPrefetchTeam?.(t.id)} data-testid={`hq-team-card-${t.id}`}>
+                <i style={{ background: t.color }} />
+                <span>{t.name}</span>
+                <small>{t.member_count}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {archiveGroups.map(([year, list]) => {
+        const open = openArchives.has(year);
+        return (
+          <div key={year} className="mw-year-block mw-archive-block">
+            <button type="button" className={`mw-archive-toggle ${open ? "open" : ""}`} onClick={() => setOpenArchives(prev => {
+              const next = new Set(prev);
+              if (next.has(year)) next.delete(year); else next.add(year);
+              return next;
+            })} data-testid={`hq-archive-toggle-${year}`}>
+              <ChevronRight size={13} />
+              Arsip {year}
+              <small>{list.length} tim</small>
+            </button>
+            {open && (
+              <div className="mw-teams">
+                {list.map(t => (
+                  <button key={t.id} className="mw-team-chip" onClick={() => onOpenTeam(t.id)} onMouseEnter={() => onPrefetchTeam?.(t.id)} data-testid={`hq-team-card-${t.id}`}>
+                    <i style={{ background: t.color }} />
+                    <span>{t.name}</span>
+                    <small>{t.member_count}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

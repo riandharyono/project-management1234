@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Link2 } from "lucide-react";
 import { client, shortDate, localISODate } from "../lib/api";
 import { EmptyState } from "./EmptyState";
+import { currentYear, teamYear } from "../lib/years";
 
 const TABS = [
   { key: "progress", label: "Progres Tim" },
@@ -42,14 +43,44 @@ export function MonitoringPage({ onOpenTeam }) {
   );
 }
 
+function YearFilter({ rows, year, onChange }) {
+  const years = useMemo(() => {
+    const set = new Set((rows || []).map(r => teamYear(r)));
+    return [...set].sort((a, b) => b - a);
+  }, [rows]);
+  if (years.length < 2) return null;
+  return (
+    <div className="mon-year-filters" data-testid="monitoring-year-filter">
+      {years.map(y => (
+        <button key={y} type="button" className={year === y ? "active" : ""} onClick={() => onChange(y)} data-testid={`monitoring-year-${y}`}>
+          {y}{y === currentYear() ? "" : y < currentYear() ? " · arsip" : ""}
+        </button>
+      ))}
+      <button type="button" className={year === "all" ? "active" : ""} onClick={() => onChange("all")} data-testid="monitoring-year-all">Semua tahun</button>
+    </div>
+  );
+}
+
+function filterByYear(rows, year) {
+  if (year === "all") return rows;
+  return rows.filter(r => teamYear(r) === year);
+}
+
 function ProgressMonitoring({ onOpenTeam }) {
   const [rows, setRows] = useState(null);
+  const [year, setYear] = useState(currentYear());
   useEffect(() => { client.get("/teams/tasks-monitoring").then(r => setRows(r.data)).catch(() => setRows([])); }, []);
   if (rows === null) return <p className="muted">Memuat…</p>;
   if (!rows.length) return <EmptyState icon={<CheckCircle2 size={22} />} title="Belum ada tim" body="Progres tugas akan muncul di sini begitu ada tim dengan tugas." />;
+  const visible = filterByYear(rows, year);
   return (
+    <>
+      <YearFilter rows={rows} year={year} onChange={setYear} />
+      {!visible.length ? (
+        <EmptyState icon={<CheckCircle2 size={22} />} title={`Tidak ada tim ${year === "all" ? "" : year}`} body="Pilih tahun lain, atau buka arsip untuk melihat tim tahun sebelumnya." />
+      ) : (
     <div className="mon-list" data-testid="progress-monitoring-list">
-      {rows.map(r => {
+      {visible.map(r => {
         const tone = !r.total ? "" : r.pct_complete >= 80 ? "var(--success)" : r.pct_complete >= 50 ? "var(--warning)" : "var(--danger)";
         return (
           <button className="mon-row" key={r.team_id} onClick={() => onOpenTeam(r.team_id, "overview")} data-testid={`progress-monitoring-row-${r.team_id}`}>
@@ -69,17 +100,26 @@ function ProgressMonitoring({ onOpenTeam }) {
         );
       })}
     </div>
+      )}
+    </>
   );
 }
 
 function DataRequestMonitoring({ onOpenTeam }) {
   const [rows, setRows] = useState(null);
+  const [year, setYear] = useState(currentYear());
   useEffect(() => { client.get("/data-requests/monitoring").then(r => setRows(r.data)).catch(() => setRows([])); }, []);
   if (rows === null) return <p className="muted">Memuat…</p>;
   if (!rows.length) return <EmptyState icon={<CheckCircle2 size={22} />} title="Belum ada tim" body="Kelengkapan data akan muncul di sini begitu ada tim dengan permintaan data." />;
+  const visible = filterByYear(rows, year);
   return (
+    <>
+      <YearFilter rows={rows} year={year} onChange={setYear} />
+      {!visible.length ? (
+        <EmptyState icon={<CheckCircle2 size={22} />} title={`Tidak ada tim ${year === "all" ? "" : year}`} body="Pilih tahun lain, atau buka arsip untuk melihat tim tahun sebelumnya." />
+      ) : (
     <div className="mon-list" data-testid="data-monitoring-list">
-      {rows.map(r => {
+      {visible.map(r => {
         const flagged = r.counts.tidak_tersedia > 0;
         const tone = !r.total ? "" : r.pct_complete >= 80 ? "var(--success)" : r.pct_complete >= 50 ? "var(--warning)" : "var(--danger)";
         return (
@@ -100,5 +140,7 @@ function DataRequestMonitoring({ onOpenTeam }) {
         );
       })}
     </div>
+      )}
+    </>
   );
 }

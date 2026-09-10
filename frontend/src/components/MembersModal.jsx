@@ -3,6 +3,7 @@ import { X, UserPlus, Trash2 } from "lucide-react";
 import { client, apiError, LABEL_COLORS } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { useConfirm } from "./ConfirmDialog";
+import { currentYear, teamYear, yearChoices } from "../lib/years";
 
 export function MembersModal({ team, mode, members, myRole, currentUser, onClose, onChanged, onTeamUpdated, onTeamDeleted }) {
   const [tab, setTab] = useState(mode || "access");
@@ -13,6 +14,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
   const [kkeDeadline, setKkeDeadline] = useState(team.kke_deadline || "");
   const [laporanLink, setLaporanLink] = useState(team.laporan_link || "");
   const [kkeLink, setKkeLink] = useState(team.kke_link || "");
+  const [teamYearValue, setTeamYearValue] = useState(teamYear(team));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const isAdmin = myRole === "admin";
@@ -33,7 +35,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
     setError("");
     try {
       await client.patch(`/teams/${team.id}`, {
-        name: teamName.trim(), color: teamColor,
+        name: teamName.trim(), color: teamColor, year: Number(teamYearValue),
         laporan_deadline: laporanDeadline || null, kke_deadline: kkeDeadline || null,
         laporan_link: laporanLink.trim() || null, kke_link: kkeLink.trim() || null,
       });
@@ -84,6 +86,12 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
         ) : (
           <div className="team-settings" data-testid="team-settings-panel">
             <label className="sf-label">NAMA TIM<input value={teamName} onChange={e => setTeamName(e.target.value)} data-testid="team-name-input" /></label>
+            <label className="sf-label">TAHUN PENUGASAN
+              <select value={teamYearValue} onChange={e => setTeamYearValue(Number(e.target.value))} data-testid="team-year-select">
+                {yearChoices(teamYearValue).map(y => <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : y < currentYear() ? " (arsip)" : ""}</option>)}
+              </select>
+            </label>
+            <p className="muted" style={{ marginTop: -8, fontSize: 12 }}>Pindahkan ke tahun lalu untuk mengarsipkan tim di sidebar tanpa menghapus datanya.</p>
             <label className="sf-label">WARNA<div className="td-label-swatches">{LABEL_COLORS.map(c => <button type="button" key={c} style={{ background: c, outline: teamColor === c ? "2px solid #10213b" : "none" }} onClick={() => setTeamColor(c)} data-testid={`team-edit-color-${c}`} />)}</div></label>
             <label className="sf-label">TENGGAT UPLOAD LAPORAN<input type="date" value={laporanDeadline} onChange={e => setLaporanDeadline(e.target.value)} data-testid="team-laporan-deadline-input" /></label>
             <label className="sf-label">LINK UPLOAD LAPORAN<input value={laporanLink} onChange={e => setLaporanLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-laporan-link-input" /></label>

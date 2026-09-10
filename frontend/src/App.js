@@ -14,7 +14,9 @@ import { Schedule } from "./components/Schedule";
 import { Questions } from "./components/Questions";
 import { Documents } from "./components/Documents";
 import { DataRequests } from "./components/DataRequests";
+import { DataRecapPage } from "./components/DataRecapPage";
 import { MonitoringPage } from "./components/MonitoringPage";
+import { teamYear } from "./lib/years";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { MembersModal } from "./components/MembersModal";
@@ -142,8 +144,9 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [toast, setToast] = useState("");
-  const [userAdminOpen, setUserAdminOpen] = useState(false);
-  const [monitoringOpen, setMonitoringOpen] = useState(false);
+  const [userAdminOpen, setUserAdminOpen] = useState(urlParams.get("page") === "users");
+  const [monitoringOpen, setMonitoringOpen] = useState(urlParams.get("page") === "monitoring");
+  const [recapOpen, setRecapOpen] = useState(urlParams.get("page") === "recap");
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [boardLoading, setBoardLoading] = useState(!!urlParams.get("team"));
@@ -252,6 +255,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     const params = new URLSearchParams();
     if (userAdminOpen) params.set("page", "users");
     else if (monitoringOpen) params.set("page", "monitoring");
+    else if (recapOpen) params.set("page", "recap");
     else {
       if (activeTeamId) params.set("team", activeTeamId);
       if (activeTeamId && tab) params.set("tab", tab);
@@ -265,13 +269,14 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     skipUrl.current = false;
     if (replace) window.history.replaceState(null, "", next);
     else window.history.pushState(null, "", next);
-  }, [activeTeamId, tab, taskIdInUrl, userAdminOpen, monitoringOpen]);
+  }, [activeTeamId, tab, taskIdInUrl, userAdminOpen, monitoringOpen, recapOpen]);
   useEffect(() => {
     const onPop = () => {
       const p = new URLSearchParams(window.location.search);
       skipUrl.current = true;
       setUserAdminOpen(p.get("page") === "users");
       setMonitoringOpen(p.get("page") === "monitoring");
+      setRecapOpen(p.get("page") === "recap");
       setActiveTeamId(p.get("team"));
       setTab(p.get("tab") || "overview");
       const task = p.get("task");
@@ -302,9 +307,10 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     const cached = boardCache.get(id);
     if (cached) { applyBoard(cached); setBoardLoading(false); }
     else { applyBoard(EMPTY_BOARD); setBoardLoading(true); }
-    setActiveTeamId(id); setTab(initialTab); setUserAdminOpen(false); setMonitoringOpen(false); setTaskModal(null);
+    setActiveTeamId(id); setTab(initialTab); setUserAdminOpen(false); setMonitoringOpen(false); setRecapOpen(false); setTaskModal(null);
   };
-  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setMonitoringOpen(false); setTaskModal(null); setBoardLoading(false); };
+  const goHQ = () => { setActiveTeamId(null); setUserAdminOpen(false); setMonitoringOpen(false); setRecapOpen(false); setTaskModal(null); setBoardLoading(false); };
+  const openRecap = () => { setActiveTeamId(null); setUserAdminOpen(false); setMonitoringOpen(false); setRecapOpen(true); setTaskModal(null); setBoardLoading(false); };
   const openTask = (task) => {
     if (task.team_id && task.team_id !== activeTeamId) {
       const cached = boardCache.get(task.team_id);
@@ -313,6 +319,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
     }
     setUserAdminOpen(false);
     setMonitoringOpen(false);
+    setRecapOpen(false);
     setTab("tasks");
     setTaskModal({ mode: "detail", task });
   };
@@ -339,10 +346,11 @@ function Workspace({ user, onLogout, onUserUpdate }) {
       <Sidebar teams={teams} activeTeamId={activeTeamId} onSelectHQ={goHQ} onSelectTeam={selectTeam}
         onPrefetchTeam={prefetchTeam}
         onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} user={user}
-        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); setMonitoringOpen(false); }}
-        monitoringOpen={monitoringOpen} onOpenMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); }}
+        userAdminOpen={userAdminOpen} onOpenUserAdmin={() => { setActiveTeamId(null); setUserAdminOpen(true); setMonitoringOpen(false); setRecapOpen(false); }}
+        monitoringOpen={monitoringOpen} onOpenMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); setRecapOpen(false); }}
+        recapOpen={recapOpen} onOpenRecap={openRecap}
         onOpenProfile={() => setProfileOpen(true)} />
-      <main className="content" data-tab={userAdminOpen ? "users" : monitoringOpen ? "monitoring" : (activeTeam ? tab : "hq")}>
+      <main className="content" data-tab={userAdminOpen ? "users" : monitoringOpen ? "monitoring" : recapOpen ? "recap" : (activeTeam ? tab : "hq")}>
         <TopBar team={activeTeam} tab={tab} onTabChange={setTab} onOpenHQ={goHQ} members={members} myRole={activeTeam?.my_role}
           onOpenAddMember={() => setMembersModal("add")} onOpenAccess={() => setMembersModal("access")}
           onOpenSettings={() => setMembersModal("settings")} notifUnread={notif.unread}
@@ -357,6 +365,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           <UserAdminPage currentUser={user} />
         ) : monitoringOpen ? (
           <MonitoringPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
+        ) : recapOpen ? (
+          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
             onPrefetchTeam={prefetchTeam}
@@ -374,6 +384,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
           <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} />
+        ) : tab === "data-recap" ? (
+          <DataRecapPage initialYear={teamYear(activeTeam)} onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
         ) : tab === "announcements" ? (
           <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (
@@ -417,6 +429,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           canCreateTeam={canCreateTeam(user)}
           onCreateTask={() => { if (activeTeamId) setTaskModal({ mode: "new", listId: lists[0]?.id }); }}
           onGoHQ={goHQ}
+          onOpenRecap={openRecap}
           onTab={setTab}
           onOpenDocuments={d => { if (d.team_id) { setActiveTeamId(d.team_id); setTab("documents"); } }}
         />

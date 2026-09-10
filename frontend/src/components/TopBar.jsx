@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Database, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { applyTheme, readTheme } from "../lib/theme";
+import { currentYear, teamYear } from "../lib/years";
 
 const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Tugas", icon: ClipboardList },
   { key: "data-requests", label: "Permintaan Data", icon: ClipboardCheck },
+  { key: "data-recap", label: "Rekap Data", icon: Database },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Check-in", icon: HelpCircle },
@@ -32,7 +34,7 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
       <div className="tt-row1">
         <div className="tt-crumb">
           <span onClick={onOpenHQ} data-testid="breadcrumb-home">Beranda</span>
-          {team && <><b>›</b><span className="tt-current">{team.name}</span></>}
+          {team && <><b>›</b><span className="tt-current">{team.name}{teamYear(team) !== currentYear() ? ` · ${teamYear(team)}` : ""}</span></>}
           {team && tab === "tasks" && <><b>›</b><span className="tt-current">Papan</span></>}
           {team && tab !== "overview" && tab !== "tasks" && activeTabLabel && <><b>›</b><span className="tt-current">{activeTabLabel}</span></>}
         </div>

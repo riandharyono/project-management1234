@@ -48,7 +48,25 @@ def get_object(path):
     content_type = mimetypes.guess_type(full_path.name)[0] or "application/octet-stream"
     return full_path.read_bytes(), content_type
 
+WIB = timezone(timedelta(hours=7))
 def now(): return datetime.now(timezone.utc).isoformat()
+def current_year(): return datetime.now(WIB).year
+def infer_team_year(team):
+    y = team.get("year") if isinstance(team, dict) else None
+    try:
+        y = int(y)
+        if 2000 <= y <= 2100: return y
+    except (TypeError, ValueError):
+        pass
+    created = (team or {}).get("created_at") or ""
+    if len(created) >= 4 and created[:4].isdigit():
+        y = int(created[:4])
+        if 2000 <= y <= 2100: return y
+    return current_year()
+def with_team_year(team):
+    team = dict(team)
+    team["year"] = infer_team_year(team)
+    return team
 def public_user(user):
     user = dict(user); user.pop("password_hash", None); user.pop("_id", None); return user
 def hash_password(value): return bcrypt.hashpw(value.encode(), bcrypt.gensalt()).decode()
@@ -189,6 +207,7 @@ class PasswordUpdate(BaseModel):
 class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
+    year: Optional[int] = Field(default=None, ge=2000, le=2100)
     laporan_deadline: Optional[str] = None
     kke_deadline: Optional[str] = None
     laporan_link: Optional[str] = None
@@ -314,6 +333,19 @@ class DataRequestPatch(BaseModel):
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
 DATA_REQUEST_RECEIVED_STATUSES = {"diterima_sebagian", "diterima_lengkap"}
+NO_SHEET_LABEL = "(Tanpa klasifikasi)"
+
+def normalize_data_name(name):
+    s = (name or "").strip().lower()
+    s = re.sub(r"[\s\u00a0]+", " ", s)
+    s = re.sub(r"[\"'`]+", "", s)
+    return s.strip()
+
+def _most_common_name(names):
+    counts = {}
+    for n in names:
+        counts[n] = counts.get(n, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))[0][0]
 
 async def seed_admin():
     await db.users.create_index("email", unique=True)
@@ -329,8 +361,9 @@ async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
     await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
-async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None):
+async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None, year=None):
     team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now(),
+            "year": year if year is not None else current_year(),
             "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline,
             "laporan_link": laporan_link, "kke_link": kke_link}
     await db.teams.insert_one(team)
@@ -400,6 +433,10 @@ async def migrate_list_done_flag():
     await db.lists.update_many({"is_cancelled": {"$exists": False}, "name": "Batal"}, {"$set": {"is_cancelled": True}})
     await db.lists.update_many({"is_cancelled": {"$exists": False}}, {"$set": {"is_cancelled": False}})
 
+async def migrate_team_years():
+    async for t in db.teams.find({"$or": [{"year": {"$exists": False}}, {"year": None}]}):
+        await db.teams.update_one({"id": t["id"]}, {"$set": {"year": infer_team_year(t)}})
+
 _scheduler_task = None
 _reminder_task = None
 
@@ -429,6 +466,7 @@ async def startup():
     await migrate_legacy_tasks()
     await migrate_task_labels()
     await migrate_list_done_flag()
+    await migrate_team_years()
     await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
@@ -535,16 +573,16 @@ async def list_teams(user=Depends(current_user)):
         {"$group": {"_id": "$team_id", "n": {"$sum": 1}}},
     ]).to_list(200)
     count_map = {c["_id"]: c["n"] for c in counts}
-    result = [{**t, "my_role": role_by_team.get(t["id"], default_role), "member_count": count_map.get(t["id"], 0)} for t in teams]
-    result.sort(key=lambda t: t.get("created_at") or "")
+    result = [{**with_team_year(t), "my_role": role_by_team.get(t["id"], default_role), "member_count": count_map.get(t["id"], 0)} for t in teams]
+    result.sort(key=lambda t: (-int(t.get("year") or 0), t.get("created_at") or ""))
     return result
 
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
     if not can_create_team(user):
         raise HTTPException(403, "Role Anda tidak dapat membuat tim")
-    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link)
-    return {**team, "my_role": "admin", "member_count": 1}
+    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link, data.year)
+    return {**with_team_year(team), "my_role": "admin", "member_count": 1}
 
 def _task_progress_fraction(task, lst):
     if lst and lst.get("is_done"): return 1.0
@@ -582,7 +620,7 @@ async def tasks_monitoring(user=Depends(current_user)):
         pct = round((progress_sum / total) * 100) if total else 0
         result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
                         "total": total, "done": done_count, "overdue": overdue_count,
-                        "pct_complete": pct, "created_at": t.get("created_at"),
+                        "pct_complete": pct, "created_at": t.get("created_at"), "year": infer_team_year(t),
                         "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline"),
                         "laporan_link": t.get("laporan_link"), "kke_link": t.get("kke_link")})
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
@@ -593,17 +631,21 @@ async def get_team(team_id: str, user=Depends(current_user)):
     role = await require_member(team_id, user)
     team = await db.teams.find_one({"id": team_id}, {"_id": 0})
     if not team: raise HTTPException(404, "Tim tidak ditemukan")
-    return {**team, "my_role": role}
+    return {**with_team_year(team), "my_role": role}
 
 @api.patch("/teams/{team_id}")
 async def update_team(team_id: str, data: TeamInput, user=Depends(current_user)):
     await require_admin(team_id, user)
-    await db.teams.update_one({"id": team_id}, {"$set": {
+    fields = {
         "name": data.name, "color": data.color,
         "laporan_deadline": data.laporan_deadline, "kke_deadline": data.kke_deadline,
         "laporan_link": data.laporan_link, "kke_link": data.kke_link,
-    }})
-    return await db.teams.find_one({"id": team_id}, {"_id": 0})
+    }
+    if data.year is not None:
+        fields["year"] = data.year
+    await db.teams.update_one({"id": team_id}, {"$set": fields})
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    return with_team_year(team) if team else team
 
 @api.delete("/teams/{team_id}")
 async def delete_team(team_id: str, user=Depends(current_user)):
@@ -1081,9 +1123,106 @@ async def data_requests_monitoring(user=Depends(current_user)):
         pct = round((counts["diterima_lengkap"] / total) * 100) if total else 0
         result.append({"team_id": t["id"], "team_name": t["name"], "team_color": t.get("color"),
                         "total": total, "counts": counts, "pct_complete": pct, "created_at": t.get("created_at"),
+                        "year": infer_team_year(t),
                         "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline")})
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
+
+@api.get("/data-recap")
+async def data_requests_recap(year: Optional[int] = None, user=Depends(current_user)):
+    """Unique yearly data catalog: one row per distinct data name, grouped by sheet."""
+    memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
+    role_by_team = {m["team_id"]: m["role"] for m in memberships}
+    if can_view_all_teams(user):
+        teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+    else:
+        if not memberships:
+            y = year or current_year()
+            return {"year": y, "years": [y], "total_requests": 0, "unique_count": 0, "team_count": 0, "groups": []}
+        teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(200)
+    teams = [with_team_year(t) for t in teams]
+    years = sorted({t["year"] for t in teams} | {current_year()}, reverse=True)
+    if year is None:
+        chosen = current_year()
+    else:
+        chosen = year
+        if chosen not in years:
+            years = sorted({*years, chosen}, reverse=True)
+    year_teams = [t for t in teams if t["year"] == chosen]
+    team_map = {t["id"]: t for t in year_teams}
+    team_ids = list(team_map.keys())
+    items = await db.data_requests.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(50000) if team_ids else []
+
+    buckets = {}
+    for it in items:
+        key = normalize_data_name(it.get("name") or "")
+        if not key:
+            continue
+        b = buckets.setdefault(key, {
+            "key": key, "names": [], "sheets": set(), "status_counts": {s: 0 for s in DATA_REQUEST_STATUSES},
+            "teams": {}, "attachments": [], "notes": [],
+        })
+        b["names"].append(it.get("name") or "")
+        for sh in (it.get("sheets") or []):
+            if sh and sh.strip():
+                b["sheets"].add(sh.strip())
+        status = it.get("status") if it.get("status") in DATA_REQUEST_STATUSES else "diminta"
+        b["status_counts"][status] = b["status_counts"].get(status, 0) + 1
+        team = team_map.get(it.get("team_id"))
+        if team and team["id"] not in b["teams"]:
+            b["teams"][team["id"]] = {
+                "team_id": team["id"], "team_name": team.get("name"), "team_color": team.get("color"),
+                "status": status, "pic": it.get("pic") or "", "item_id": it.get("id"),
+            }
+        elif team and team["id"] in b["teams"]:
+            # keep the "best" status if the same team listed the same data more than once
+            prev = b["teams"][team["id"]]["status"]
+            rank = {s: i for i, s in enumerate(["tidak_relevan", "diminta", "tidak_tersedia", "diterima_sebagian", "diterima_lengkap"])}
+            if rank.get(status, 0) > rank.get(prev, 0):
+                b["teams"][team["id"]]["status"] = status
+                b["teams"][team["id"]]["item_id"] = it.get("id")
+            if it.get("pic") and not b["teams"][team["id"]].get("pic"):
+                b["teams"][team["id"]]["pic"] = it["pic"]
+        for att in it.get("attachments") or []:
+            url = (att.get("url") or "").strip()
+            name = att.get("name") or att.get("filename") or url
+            if url and not any(a.get("url") == url for a in b["attachments"]):
+                b["attachments"].append({"name": name, "url": url, "team_name": team.get("name") if team else ""})
+        note = (it.get("notes") or "").strip()
+        if note and note not in b["notes"]:
+            b["notes"].append(note)
+
+    unique_items = []
+    for b in buckets.values():
+        unique_items.append({
+            "key": b["key"],
+            "name": _most_common_name(b["names"]),
+            "sheets": sorted(b["sheets"]),
+            "status_counts": b["status_counts"],
+            "team_count": len(b["teams"]),
+            "teams": sorted(b["teams"].values(), key=lambda t: t.get("team_name") or ""),
+            "attachments": b["attachments"][:100],
+            "notes": b["notes"][:8],
+        })
+    unique_items.sort(key=lambda i: (i["name"].lower(), i["key"]))
+
+    by_sheet = {}
+    for item in unique_items:
+        labels = item["sheets"] or [NO_SHEET_LABEL]
+        for sh in labels:
+            by_sheet.setdefault(sh, []).append(item)
+    groups = []
+    for sh in sorted(by_sheet.keys(), key=lambda s: (s == NO_SHEET_LABEL, s.lower())):
+        groups.append({"sheet": sh, "count": len(by_sheet[sh]), "items": by_sheet[sh]})
+
+    return {
+        "year": chosen,
+        "years": years,
+        "total_requests": len(items),
+        "unique_count": len(unique_items),
+        "team_count": len(year_teams),
+        "groups": groups,
+    }
 
 # ---------- calendar sync (iCal) ----------
 def _ics_escape(text):

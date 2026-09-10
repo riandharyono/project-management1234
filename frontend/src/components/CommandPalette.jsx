@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, HelpCircle, Megaphone } from "lucide-react";
+import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, HelpCircle, Megaphone, Database } from "lucide-react";
 import { client } from "../lib/api";
+import { currentYear, teamYear } from "../lib/years";
 
 const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Papan", icon: ClipboardList },
+  { key: "data-recap", label: "Rekap Data", icon: Database },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Check-in", icon: HelpCircle },
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
-export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onTab, onOpenDocuments, canCreateTeam }) {
+export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onOpenRecap, onTab, onOpenDocuments, canCreateTeam }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState({ tasks: [], documents: [], teams: [] });
   const [active, setActive] = useState(0);
@@ -40,22 +42,29 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
     const needle = q.trim().toLowerCase();
     const list = [
       { id: "act-hq", label: "Ke Tugas saya", icon: Inbox, run: onGoHQ },
+      { id: "act-recap", label: "Buka Rekap Data", icon: Database, run: onOpenRecap },
     ];
     if (canCreateTeam) list.push({ id: "act-new-team", label: "Buat tim baru", icon: Plus, run: onCreateTeam });
     if (team) {
       list.push({ id: "act-new-task", label: `Buat tugas di ${team.name}`, icon: Plus, run: onCreateTask });
       TABS.forEach(tab => list.push({ id: `act-tab-${tab.key}`, label: `Buka ${tab.label}`, icon: tab.icon, run: () => onTab(tab.key) }));
     }
-    teams.forEach(t => list.push({ id: `team-${t.id}`, label: `Buka tim ${t.name}`, icon: Users, run: () => onSelectTeam(t.id) }));
+    teams.forEach(t => {
+      const y = teamYear(t);
+      list.push({ id: `team-${t.id}`, label: y === currentYear() ? `Buka tim ${t.name}` : `Buka tim ${t.name} (${y})`, icon: Users, run: () => onSelectTeam(t.id) });
+    });
     if (!needle) return list.slice(0, 8);
     return list.filter(a => a.label.toLowerCase().includes(needle));
-  }, [q, team, teams, onGoHQ, onCreateTeam, onCreateTask, onTab, onSelectTeam, canCreateTeam]);
+  }, [q, team, teams, onGoHQ, onOpenRecap, onCreateTeam, onCreateTask, onTab, onSelectTeam, canCreateTeam]);
 
   const rows = useMemo(() => {
     const out = [];
     hits.tasks.forEach(t => out.push({ id: `task-${t.id}`, kind: "Tugas", label: t.title, run: () => onOpenTask(t) }));
     hits.documents.forEach(d => out.push({ id: `doc-${d.id}`, kind: "Dokumen", label: d.filename, run: () => onOpenDocuments?.(d) }));
-    hits.teams.forEach(t => out.push({ id: `hit-team-${t.id}`, kind: "Tim", label: t.name, run: () => onSelectTeam(t.id) }));
+    hits.teams.forEach(t => {
+      const y = teamYear(t);
+      out.push({ id: `hit-team-${t.id}`, kind: y === currentYear() ? "Tim" : `Tim ${y}`, label: t.name, run: () => onSelectTeam(t.id) });
+    });
     actions.forEach(a => out.push({ id: a.id, kind: "Aksi", label: a.label, icon: a.icon, run: a.run }));
     return out;
   }, [hits, actions, onOpenTask, onOpenDocuments, onSelectTeam]);

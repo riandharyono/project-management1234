@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { client, apiError } from "../lib/api";
+import { currentYear, groupTeamsByYear, isCurrentOrUpcomingYear } from "../lib/years";
 
 export function CopyMoveModal({ task, teams, mode, onClose, onDone }) {
   const [title, setTitle] = useState(`${task.title} (Salinan)`);
@@ -55,7 +56,11 @@ export function CopyMoveModal({ task, teams, mode, onClose, onDone }) {
         <label className="sf-label">{isCopy ? "SALIN TUGAS KE…" : "PINDAHKAN TUGAS KE…"}</label>
         <label>PILIH TIM TUJUAN
           <select value={targetTeamId} onChange={e => setTargetTeamId(e.target.value)} data-testid="target-team-select">
-            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {groupTeamsByYear(teams).map(([year, list]) => (
+              <optgroup key={year} label={isCurrentOrUpcomingYear(year) ? `Tim ${year}` : `Arsip ${year}`}>
+                {list.map(t => <option key={t.id} value={t.id}>{t.name}{year === currentYear() ? "" : ` · ${year}`}</option>)}
+              </optgroup>
+            ))}
           </select>
         </label>
         <label>PILIH LIST TUJUAN

@@ -1,9 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2, ChevronDown } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
+import { teamYear } from "../lib/years";
+
+function normName(s) {
+  return (s || "").trim().toLowerCase().replace(/[\s\u00a0]+/g, " ").replace(/["'`]+/g, "").trim();
+}
+
+function flattenCatalog(groups) {
+  const seen = new Map();
+  for (const g of groups || []) {
+    for (const it of g.items || []) {
+      if (it?.key && !seen.has(it.key)) seen.set(it.key, it);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
+}
 
 const STATUS_OPTIONS = [
   { value: "diminta", label: "Diminta" },
@@ -28,10 +43,16 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [linkNameDraft, setLinkNameDraft] = useState("");
   const [attachError, setAttachError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
+  const [catalog, setCatalog] = useState([]);
   const confirm = useConfirm();
 
   const load = () => client.get(`/teams/${team.id}/data-requests`).then(r => { setItems(r.data); setLoading(false); });
   useEffect(() => { setLoading(true); load(); setOpenSheet(null); }, [team.id]);
+  useEffect(() => {
+    client.get("/data-recap", { params: { year: teamYear(team) } })
+      .then(r => setCatalog(flattenCatalog(r.data.groups)))
+      .catch(() => setCatalog([]));
+  }, [team.id, team.year, items.length]);
 
   const allSheets = useMemo(() => [...new Set(items.flatMap(i => (i.sheets?.length ? i.sheets : [NO_SHEET])))].sort(), [items]);
   const bySheet = useMemo(() => allSheets.map(sheet => ({
@@ -130,7 +151,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       )}
 
       {openSheet === "__new__" && (
-        <AddForm team={team} items={items} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+        <AddForm team={team} items={items} catalog={catalog} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
       )}
 
       {!items.length ? (
@@ -153,7 +174,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                 <button className="add-btn" onClick={() => setOpenSheet(sheet)} data-testid={`add-to-sheet-${sheet}`}>+ Tambah data</button>
               </div>
               {openSheet === sheet && (
-                <AddForm team={team} items={items} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+                <AddForm team={team} items={items} catalog={catalog} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
               )}
               {rows.map(item => (
                 <div className="dr-row" key={item.id} data-testid={`data-request-row-${item.id}`}>
@@ -223,16 +244,12 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   );
 }
 
-function AddForm({ team, items, defaultSheet, onDone, onCancel, allSheets }) {
+function AddForm({ team, items, catalog, defaultSheet, onDone, onCancel, allSheets }) {
   const [name, setName] = useState("");
   const [sheets, setSheets] = useState(defaultSheet ? [defaultSheet] : []);
   const [sheetInput, setSheetInput] = useState("");
   const [pic, setPic] = useState("");
   const [error, setError] = useState("");
-
-  const similar = name.trim().length >= 2
-    ? items.filter(i => i.name.toLowerCase().includes(name.trim().toLowerCase())).slice(0, 4)
-    : [];
 
   const addSheetTag = () => {
     const v = sheetInput.trim();
@@ -241,34 +258,35 @@ function AddForm({ team, items, defaultSheet, onDone, onCancel, allSheets }) {
   };
   const removeSheetTag = s => setSheets(sheets.filter(x => x !== s));
 
-  const submit = async e => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    try {
-      await client.post(`/teams/${team.id}/data-requests`, { name: name.trim(), sheets, pic: pic.trim() });
-      onDone();
-    } catch (x) { setError(apiError(x)); }
-  };
-
   const attachToExisting = async existing => {
     const merged = [...new Set([...(existing.sheets || []), ...sheets])];
     await client.patch(`/data-requests/${existing.id}`, { sheets: merged });
     onDone();
   };
 
+  const submit = async e => {
+    e.preventDefault();
+    const typed = name.trim();
+    if (!typed) return;
+    const existing = items.find(i => normName(i.name) === normName(typed));
+    if (existing) { await attachToExisting(existing); return; }
+    const canon = (catalog || []).find(c => c.key === normName(typed));
+    try {
+      await client.post(`/teams/${team.id}/data-requests`, { name: canon ? canon.name : typed, sheets, pic: pic.trim() });
+      onDone();
+    } catch (x) { setError(apiError(x)); }
+  };
+
   return (
     <form className="inline-form dr-add-form" onSubmit={submit} data-testid="data-request-add-form">
-      <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Nama data yang dibutuhkan…" data-testid="data-request-name-input" />
-      {!!similar.length && (
-        <div className="dr-similar" data-testid="data-request-similar-hint">
-          <small>Sudah ada data serupa — mungkin tidak perlu diminta ulang:</small>
-          {similar.map(s => (
-            <button type="button" key={s.id} onClick={() => attachToExisting(s)} data-testid={`use-existing-${s.id}`}>
-              {s.name} <em>({s.sheets?.join(", ") || "tanpa sheet"})</em> — pakai &amp; tambahkan sheet ini
-            </button>
-          ))}
-        </div>
-      )}
+      <DataNamePicker
+        value={name}
+        onChange={setName}
+        catalog={catalog}
+        teamItems={items}
+        year={teamYear(team)}
+        onPickTeamItem={attachToExisting}
+      />
       <div className="dr-tags editable">
         {sheets.map(s => <span className="dr-tag" key={s}>{s}<button type="button" onClick={() => removeSheetTag(s)}><X size={9} /></button></span>)}
         <input value={sheetInput} onChange={e => setSheetInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSheetTag(); } }}
@@ -280,5 +298,121 @@ function AddForm({ team, items, defaultSheet, onDone, onCancel, allSheets }) {
       {error && <div className="error">{error}</div>}
       <div><button className="primary" data-testid="submit-data-request-button">Tambah</button><button type="button" className="secondary" onClick={onCancel}>Batal</button></div>
     </form>
+  );
+}
+
+function DataNamePicker({ value, onChange, catalog, teamItems, year, onPickTeamItem }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const boxRef = useRef(null);
+
+  const rows = useMemo(() => {
+    const needle = normName(value);
+    const teamByKey = new Map();
+    (teamItems || []).forEach(i => {
+      const k = normName(i.name);
+      if (k && !teamByKey.has(k)) teamByKey.set(k, i);
+    });
+    const out = [];
+    const seen = new Set();
+    const push = (row) => { if (!seen.has(row.key)) { seen.add(row.key); out.push(row); } };
+
+    if (!needle) {
+      (catalog || []).forEach(c => push({
+        key: c.key, name: c.name, sheets: c.sheets || [], teamCount: c.team_count,
+        inTeam: teamByKey.get(c.key) || null, source: "catalog",
+      }));
+      teamByKey.forEach((item, key) => push({
+        key, name: item.name, sheets: item.sheets || [], teamCount: 1, inTeam: item, source: "team",
+      }));
+      return out.slice(0, 12);
+    }
+
+    const match = (name, sheets) =>
+      normName(name).includes(needle) || (sheets || []).some(s => s.toLowerCase().includes(value.trim().toLowerCase()));
+
+    (catalog || []).filter(c => match(c.name, c.sheets)).forEach(c => push({
+      key: c.key, name: c.name, sheets: c.sheets || [], teamCount: c.team_count,
+      inTeam: teamByKey.get(c.key) || null, source: "catalog",
+    }));
+    (teamItems || []).filter(i => match(i.name, i.sheets)).forEach(i => push({
+      key: normName(i.name), name: i.name, sheets: i.sheets || [], teamCount: 1, inTeam: i, source: "team",
+    }));
+    return out.slice(0, 12);
+  }, [value, catalog, teamItems]);
+
+  const exact = rows.some(r => r.key === normName(value));
+  const showNew = value.trim() && !exact;
+
+  useEffect(() => { setActive(0); }, [value, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = e => { if (!boxRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const pick = row => {
+    if (row.inTeam) onPickTeamItem(row.inTeam);
+    else { onChange(row.name); setOpen(false); }
+  };
+
+  const onKeyDown = e => {
+    if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) { setOpen(true); return; }
+    if (!open) return;
+    const total = rows.length + (showNew ? 1 : 0);
+    if (!total) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive(i => Math.min(total - 1, i + 1)); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setActive(i => Math.max(0, i - 1)); }
+    if (e.key === "Escape") { e.preventDefault(); setOpen(false); }
+    if (e.key === "Enter" && rows[active]) { e.preventDefault(); pick(rows[active]); }
+  };
+
+  return (
+    <div className="dr-name-picker" ref={boxRef} data-testid="data-request-name-picker">
+      <div className="dr-name-picker-field">
+        <input
+          autoFocus
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          placeholder="Cari atau ketik nama data…"
+          data-testid="data-request-name-input"
+          autoComplete="off"
+        />
+        <button type="button" className="dr-name-picker-toggle" onClick={() => setOpen(o => !o)} tabIndex={-1} aria-label="Buka daftar nama">
+          <ChevronDown size={14} />
+        </button>
+      </div>
+      {open && (
+        <div className="dr-name-dropdown" data-testid="data-request-name-dropdown">
+          <small>Data {year} yang sudah pernah diinput — pilih agar nama seragam</small>
+          {rows.map((row, i) => (
+            <button
+              type="button"
+              key={`${row.source}-${row.key}`}
+              className={i === active ? "active" : ""}
+              onMouseDown={e => { e.preventDefault(); pick(row); }}
+              onMouseEnter={() => setActive(i)}
+              data-testid={`data-name-option-${row.key}`}
+            >
+              <span>{row.name}</span>
+              <em>
+                {row.inTeam ? "sudah di tim ini" : row.teamCount > 1 ? `${row.teamCount} tim` : "rekap tahun ini"}
+                {row.sheets.length ? ` · ${row.sheets.join(", ")}` : ""}
+              </em>
+            </button>
+          ))}
+          {showNew && (
+            <button type="button" className={`dr-name-new ${active === rows.length ? "active" : ""}`} onMouseDown={e => { e.preventDefault(); setOpen(false); }}>
+              <span>Pakai nama baru: {value.trim()}</span>
+            </button>
+          )}
+          {!rows.length && !showNew && <p className="muted">Belum ada data tahun ini. Ketik nama baru.</p>}
+        </div>
+      )}
+    </div>
   );
 }
