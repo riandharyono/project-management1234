@@ -842,6 +842,7 @@ html, body, #root { overflow-x: hidden; }
 
 .dr-edit-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .dr-edit-form input { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 8px; font-size: 12px; background: var(--paper); }
+.dr-edit-form input[type="number"], .dr-doc-fields input[type="number"] { width: 96px; }
 .dr-add-form { margin: 0 14px 14px; }
 .dr-name-picker { position: relative; }
 .dr-name-picker-field { position: relative; display: flex; align-items: center; }

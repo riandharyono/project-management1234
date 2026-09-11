@@ -326,7 +326,7 @@ class DataRequestCreate(BaseModel):
     pic: str = ""
     notes: str = ""
     year: Optional[int] = Field(default=None, ge=2000, le=2100)
-    doc_year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_year: Optional[int] = Field(default=None, ge=1900, le=2100)
     doc_type: str = Field(default="", max_length=120)
     scope: str = "pemda"
     wilayah: Optional[str] = Field(default=None, max_length=160)
@@ -337,7 +337,7 @@ class DataRequestPatch(BaseModel):
     pic: Optional[str] = None
     notes: Optional[str] = None
     year: Optional[int] = Field(default=None, ge=2000, le=2100)
-    doc_year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_year: Optional[int] = Field(default=None, ge=1900, le=2100)
     doc_type: Optional[str] = Field(default=None, max_length=120)
     scope: Optional[str] = None
     wilayah: Optional[str] = Field(default=None, max_length=160)
@@ -383,7 +383,7 @@ def infer_doc_year(item, team=None):
     y = (item or {}).get("doc_year")
     try:
         y = int(y)
-        if 2000 <= y <= 2100:
+        if 1900 <= y <= 2100:
             return y
     except (TypeError, ValueError):
         pass

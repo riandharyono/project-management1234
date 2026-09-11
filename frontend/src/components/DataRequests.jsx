@@ -4,11 +4,17 @@ import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
-import { currentYear, teamYear, yearChoices } from "../lib/years";
+import { currentYear, teamYear } from "../lib/years";
 import { DOC_TYPE_SUGGESTIONS, PUSAT_LABEL, itemScope, itemWilayahLabel, mergeSuggestions } from "../lib/dataDocs";
 
 function normName(s) {
   return (s || "").trim().toLowerCase().replace(/[\s\u00a0]+/g, " ").replace(/["'`]+/g, "").trim();
+}
+
+function parseDocYear(value, fallback) {
+  const n = Number(value);
+  if (Number.isInteger(n) && n >= 1900 && n <= 2100) return n;
+  return fallback;
 }
 
 function flattenCatalog(recap) {
@@ -131,7 +137,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     await client.patch(`/data-requests/${id}`, {
       name: editForm.name.trim(), pic: editForm.pic.trim(), notes: editForm.notes.trim(),
       scope: editForm.scope, wilayah: editForm.scope === "pusat" ? "" : editForm.wilayah.trim(),
-      doc_year: Number(editForm.doc_year), doc_type: editForm.doc_type.trim(),
+      doc_year: parseDocYear(editForm.doc_year, assignmentYear), doc_type: editForm.doc_type.trim(),
     });
     load();
   };
@@ -298,9 +304,16 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                         {editForm.scope === "pemda" && (
                           <input value={editForm.wilayah} onChange={e => setEditForm({ ...editForm, wilayah: e.target.value })} list="dr-wilayah-suggestions" placeholder="Kabupaten / provinsi" data-testid={`edit-wilayah-${item.id}`} />
                         )}
-                        <select value={editForm.doc_year} onChange={e => setEditForm({ ...editForm, doc_year: Number(e.target.value) })} data-testid={`edit-doc-year-${item.id}`} title="Tahun dokumen">
-                          {yearChoices(editForm.doc_year, assignmentYear, team).map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
+                        <input
+                          type="number"
+                          min="1900"
+                          max="2100"
+                          value={editForm.doc_year}
+                          onChange={e => setEditForm({ ...editForm, doc_year: e.target.value })}
+                          placeholder="Tahun dokumen"
+                          title="Tahun dokumen"
+                          data-testid={`edit-doc-year-${item.id}`}
+                        />
                         <input value={editForm.doc_type} onChange={e => setEditForm({ ...editForm, doc_type: e.target.value })} list="dr-doc-type-suggestions" placeholder="Jenis dokumen" data-testid={`edit-doc-type-${item.id}`} />
                         <input value={editForm.pic} onChange={e => setEditForm({ ...editForm, pic: e.target.value })} placeholder="PIC pemda (opsional)" />
                         <input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Catatan (opsional)" />
@@ -413,7 +426,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
     const existing = items.find(i =>
       normName(i.name) === normName(typed)
       && Number(i.year || year) === Number(year)
-      && Number(i.doc_year || i.year || year) === Number(docYear)
+      && Number(i.doc_year || i.year || year) === parseDocYear(docYear, year)
       && itemScope(i) === scope
       && (scope === "pusat" || normName(i.wilayah || wilayah) === normName(itemWilayah || wilayah))
     );
@@ -423,7 +436,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
       await client.post(`/teams/${team.id}/data-requests`, {
         name: canon ? canon.name : typed, sheets, pic: pic.trim(),
         year: Number(year),
-        doc_year: Number(docYear || year),
+        doc_year: parseDocYear(docYear, year),
         doc_type: docType.trim(),
         scope,
         wilayah: scope === "pusat" ? "" : (itemWilayah.trim() || wilayah || ""),
@@ -449,9 +462,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
           <p className="dr-wilayah-context" data-testid="data-request-wilayah-context">{PUSAT_LABEL} — tidak masuk rekap per pemda</p>
         )}
         <label>Tahun dokumen
-          <select value={docYear} onChange={e => setDocYear(Number(e.target.value))} data-testid="new-data-doc-year">
-            {yearChoices(docYear, year, team).map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <input type="number" min="1900" max="2100" value={docYear} onChange={e => setDocYear(e.target.value)} placeholder="contoh: 2014" data-testid="new-data-doc-year" />
         </label>
         <label>Jenis dokumen
           <input value={docType} onChange={e => setDocType(e.target.value)} list="dr-doc-type-suggestions" placeholder="LKPD, Peraturan pusat, …" data-testid="new-data-doc-type" />
