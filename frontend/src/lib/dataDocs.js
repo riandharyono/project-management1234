@@ -43,3 +43,23 @@ export function weakestStatus(counts) {
   }
   return "diminta";
 }
+
+export function linkedDataSummary(items) {
+  const list = items || [];
+  if (!list.length) return null;
+  const counts = {};
+  for (const d of list) {
+    const s = d.status || "diminta";
+    counts[s] = (counts[s] || 0) + 1;
+  }
+  const weak = weakestStatus(counts);
+  const complete = counts.diterima_lengkap || 0;
+  const tone = weak === "diterima_lengkap" ? "ok" : weak === "diterima_sebagian" ? "part" : weak === "tidak_tersedia" ? "na" : "req";
+  return {
+    complete,
+    total: list.length,
+    weak,
+    tone,
+    waiting: weak === "diminta" || weak === "diterima_sebagian",
+  };
+}

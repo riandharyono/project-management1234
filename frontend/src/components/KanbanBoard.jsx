@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, Filter, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban } from "lucide-react";
+import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban, Search } from "lucide-react";
 import { client, apiError, shortDate, isDueReached } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
 import { useConfirm } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { priorityLabel, priorityKey } from "../lib/priority";
+import { linkedDataSummary } from "../lib/dataDocs";
 
-export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onCreateTask, onReload, boardLoading }) {
+export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onReload, boardLoading }) {
   const [localTasks, setLocalTasks] = useState(tasks);
   const [localLists, setLocalLists] = useState(lists);
   const [view, setView] = useState(() => { try { return localStorage.getItem(`pmng_view_${team.id}`) || "kanban"; } catch (e) { return "kanban"; } });
@@ -19,9 +20,11 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const [renameValue, setRenameValue] = useState("");
   const [newListOpen, setNewListOpen] = useState(false);
   const [newListName, setNewListName] = useState("");
-  const [filters, setFilters] = useState({ priority: "", assignee: "" });
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({ q: "", priority: "", assignee: "", label: "", overdue: false, waitingData: false });
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveView, setArchiveView] = useState(null);
+  const [addingList, setAddingList] = useState(null);
+  const [newTitle, setNewTitle] = useState("");
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [archivedLists, setArchivedLists] = useState([]);
   const [error, setError] = useState("");
@@ -32,7 +35,8 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const dismissOnboard = (listId) => {
     setOnboardDismissed(prev => { const next = new Set(prev); next.add(listId); try { localStorage.setItem(`pmng_onboard_${team.id}`, JSON.stringify([...next])); } catch (e) { } return next; });
   };
-  const showOnboardFor = (list) => byList(list.id).length === 0 && !onboardDismissed.has(list.id);
+  const teamHasTasks = localTasks.some(t => !t.archived);
+  const showOnboardFor = (list) => !teamHasTasks && byList(list.id).length === 0 && !onboardDismissed.has(list.id);
   const onboardTip = (list) => list.is_done
     ? { title: "Ini kolom tugas selesai", body: "Seret tugas ke sini kalau sudah kelar, atau centang statusnya lewat detail tugas." }
     : list.is_cancelled
@@ -53,10 +57,25 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     if (stage === "todo") return <Hourglass size={15} />;
     return null;
   };
-  const byList = id => localTasks.filter(t => t.list_id === id && !t.archived
-    && (!filters.priority || t.priority === filters.priority)
-    && (!filters.assignee || (t.assignees || []).includes(filters.assignee))
-  ).sort((a, b) => a.order - b.order);
+  const matchTask = t => {
+    if (t.archived) return false;
+    const needle = filters.q.trim().toLowerCase();
+    if (needle && !(t.title || "").toLowerCase().includes(needle)) return false;
+    if (filters.priority && t.priority !== filters.priority) return false;
+    if (filters.assignee && !(t.assignees || []).includes(filters.assignee)) return false;
+    if (filters.label && !(t.labels || []).includes(filters.label)) return false;
+    if (filters.overdue) {
+      const list = localLists.find(l => l.id === t.list_id);
+      const stage = list ? stageOf(list) : "todo";
+      if (!isDueReached(t.due_date, { done: stage === "done", cancelled: stage === "cancelled" })) return false;
+    }
+    if (filters.waitingData) {
+      const data = linkedDataSummary(t.linked_data_requests);
+      if (!data?.waiting) return false;
+    }
+    return true;
+  };
+  const byList = id => localTasks.filter(t => t.list_id === id && matchTask(t)).sort((a, b) => a.order - b.order);
 
   const handleTaskDragEnd = async (result) => {
     const { source, destination, draggableId } = result;
@@ -118,6 +137,15 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     try { await client.post(`/teams/${team.id}/lists`, { name: newListName.trim() }); setNewListName(""); setNewListOpen(false); onReload(); }
     catch (e) { setError(apiError(e)); setNewListOpen(false); }
   };
+  const createInlineTask = async listId => {
+    const title = newTitle.trim();
+    if (!title) { setAddingList(null); return; }
+    try {
+      await client.post(`/teams/${team.id}/tasks`, { title, list_id: listId, priority: "Medium" });
+      setNewTitle(""); setAddingList(null); onReload();
+    } catch (e) { setError(apiError(e)); }
+  };
+  const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
   const renameList = async (id) => {
     if (!renameValue.trim()) { setRenaming(null); return; }
     try { await client.patch(`/lists/${id}`, { name: renameValue.trim() }); } catch (e) { setError(apiError(e)); }
@@ -144,22 +172,45 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     <div className="page kanban-page">
       <div className="kb-toolbar">
         <div className="kb-toolbar-actions">
-          <div className="kb-filter-wrap">
-            <button className="secondary" onClick={() => setFilterOpen(!filterOpen)} data-testid="filter-button"><Filter size={14} /> Filter</button>
-            {filterOpen && (
-              <div className="td-panel kb-filter-panel" data-testid="filter-panel">
-                <select value={filters.priority} onChange={e => setFilters({ ...filters, priority: e.target.value })} data-testid="filter-priority-select"><option value="">Semua prioritas</option><option value="High">Tinggi</option><option value="Medium">Sedang</option><option value="Low">Rendah</option></select>
-                <select value={filters.assignee} onChange={e => setFilters({ ...filters, assignee: e.target.value })} data-testid="filter-assignee-select"><option value="">Semua anggota</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-              </div>
-            )}
-          </div>
           <div className="view-toggle">
             <button className={view === "kanban" ? "selected" : ""} onClick={() => setViewPersist("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /> Kanban</button>
             <button className={view === "list" ? "selected" : ""} onClick={() => setViewPersist("list")} data-testid="list-view-button"><ListIcon size={14} /> List</button>
           </div>
-          <button className="secondary" onClick={openArchivedTasks} data-testid="archive-tasks-button"><Archive size={14} /> Arsip Tugas</button>
-          {isAdmin && <button className="secondary" onClick={openArchivedLists} data-testid="archive-lists-button"><Archive size={14} /> Arsip List</button>}
+          <div className="kb-filter-wrap">
+            <button className="secondary" onClick={() => setArchiveOpen(o => !o)} data-testid="archive-tasks-button"><Archive size={14} /> Arsip</button>
+            {archiveOpen && (
+              <div className="kb-list-menu kb-archive-menu" data-testid="archive-menu">
+                <button onClick={() => { setArchiveOpen(false); openArchivedTasks(); }}>Arsip tugas</button>
+                {isAdmin && <button onClick={() => { setArchiveOpen(false); openArchivedLists(); }} data-testid="archive-lists-button">Arsip list</button>}
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+      <div className="kb-board-filters" data-testid="filter-panel">
+        <button hidden type="button" data-testid="filter-button" />
+        <label className="kb-search">
+          <Search size={14} />
+          <input value={filters.q} onChange={e => setFilter("q", e.target.value)} placeholder="Cari tugas…" data-testid="kanban-search-input" />
+        </label>
+        <button type="button" className={`secondary ${filters.overdue ? "selected" : ""}`} onClick={() => setFilter("overdue", !filters.overdue)} data-testid="filter-overdue">Terlambat</button>
+        <button type="button" className={`secondary ${filters.waitingData ? "selected" : ""}`} onClick={() => setFilter("waitingData", !filters.waitingData)} data-testid="filter-waiting-data">Menunggu data</button>
+        <select value={filters.assignee} onChange={e => setFilter("assignee", e.target.value)} data-testid="filter-assignee-select">
+          <option value="">Semua anggota</option>
+          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        {!!(labels || []).length && (
+          <select value={filters.label} onChange={e => setFilter("label", e.target.value)} data-testid="filter-label-select">
+            <option value="">Semua label</option>
+            {labels.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        )}
+        <select value={filters.priority} onChange={e => setFilter("priority", e.target.value)} data-testid="filter-priority-select">
+          <option value="">Semua prioritas</option>
+          <option value="High">Tinggi</option>
+          <option value="Medium">Sedang</option>
+          <option value="Low">Rendah</option>
+        </select>
       </div>
       {error && <div className="error kb-error" data-testid="kanban-error">{error}</div>}
       {boardLoading && !visibleLists.length && (
@@ -209,7 +260,14 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                             </div>
                           )}
                         </Droppable>
-                        <button className="kb-add-task" onClick={() => onCreateTask(list.id)} data-testid={`add-task-${list.id}`}><Plus size={14} /> Buat Tugas</button>
+                        {addingList === list.id ? (
+                          <form className="kb-inline-add" onSubmit={e => { e.preventDefault(); createInlineTask(list.id); }}>
+                            <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Judul tugas" onBlur={() => { if (!newTitle.trim()) setAddingList(null); }} data-testid={`add-task-${list.id}`} />
+                            <button type="submit" className="primary">Tambah</button>
+                          </form>
+                        ) : (
+                          <button className="kb-add-task" onClick={() => { setAddingList(list.id); setNewTitle(""); }} data-testid={`add-task-${list.id}`}><Plus size={14} /> Buat Tugas</button>
+                        )}
                         {showOnboardFor(list) && (
                           <div className="kb-onboard-tip" data-testid={`onboard-tooltip-${list.id}`}>
                             <button className="kb-onboard-close" onClick={() => dismissOnboard(list.id)} data-testid={`onboard-tooltip-close-${list.id}`}><X size={14} /></button>
@@ -265,13 +323,12 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                     <td>{t.due_date ? <span className={`due ${overdue ? "overdue" : ""}`}>{shortDate(t.due_date)}</span> : <span className="muted">—</span>}</td>
                     <td className="tags">{chips.map(l => <span key={l.id} className="kb-label-chip" style={{ background: l.color + "26", color: l.color }}>{l.name}</span>)}</td>
                     <td>
-                      {(t.linked_data_requests || []).length
-                        ? (t.linked_data_requests || []).some(d => d.status === "diterima_lengkap")
-                          ? <span className="kb-data-badge ok">Data tersedia</span>
-                          : (t.linked_data_requests || []).some(d => d.status === "diterima_sebagian")
-                            ? <span className="kb-data-badge part">Data sebagian</span>
-                            : <span className="kb-data-badge req">Menunggu data</span>
-                        : <span className="muted">—</span>}
+                      {(() => {
+                        const data = linkedDataSummary(t.linked_data_requests);
+                        return data
+                          ? <span className={`kb-data-badge ${data.tone}`}>{data.complete}/{data.total} data</span>
+                          : <span className="muted">—</span>;
+                      })()}
                     </td>
                   </tr>
                 );

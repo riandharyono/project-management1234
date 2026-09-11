@@ -210,6 +210,28 @@
   animation: riseIn .12s ease both;
 }
 .kb-filter-panel select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; font-size: 12px; background: var(--surface); }
+.kb-board-filters {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px 0;
+}
+.kb-board-filters .secondary.selected, .kb-toolbar-actions .secondary.selected {
+  background: var(--accent-tint); border-color: var(--accent); color: var(--accent);
+}
+.kb-board-filters select {
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 7px 10px; font-size: 12.5px;
+  background: var(--surface); color: var(--ink); font-weight: 600;
+}
+.kb-search {
+  display: flex; align-items: center; gap: 8px; min-width: 180px; flex: 1; max-width: 280px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 10px; background: var(--surface); color: var(--muted);
+}
+.kb-search input { border: 0; outline: 0; width: 100%; font-size: 13px; background: none; color: var(--ink); font-weight: 600; }
+.kb-inline-add { display: flex; gap: 6px; padding: 6px 0 4px; }
+.kb-inline-add input {
+  flex: 1; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; font-size: 13px; background: var(--paper);
+}
+.kb-archive-menu { right: 0; left: auto; top: calc(100% + 4px); }
+.kb-pri { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: var(--danger-tint); color: var(--danger); }
+.kb-check-count { display: inline-flex; align-items: center; gap: 4px; }
 .kb-board { display: flex; gap: 12px; margin-top: 0; overflow-x: auto; padding: 14px 16px 28px; align-items: start; min-height: calc(100vh - 140px); }
 .kb-column { position: relative; background: var(--column); border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 8px; min-width: 272px; width: 272px; flex-shrink: 0; }
 .kb-skeleton-col { min-height: 220px; }
@@ -333,6 +355,7 @@ html[data-theme="dark"] .kb-card.is-overdue {
 .kb-data-badge.ok { background: var(--success-tint); color: var(--success); }
 .kb-data-badge.part { background: var(--warning-tint); color: var(--warning); }
 .kb-data-badge.req { background: var(--action); color: var(--accent); }
+.kb-data-badge.na { background: var(--danger-tint); color: var(--danger); }
 .kb-avatars { display: flex; margin-left: 0; flex-basis: 100%; margin-top: 2px; }
 .kb-avatars .avatar { width: 26px; height: 26px; border-radius: 50%; margin-left: 0; margin-right: 4px; font-size: 11px; border: 0; font-weight: 700; }
 
