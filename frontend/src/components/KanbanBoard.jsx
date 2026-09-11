@@ -248,6 +248,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                 <th>Anggota</th>
                 <th><button type="button" onClick={() => toggleSort("due")}>Tenggat {sort.key === "due" ? (sort.dir === "asc" ? "↑" : "↓") : ""}</button></th>
                 <th>Label</th>
+                <th>Data</th>
               </tr>
             </thead>
             <tbody>
@@ -263,6 +264,15 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                     <td><div className="kb-avatars">{assigned.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}</div></td>
                     <td>{t.due_date ? <span className={`due ${overdue ? "overdue" : ""}`}>{shortDate(t.due_date)}</span> : <span className="muted">—</span>}</td>
                     <td className="tags">{chips.map(l => <span key={l.id} className="kb-label-chip" style={{ background: l.color + "26", color: l.color }}>{l.name}</span>)}</td>
+                    <td>
+                      {(t.linked_data_requests || []).length
+                        ? (t.linked_data_requests || []).some(d => d.status === "diterima_lengkap")
+                          ? <span className="kb-data-badge ok">Data tersedia</span>
+                          : (t.linked_data_requests || []).some(d => d.status === "diterima_sebagian")
+                            ? <span className="kb-data-badge part">Data sebagian</span>
+                            : <span className="kb-data-badge req">Menunggu data</span>
+                        : <span className="muted">—</span>}
+                    </td>
                   </tr>
                 );
               })}

@@ -9,6 +9,14 @@ import { CopyMoveModal } from "./CopyMoveModal";
 import { useConfirm } from "./ConfirmDialog";
 
 export const REPEAT_LABELS = { none: "Tidak berulang", daily: "Harian", weekly: "Mingguan", monthly: "Bulanan" };
+const DR_STATUS = {
+  diminta: { label: "Diminta", tone: "req" },
+  diterima_sebagian: { label: "Sebagian", tone: "part" },
+  diterima_lengkap: { label: "Tersedia", tone: "ok" },
+  tidak_tersedia: { label: "Tidak tersedia", tone: "na" },
+  tidak_relevan: { label: "Tidak relevan", tone: "nr" },
+};
+
 
 export function TaskDetailModal({ task: initialTask, team, teams, lists, members, teamLabels, onLabelCreated, myRole, currentUser, onClose, onReload }) {
   const [task, setTask] = useState(initialTask);
@@ -35,6 +43,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [activityExpanded, setActivityExpanded] = useState(false);
   const [linkName, setLinkName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [dataCatalog, setDataCatalog] = useState([]);
+  const [dataQuery, setDataQuery] = useState("");
+  const [dataPickerOpen, setDataPickerOpen] = useState(false);
   const linkUrlRef = useRef(null);
   const coverInput = useRef(null);
   const checklistAttachInput = useRef(null);
@@ -54,7 +65,8 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   useEffect(() => {
     client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)).catch(() => setComments([]));
     client.get(`/tasks/${task.id}/activity`).then(r => setActivity(r.data || [])).catch(() => setActivity([]));
-  }, [task.id]);
+    client.get(`/teams/${team.id}/data-requests`).then(r => setDataCatalog(r.data || [])).catch(() => setDataCatalog([]));
+  }, [task.id, team.id]);
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
@@ -126,6 +138,21 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     dirtyRef.current = true;
     setTask(t => ({ ...t, attachments: (t.attachments || []).filter(a => a.id !== id) }));
   };
+  const linkedIds = task.data_request_ids || [];
+  const linkedData = task.linked_data_requests || [];
+  const linkDataRequest = id => {
+    if (linkedIds.includes(id)) return;
+    patch({ data_request_ids: [...linkedIds, id] });
+    setDataQuery(""); setDataPickerOpen(false);
+  };
+  const unlinkDataRequest = id => patch({ data_request_ids: linkedIds.filter(x => x !== id) });
+  const dataChoices = dataCatalog.filter(d => {
+    if (linkedIds.includes(d.id)) return false;
+    const q = dataQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (d.name || "").toLowerCase().includes(q) || (d.sheets || []).some(s => s.toLowerCase().includes(q));
+  }).slice(0, 8);
+
   const addAttachmentLink = async () => {
     if (!linkUrl.trim()) return;
     try {
@@ -516,6 +543,54 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
 
             <div className="td-section">
               <div className="td-section-head"><span>Lampiran</span><button className="icon-button" onClick={() => linkUrlRef.current?.focus()} data-testid="task-add-attachment-button"><Plus size={14} /></button></div>
+              <div className="td-data-link" data-testid="task-data-request-link">
+                <p className="td-data-link-label">Dari permintaan data</p>
+                {linkedData.map(d => {
+                  const st = DR_STATUS[d.status] || DR_STATUS.diminta;
+                  return (
+                    <div className={`td-data-item ${st.tone}`} key={d.id} data-testid={`task-linked-data-${d.id}`}>
+                      <div>
+                        <b>{d.name}</b>
+                        <span className={`recap-pill ${st.tone}`}>{st.label}</span>
+                        {d.year ? <small>{d.year}</small> : null}
+                      </div>
+                      {!!(d.attachments || []).length && (
+                        <div className="td-data-files">
+                          {d.attachments.map(a => (
+                            <a key={a.id || a.url} href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer"><Link2 size={11} /> {a.name || a.filename || a.url}</a>
+                          ))}
+                        </div>
+                      )}
+                      {d.status === "diterima_lengkap" && !(d.attachments || []).length && <small className="muted">Status tersedia, belum ada tautan bukti.</small>}
+                      <button className="icon-button tiny" onClick={() => unlinkDataRequest(d.id)} title="Lepas tautan" data-testid={`unlink-data-${d.id}`}><X size={12} /></button>
+                    </div>
+                  );
+                })}
+                <div className="td-data-picker">
+                  <input
+                    value={dataQuery}
+                    onChange={e => { setDataQuery(e.target.value); setDataPickerOpen(true); }}
+                    onFocus={() => setDataPickerOpen(true)}
+                    onBlur={() => setTimeout(() => setDataPickerOpen(false), 150)}
+                    placeholder="Hubungkan data dari Permintaan Data…"
+                    data-testid="task-link-data-input"
+                  />
+                  {dataPickerOpen && (
+                    <div className="td-data-dropdown" data-testid="task-link-data-dropdown">
+                      {dataChoices.map(d => {
+                        const st = DR_STATUS[d.status] || DR_STATUS.diminta;
+                        return (
+                          <button type="button" key={d.id} onMouseDown={e => { e.preventDefault(); linkDataRequest(d.id); }} data-testid={`task-link-data-option-${d.id}`}>
+                            <span>{d.name}</span>
+                            <em className={st.tone}>{st.label}</em>
+                          </button>
+                        );
+                      })}
+                      {!dataChoices.length && <p className="muted">Tidak ada data yang cocok. Tambah dulu di tab Permintaan Data.</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="td-link-add">
                 <input ref={linkUrlRef} value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://drive.google.com/…"
                   onKeyDown={e => e.key === "Enter" && addAttachmentLink()} data-testid="task-attachment-url-input" />

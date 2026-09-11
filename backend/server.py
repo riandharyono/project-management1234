@@ -271,6 +271,7 @@ class TaskUpdate(BaseModel):
     cover: Optional[str] = None
     checklist: Optional[List[dict]] = None
     description_mentions: Optional[List[str]] = None
+    data_request_ids: Optional[List[str]] = None
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
@@ -710,7 +711,7 @@ async def get_team_board(team_id: str, user=Depends(current_user)):
     )
     return {
         "lists": lists,
-        "tasks": [t for t in tasks if task_visible(t, user, role)],
+        "tasks": await with_linked_data_requests([t for t in tasks if task_visible(t, user, role)]),
         "members": members,
         "labels": labels,
     }
@@ -787,11 +788,39 @@ async def load_visible_task(task_id, user):
     if not task_visible(task, user, role): raise HTTPException(403, "Tugas ini bersifat privat")
     return task, role
 
+def _data_request_summary(d):
+    return {
+        "id": d.get("id"), "name": d.get("name") or "", "status": d.get("status") or "diminta",
+        "attachments": d.get("attachments") or [], "year": d.get("year"),
+        "sheets": d.get("sheets") or [], "pic": d.get("pic") or "",
+    }
+
+async def with_linked_data_requests(tasks):
+    if not tasks:
+        return tasks
+    if isinstance(tasks, dict):
+        tasks = [tasks]
+        single = True
+    else:
+        single = False
+    ids = []
+    for t in tasks:
+        ids.extend(t.get("data_request_ids") or [])
+    by_id = {}
+    if ids:
+        docs = await db.data_requests.find({"id": {"$in": list(set(ids))}}, {"_id": 0}).to_list(2000)
+        by_id = {d["id"]: _data_request_summary(d) for d in docs}
+    for t in tasks:
+        t["linked_data_requests"] = [by_id[i] for i in (t.get("data_request_ids") or []) if i in by_id]
+        if "data_request_ids" not in t:
+            t["data_request_ids"] = []
+    return tasks[0] if single else tasks
+
 @api.get("/teams/{team_id}/tasks")
 async def list_tasks(team_id: str, archived: bool = False, user=Depends(current_user)):
     role = await require_member(team_id, user)
     tasks = await db.tasks.find({"team_id": team_id, "archived": archived}, {"_id": 0}).sort("order", 1).to_list(1000)
-    return [t for t in tasks if task_visible(t, user, role)]
+    return await with_linked_data_requests([t for t in tasks if task_visible(t, user, role)])
 
 @api.get("/me/tasks")
 async def my_tasks(user=Depends(current_user)):
@@ -855,7 +884,7 @@ async def my_tasks(user=Depends(current_user)):
 @api.get("/tasks/{task_id}")
 async def get_task(task_id: str, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)
-    return task
+    return await with_linked_data_requests(task)
 
 @api.post("/teams/{team_id}/tasks")
 async def create_task(team_id: str, data: TaskCreate, user=Depends(current_user)):
@@ -863,6 +892,7 @@ async def create_task(team_id: str, data: TaskCreate, user=Depends(current_user)
     count = await db.tasks.count_documents({"team_id": team_id, "list_id": data.list_id})
     task = data.model_dump()
     task.update({"id": str(uuid.uuid4()), "team_id": team_id, "order": count, "checklist": [], "attachments": [],
+                  "data_request_ids": [],
                   "cover": None, "archived": False, "created_by": user["id"], "created_by_name": user["name"], "created_at": now(), "updated_at": now()})
     await db.tasks.insert_one(task); task.pop("_id", None)
     await log_activity(task["id"], user, "created", f"membuat tugas \"{task['title']}\"", team_id=team_id)
@@ -887,6 +917,14 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
         target_member_ids = {m["user_id"] async for m in db.team_members.find({"team_id": target_team_id}, {"_id": 0})}
         updates["assignees"] = [a for a in task.get("assignees", []) if a in target_member_ids]
         updates["labels"] = []  # label ids are team-scoped
+        updates["data_request_ids"] = []
+    if "data_request_ids" in updates:
+        ids = [i for i in (updates["data_request_ids"] or []) if isinstance(i, str) and i.strip()]
+        team_id = updates.get("team_id") or task["team_id"]
+        if ids:
+            valid = {d["id"] async for d in db.data_requests.find({"id": {"$in": ids}, "team_id": team_id}, {"_id": 0, "id": 1})}
+            ids = [i for i in ids if i in valid]
+        updates["data_request_ids"] = list(dict.fromkeys(ids))
     if updates:
         updates["updated_at"] = now()
         await db.tasks.update_one({"id": task_id}, {"$set": updates})
@@ -914,7 +952,8 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
             for uid in updates["description_mentions"]:
                 if uid not in prior and uid != user["id"]:
                     await notify(uid, "mention", f"{user['name']} menyebut Anda di catatan \"{task['title']}\"", team_id=task["team_id"], task_id=task_id)
-    return await db.tasks.find_one({"id": task_id}, {"_id": 0})
+    updated = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+    return await with_linked_data_requests(updated)
 
 @api.post("/tasks/{task_id}/duplicate")
 async def duplicate_task(task_id: str, data: TaskDuplicate = TaskDuplicate(), user=Depends(current_user)):

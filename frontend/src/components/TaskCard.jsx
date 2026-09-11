@@ -1,4 +1,4 @@
-import { Clock, CheckCircle2, AlignJustify, Paperclip, Lock } from "lucide-react";
+import { Clock, CheckCircle2, AlignJustify, Paperclip, Lock, Database } from "lucide-react";
 import { fileUrl, shortDate, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { priorityKey } from "../lib/priority";
@@ -48,6 +48,12 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
           </span>
         )}
         {!!(task.attachments || []).length && <span className="kb-attach-badge"><Paperclip size={12} />{task.attachments.length}</span>}
+        {!!(task.linked_data_requests || []).length && (
+          <span className={`kb-data-badge ${ (task.linked_data_requests || []).some(d => d.status === "diterima_lengkap") ? "ok" : (task.linked_data_requests || []).some(d => d.status === "diterima_sebagian") ? "part" : "req"}`} title={(task.linked_data_requests || []).map(d => d.name).join(", ")}>
+            <Database size={12} />
+            {(task.linked_data_requests || []).some(d => d.status === "diterima_lengkap") ? "Data tersedia" : (task.linked_data_requests || []).some(d => d.status === "diterima_sebagian") ? "Data sebagian" : "Menunggu data"}
+          </span>
+        )}
         {onQuickMenu && (
           <button className="kb-card-menu" onClick={e => { e.stopPropagation(); onQuickMenu(); }} data-testid={`task-card-menu-${task.id}`}>
             <AlignJustify size={15} />
