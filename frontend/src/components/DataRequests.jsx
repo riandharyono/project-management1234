@@ -48,10 +48,16 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [attachError, setAttachError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [catalog, setCatalog] = useState([]);
+  const [wilayah, setWilayah] = useState(team.wilayah || "");
+  const [wilayahs, setWilayahs] = useState([]);
+  const [wilayahSaving, setWilayahSaving] = useState(false);
+  const [wilayahSaved, setWilayahSaved] = useState(false);
+  const [wilayahError, setWilayahError] = useState("");
   const confirm = useConfirm();
 
   const load = () => client.get(`/teams/${team.id}/data-requests`).then(r => { setItems(r.data); setLoading(false); });
-  useEffect(() => { setLoading(true); load(); setOpenSheet(null); }, [team.id]);
+  useEffect(() => { setLoading(true); load(); setOpenSheet(null); setWilayah(team.wilayah || ""); setWilayahSaved(false); setWilayahError(""); }, [team.id, team.wilayah]);
+  useEffect(() => { client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([])); }, []);
   useEffect(() => {
     client.get("/data-recap", { params: { year: teamYear(team) } })
       .then(r => setCatalog(flattenCatalog(r.data)))
@@ -75,6 +81,21 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const pctNr = counts.total ? Math.round((counts.tidak_relevan / counts.total) * 100) : 0;
 
   const canDelete = myRole === "admin";
+
+  const saveWilayah = async e => {
+    e?.preventDefault();
+    setWilayahSaving(true); setWilayahError(""); setWilayahSaved(false);
+    try {
+      await client.patch(`/teams/${team.id}`, {
+        name: team.name, color: team.color, year: team.year, wilayah: wilayah.trim(),
+        laporan_deadline: team.laporan_deadline || null, kke_deadline: team.kke_deadline || null,
+        laporan_link: team.laporan_link || null, kke_link: team.kke_link || null,
+      });
+      setWilayahSaved(true);
+      onTeamUpdated?.();
+    } catch (x) { setWilayahError(apiError(x)); }
+    finally { setWilayahSaving(false); }
+  };
 
   const setStatus = async (item, status) => {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, status } : i));
@@ -120,16 +141,31 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       <div className="page-heading">
         <div>
           <h1>Permintaan Data</h1>
-          <p className="muted">
-            Data yang dibutuhkan tiap sheet kertas kerja evaluasi, dan status permintaannya ke pemda.
-            {team.wilayah ? ` Wilayah: ${team.wilayah}.` : " Isi wilayah/pemda di pengaturan tim agar rekap terkelompok."}
-          </p>
+          <p className="muted">Data yang diminta ke pemerintah daerah. Semua item di bawah ini tercatat untuk wilayah yang dipilih, lalu masuk rekap per kabupaten/provinsi.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
           <button className="primary" onClick={() => setOpenSheet("__new__")} data-testid="add-data-request-button"><Plus size={16} /> Tambah Data</button>
         </div>
       </div>
+
+      <form className={`dr-wilayah-bar ${wilayah.trim() ? "" : "missing"}`} onSubmit={saveWilayah} data-testid="data-request-wilayah-form">
+        <label>
+          Wilayah pemerintah (kabupaten / provinsi)
+          <input
+            value={wilayah}
+            onChange={e => { setWilayah(e.target.value); setWilayahSaved(false); }}
+            list="dr-wilayah-suggestions"
+            placeholder="Contoh: Kabupaten Karawang, atau Provinsi Jawa Barat"
+            data-testid="data-request-wilayah-input"
+          />
+        </label>
+        <datalist id="dr-wilayah-suggestions">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
+        <button className="primary" disabled={wilayahSaving} data-testid="save-data-request-wilayah">{wilayahSaving ? "Menyimpan…" : "Simpan wilayah"}</button>
+        {wilayahSaved && <span className="dr-wilayah-ok">Tersimpan — rekap memakai wilayah ini.</span>}
+        {wilayahError && <div className="error">{wilayahError}</div>}
+        {!wilayah.trim() && !wilayahSaved && <p className="muted">Wajib diisi. Tanpa ini, data tim tidak masuk kelompok kabupaten/provinsi di Rekap Data.</p>}
+      </form>
       {exportOpen && (
         <ExportSuratModal
           team={team}
@@ -161,7 +197,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       )}
 
       {openSheet === "__new__" && (
-        <AddForm team={team} items={items} catalog={catalog} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+        <AddForm team={team} items={items} catalog={catalog} wilayah={wilayah.trim() || team.wilayah} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
       )}
 
       {!items.length ? (
@@ -184,7 +220,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                 <button className="add-btn" onClick={() => setOpenSheet(sheet)} data-testid={`add-to-sheet-${sheet}`}>+ Tambah data</button>
               </div>
               {openSheet === sheet && (
-                <AddForm team={team} items={items} catalog={catalog} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+                <AddForm team={team} items={items} catalog={catalog} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
               )}
               {rows.map(item => (
                 <div className="dr-row" key={item.id} data-testid={`data-request-row-${item.id}`}>
@@ -254,7 +290,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   );
 }
 
-function AddForm({ team, items, catalog, defaultSheet, onDone, onCancel, allSheets }) {
+function AddForm({ team, items, catalog, wilayah, defaultSheet, onDone, onCancel, allSheets }) {
   const [name, setName] = useState("");
   const [sheets, setSheets] = useState(defaultSheet ? [defaultSheet] : []);
   const [sheetInput, setSheetInput] = useState("");
@@ -289,6 +325,9 @@ function AddForm({ team, items, catalog, defaultSheet, onDone, onCancel, allShee
 
   return (
     <form className="inline-form dr-add-form" onSubmit={submit} data-testid="data-request-add-form">
+      <p className={wilayah ? "dr-wilayah-context" : "dr-wilayah-context missing"} data-testid="data-request-wilayah-context">
+        {wilayah ? `Wilayah: ${wilayah}` : "Wilayah belum diisi — simpan kabupaten/provinsi di atas supaya data ini masuk rekap per pemda."}
+      </p>
       <DataNamePicker
         value={name}
         onChange={setName}
