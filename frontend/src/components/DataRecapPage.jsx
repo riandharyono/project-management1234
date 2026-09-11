@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Database, Download, FileOutput, Link2, Search } from "lucide-react";
+import { ChevronRight, Database, Download, FileOutput, Link2, Search, ClipboardList } from "lucide-react";
 import { client } from "../lib/api";
 import { EmptyState } from "./EmptyState";
 import { NO_DOC_TYPE_LABEL, PUSAT_LABEL, weakestStatus } from "../lib/dataDocs";
 import { downloadPdfBytes, downloadTextFile, flattenRecapItems, recapToCsv, recapToCsvDetail, recapToPdfBytes } from "../lib/exportRecap";
+import { createTaskFromDataRequest } from "../lib/createTaskFromData";
 
 const STATUS_LABEL = {
   diminta: "Diminta",
@@ -61,7 +62,7 @@ function groupRecap(items, groupBy) {
   return labels.map(label => ({ label, count: by.get(label).length, items: by.get(label) }));
 }
 
-export function DataRecapPage({ onOpenTeam }) {
+export function DataRecapPage({ onOpenTeam, onOpenTask }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
   const [wilayah, setWilayah] = useState("all");
@@ -72,6 +73,8 @@ export function DataRecapPage({ onOpenTeam }) {
   const [groupBy, setGroupBy] = useState("wilayah");
   const [openKey, setOpenKey] = useState(null);
   const [openGroups, setOpenGroups] = useState(() => new Set());
+  const [creatingKey, setCreatingKey] = useState(null);
+  const [taskError, setTaskError] = useState("");
 
   useEffect(() => {
     setData(null);
@@ -121,6 +124,17 @@ export function DataRecapPage({ onOpenTeam }) {
       if (next.has(label)) next.delete(label); else next.add(label);
       return next;
     });
+  };
+
+  const createTask = async (item, teamRef) => {
+    const key = `${item.key}:${teamRef.team_id}`;
+    setCreatingKey(key); setTaskError("");
+    try {
+      const task = await createTaskFromDataRequest({ teamId: teamRef.team_id, item, itemId: teamRef.item_id });
+      onOpenTask?.(task);
+    } catch (e) {
+      setTaskError(e?.response?.data?.detail || e.message || "Gagal membuat tugas");
+    } finally { setCreatingKey(null); }
   };
 
   const clickCard = key => {
@@ -266,14 +280,27 @@ export function DataRecapPage({ onOpenTeam }) {
                           </button>
                           {expanded && (
                             <div className="recap-item-detail">
+                              {taskError && <div className="error">{taskError}</div>}
                               <div className="recap-teams">
                                 {item.teams.map(t => (
-                                  <button key={t.team_id} type="button" className="recap-team-chip" onClick={() => onOpenTeam?.(t.team_id, "data-requests")} data-testid={`recap-team-${t.team_id}`}>
-                                    <i style={{ background: t.team_color }} />
-                                    <span>{t.team_name}</span>
-                                    <em className={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</em>
-                                    {t.pic ? <small>{t.pic}</small> : null}
-                                  </button>
+                                  <span key={t.team_id} className="recap-team-wrap">
+                                    <button type="button" className="recap-team-chip" onClick={() => onOpenTeam?.(t.team_id, "data-requests")} data-testid={`recap-team-${t.team_id}`}>
+                                      <i style={{ background: t.team_color }} />
+                                      <span>{t.team_name}</span>
+                                      <em className={STATUS_TONE[t.status]}>{STATUS_LABEL[t.status]}</em>
+                                      {t.pic ? <small>{t.pic}</small> : null}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="icon-button tiny"
+                                      title={`Buat tugas di ${t.team_name}`}
+                                      disabled={creatingKey === `${item.key}:${t.team_id}` || !t.item_id}
+                                      onClick={() => createTask(item, t)}
+                                      data-testid={`recap-create-task-${t.team_id}`}
+                                    >
+                                      <ClipboardList size={13} />
+                                    </button>
+                                  </span>
                                 ))}
                               </div>
                               {!!item.attachments.length && (

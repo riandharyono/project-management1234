@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2, ChevronDown } from "lucide-react";
+import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2, ChevronDown, ClipboardList } from "lucide-react";
 import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
 import { currentYear, teamYear } from "../lib/years";
 import { DOC_TYPE_SUGGESTIONS, PUSAT_LABEL, itemScope, itemWilayahLabel, mergeSuggestions } from "../lib/dataDocs";
+import { createTaskFromDataRequest } from "../lib/createTaskFromData";
 
 function normName(s) {
   return (s || "").trim().toLowerCase().replace(/[\s\u00a0]+/g, " ").replace(/["'`]+/g, "").trim();
@@ -41,7 +42,7 @@ const STATUS_TONE = {
 };
 const NO_SHEET = "(Tanpa sheet)";
 
-export function DataRequests({ team, myRole, onTeamUpdated }) {
+export function DataRequests({ team, myRole, onTeamUpdated, onOpenTask }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSheet, setOpenSheet] = useState(null);
@@ -59,6 +60,8 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [wilayahSaving, setWilayahSaving] = useState(false);
   const [wilayahSaved, setWilayahSaved] = useState(false);
   const [wilayahError, setWilayahError] = useState("");
+  const [creatingTaskId, setCreatingTaskId] = useState(null);
+  const [taskError, setTaskError] = useState("");
   const [renamingSheet, setRenamingSheet] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [addingSheetId, setAddingSheetId] = useState(null);
@@ -100,6 +103,14 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const pctNr = counts.total ? Math.round((counts.tidak_relevan / counts.total) * 100) : 0;
 
   const canDelete = myRole === "admin";
+  const createTask = async item => {
+    setCreatingTaskId(item.id); setTaskError("");
+    try {
+      const task = await createTaskFromDataRequest({ teamId: team.id, item, dueDate: team.kke_deadline || "" });
+      onOpenTask?.(task);
+    } catch (e) { setTaskError(apiError(e) || e.message || "Gagal membuat tugas"); }
+    finally { setCreatingTaskId(null); }
+  };
 
   const saveWilayah = async e => {
     e?.preventDefault();
@@ -197,6 +208,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
         <div>
           <h1>Permintaan Data</h1>
           <p className="muted">Tanggungan, tahun dokumen, dan jenis diatur per data — peraturan pusat tidak ikut wilayah pemda tim.</p>
+          {taskError && <div className="error">{taskError}</div>}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
@@ -384,6 +396,9 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                       </div>
                     )}
                   </div>
+                  <button className="icon-button" title="Buat tugas" onClick={() => createTask(item)} disabled={creatingTaskId === item.id} data-testid={`create-task-from-data-${item.id}`}>
+                    <ClipboardList size={13} />
+                  </button>
                   {canDelete && <button className="icon-button" onClick={() => removeItem(item)} data-testid={`delete-data-request-${item.id}`}><Trash2 size={13} /></button>}
                 </div>
               ))}

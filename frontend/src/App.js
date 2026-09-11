@@ -365,7 +365,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         ) : monitoringOpen ? (
           <MonitoringPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
         ) : recapOpen ? (
-          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
+          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} onOpenTask={openTask} />
         ) : !activeTeam ? (
           <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
             onPrefetchTeam={prefetchTeam}
@@ -382,9 +382,9 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
-          <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} />
+          <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} onOpenTask={openTask} />
         ) : tab === "data-recap" ? (
-          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
+          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} onOpenTask={openTask} />
         ) : tab === "announcements" ? (
           <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (

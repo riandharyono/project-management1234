@@ -7,6 +7,7 @@ import { MentionText } from "./MentionText";
 import { RichTextEditor, sanitizeNotesHtml } from "./RichTextEditor";
 import { CopyMoveModal } from "./CopyMoveModal";
 import { useConfirm } from "./ConfirmDialog";
+import { TITLE_COLORS, TITLE_SIZES, normalizeTitleColor, normalizeTitleSize, titleStyle } from "../lib/titleStyle";
 
 export const REPEAT_LABELS = { none: "Tidak berulang", daily: "Harian", weekly: "Mingguan", monthly: "Bulanan" };
 const DR_STATUS = {
@@ -288,7 +289,32 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
           <div className="td-main">
             <div className="td-title-row">
               <button className={`td-status-dot ${list?.is_done ? "done" : ""}`} onClick={toggleComplete} data-testid="task-complete-toggle" />
-              <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" />
+              <div className="td-title-wrap">
+                <input className="td-title-input" value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} data-testid="task-title-input" style={titleStyle(task, "detail")} />
+                <div className="td-title-style" data-testid="task-title-style">
+                  {TITLE_COLORS.map(c => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className={`td-title-swatch ${normalizeTitleColor(task.title_color) === c.value ? "on" : ""}`}
+                      style={{ background: c.value || "var(--ink)" }}
+                      title={c.label}
+                      onClick={() => patch({ title_color: c.value })}
+                      data-testid={`task-title-color-${c.key}`}
+                    />
+                  ))}
+                  <span className="td-title-style-sep" />
+                  {TITLE_SIZES.map(s => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      className={`td-title-size ${normalizeTitleSize(task.title_size) === s.key ? "on" : ""}`}
+                      onClick={() => patch({ title_size: s.key })}
+                      data-testid={`task-title-size-${s.key}`}
+                    >{s.label}</button>
+                  ))}
+                </div>
+              </div>
             </div>
             <p className="td-breadcrumb"><span className="td-crumb-link">{list?.name || "…"}</span> · {team.name}</p>
             <div className="td-creator">

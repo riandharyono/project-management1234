@@ -8,6 +8,7 @@ import { useConfirm } from "./ConfirmDialog";
 import { Avatar } from "./Avatar";
 import { priorityLabel, priorityKey } from "../lib/priority";
 import { linkedDataSummary } from "../lib/dataDocs";
+import { titleStyle } from "../lib/titleStyle";
 
 export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onReload, boardLoading }) {
   const [localTasks, setLocalTasks] = useState(tasks);
@@ -316,7 +317,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                 const overdue = isDueReached(t.due_date, { done: t.stage === "done", cancelled: t.stage === "cancelled" });
                 return (
                   <tr key={t.id} className={overdue ? "is-overdue" : ""} onClick={() => onOpenTask(t)} data-testid={`task-row-${t.id}`}>
-                    <td className="task-table-title">{t.title}</td>
+                    <td className="task-table-title" style={titleStyle(t, "card")}>{t.title}</td>
                     <td><span className="badge-status">{t.listName}</span></td>
                     <td><span className={`kb-priority-dot ${priorityKey(t.priority)}`} /> {priorityLabel(t.priority)}</td>
                     <td><div className="kb-avatars">{assigned.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}</div></td>

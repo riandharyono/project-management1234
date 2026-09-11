@@ -245,6 +245,9 @@ class TaskCreate(BaseModel):
     assignees: List[str] = []
     labels: List[str] = []
     is_private: bool = False
+    data_request_ids: List[str] = []
+    title_color: str = ""
+    title_size: str = "md"
 class TaskDuplicate(BaseModel):
     title: Optional[str] = None
     target_team_id: Optional[str] = None
@@ -272,6 +275,8 @@ class TaskUpdate(BaseModel):
     checklist: Optional[List[dict]] = None
     description_mentions: Optional[List[str]] = None
     data_request_ids: Optional[List[str]] = None
+    title_color: Optional[str] = None
+    title_size: Optional[str] = None
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
@@ -348,6 +353,18 @@ class RenameSheetInput(BaseModel):
     to_name: str = Field(min_length=1, max_length=120)
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
+TASK_TITLE_COLORS = {"", "#dc6863", "#ec9a2b", "#20a76a", "#2879ed", "#8b5cf6"}
+TASK_TITLE_SIZES = {"sm", "md", "lg"}
+
+def normalize_title_style(color=None, size=None):
+    out = {}
+    if color is not None:
+        c = (color or "").strip().lower()
+        out["title_color"] = c if c in TASK_TITLE_COLORS else ""
+    if size is not None:
+        s = (size or "md").strip().lower()
+        out["title_size"] = s if s in TASK_TITLE_SIZES else "md"
+    return out
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
 DATA_REQUEST_RECEIVED_STATUSES = {"diterima_sebagian", "diterima_lengkap"}
 DATA_REQUEST_SCOPES = ["pemda", "pusat"]
@@ -1030,8 +1047,14 @@ async def create_task(team_id: str, data: TaskCreate, user=Depends(current_user)
     await require_member(team_id, user)
     count = await db.tasks.count_documents({"team_id": team_id, "list_id": data.list_id})
     task = data.model_dump()
+    style = normalize_title_style(task.get("title_color"), task.get("title_size"))
+    ids = [i for i in (task.get("data_request_ids") or []) if isinstance(i, str) and i.strip()]
+    if ids:
+        valid = {d["id"] async for d in db.data_requests.find({"id": {"$in": ids}, "team_id": team_id}, {"_id": 0, "id": 1})}
+        ids = [i for i in ids if i in valid]
     task.update({"id": str(uuid.uuid4()), "team_id": team_id, "order": count, "checklist": [], "attachments": [],
-                  "data_request_ids": [],
+                  "data_request_ids": list(dict.fromkeys(ids)),
+                  "title_color": style.get("title_color", ""), "title_size": style.get("title_size", "md"),
                   "cover": None, "archived": False, "created_by": user["id"], "created_by_name": user["name"], "created_at": now(), "updated_at": now()})
     await db.tasks.insert_one(task); task.pop("_id", None)
     await log_activity(task["id"], user, "created", f"membuat tugas \"{task['title']}\"", team_id=team_id)
@@ -1057,6 +1080,8 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
         updates["assignees"] = [a for a in task.get("assignees", []) if a in target_member_ids]
         updates["labels"] = []  # label ids are team-scoped
         updates["data_request_ids"] = []
+    if "title_color" in updates or "title_size" in updates:
+        updates.update(normalize_title_style(updates.get("title_color", task.get("title_color")), updates.get("title_size", task.get("title_size"))))
     if "data_request_ids" in updates:
         ids = [i for i in (updates["data_request_ids"] or []) if isinstance(i, str) and i.strip()]
         team_id = updates.get("team_id") or task["team_id"]
