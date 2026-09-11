@@ -1,4 +1,4 @@
-import { Bell, AtSign, UserPlus, Megaphone, CalendarClock, HelpCircle, MessageCircle } from "lucide-react";
+import { Bell, AtSign, UserPlus, Megaphone, CalendarClock, HelpCircle, MessageCircle, Database } from "lucide-react";
 import { timeAgo } from "../lib/api";
 
 const ICONS = {
@@ -8,6 +8,7 @@ const ICONS = {
   deadline: CalendarClock,
   answer: MessageCircle,
   question: HelpCircle,
+  data_status: Database,
 };
 const LABELS = {
   mention: "Mention",
@@ -16,6 +17,7 @@ const LABELS = {
   deadline: "Tenggat",
   answer: "Jawaban",
   question: "Check-in",
+  data_status: "Data",
 };
 
 export function NotificationsPanel({ items, hasMore, onRead, onReadAll, onSelect, onLoadMore }) {

@@ -393,6 +393,24 @@ html[data-theme="dark"] .kb-card.is-overdue {
   border-radius: 999px; padding: 2px 8px; cursor: pointer;
 }
 .td-title-size.on { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); }
+.td-title-editor { min-height: 28px; line-height: 1.35; word-break: break-word; }
+.td-title-hint { font-size: 10px; color: var(--muted); font-weight: 600; margin-right: 6px; }
+.task-title-html font[size="2"] { font-size: 0.85em; }
+.task-title-html font[size="5"] { font-size: 1.22em; }
+.kb-card h4 .task-title-html { font-weight: inherit; }
+.recap-matrix-wrap { overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: 20px; }
+.recap-matrix { width: 100%; border-collapse: collapse; font-size: 12px; }
+.recap-matrix th, .recap-matrix td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.recap-matrix th { font-size: 11px; color: var(--muted); white-space: nowrap; background: var(--paper); position: sticky; top: 0; }
+.recap-matrix th:first-child, .recap-matrix td:first-child { position: sticky; left: 0; background: var(--surface); min-width: 180px; z-index: 1; }
+.recap-matrix th:first-child { z-index: 2; }
+.recap-cell button { border: 0; background: none; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
+.recap-cell.ok button { color: var(--success); }
+.recap-cell.part button { color: var(--warning); }
+.recap-cell.req button { color: var(--accent); }
+.recap-cell.na button { color: var(--danger); }
+.recap-cell.nr button { color: var(--teal); }
+.recap-cell.empty { color: var(--muted); }
 .recap-team-wrap { display: inline-flex; align-items: center; gap: 2px; }
 .td-status-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #C8C8C8; background: none; margin: 6px 0 0; flex-shrink: 0; }
 .td-status-dot.done { background: var(--success); border-color: var(--success); }

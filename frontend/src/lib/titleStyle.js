@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 export const TITLE_COLORS = [
   { key: "default", value: "", label: "Default" },
   { key: "red", value: "#dc6863", label: "Merah" },
@@ -8,27 +10,35 @@ export const TITLE_COLORS = [
 ];
 
 export const TITLE_SIZES = [
-  { key: "sm", label: "Kecil", card: 13, detail: 18 },
-  { key: "md", label: "Biasa", card: 14, detail: 20 },
-  { key: "lg", label: "Besar", card: 17, detail: 26 },
+  { key: "2", label: "Kecil", card: 13, detail: 18 },
+  { key: "3", label: "Biasa", card: 14, detail: 20 },
+  { key: "5", label: "Besar", card: 17, detail: 26 },
 ];
 
-const COLOR_SET = new Set(TITLE_COLORS.map(c => c.value));
-const SIZE_SET = new Set(TITLE_SIZES.map(s => s.key));
+const TITLE_HTML_ALLOWED = {
+  ALLOWED_TAGS: ["span", "font", "b", "strong", "i", "em", "br"],
+  ALLOWED_ATTR: ["style", "color", "size", "class"],
+};
 
-export function normalizeTitleColor(value) {
-  return COLOR_SET.has(value) ? value : "";
+export function sanitizeTitleHtml(html) {
+  return DOMPurify.sanitize(html || "", TITLE_HTML_ALLOWED);
 }
 
-export function normalizeTitleSize(value) {
-  return SIZE_SET.has(value) ? value : "md";
+export function titleToPlain(htmlOrText) {
+  if (!htmlOrText) return "";
+  if (typeof document === "undefined") return String(htmlOrText).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const d = document.createElement("div");
+  d.innerHTML = sanitizeTitleHtml(htmlOrText);
+  return (d.textContent || "").replace(/\s+/g, " ").trim();
 }
 
-export function titleStyle(task, where = "card") {
-  const size = TITLE_SIZES.find(s => s.key === normalizeTitleSize(task?.title_size)) || TITLE_SIZES[1];
-  const color = normalizeTitleColor(task?.title_color);
-  return {
-    color: color || undefined,
-    fontSize: where === "detail" ? size.detail : size.card,
-  };
+export function titleDisplayHtml(task) {
+  if (task?.title_html) return sanitizeTitleHtml(task.title_html);
+  const color = task?.title_color || "";
+  const size = task?.title_size === "sm" ? "0.92em" : task?.title_size === "lg" ? "1.2em" : "";
+  const text = task?.title || "";
+  if (!color && !size) return "";
+  const style = [color ? `color:${color}` : "", size ? `font-size:${size}` : ""].filter(Boolean).join(";");
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<span style="${style}">${escaped}</span>`;
 }

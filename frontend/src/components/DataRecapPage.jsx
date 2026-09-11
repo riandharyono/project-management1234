@@ -20,6 +20,7 @@ const GROUP_OPTIONS = [
   { key: "wilayah", label: "Per tanggungan" },
   { key: "doc_type", label: "Per jenis" },
   { key: "doc_year", label: "Per tahun dokumen" },
+  { key: "matrix", label: "Matriks tim" },
 ];
 
 function statusSummary(counts) {
@@ -104,7 +105,16 @@ export function DataRecapPage({ onOpenTeam, onOpenTask }) {
     });
   }, [allItems, q, wilayah, docType, docYear, status, noLink]);
 
-  const regions = useMemo(() => groupRecap(filtered, groupBy), [filtered, groupBy]);
+  const regions = useMemo(() => groupBy === "matrix" ? [] : groupRecap(filtered, groupBy), [filtered, groupBy]);
+  const matrixTeams = useMemo(() => {
+    const map = new Map();
+    for (const it of filtered) {
+      for (const t of it.teams || []) {
+        if (t.team_id && !map.has(t.team_id)) map.set(t.team_id, t);
+      }
+    }
+    return [...map.values()].sort((a, b) => (a.team_name || "").localeCompare(b.team_name || "", "id"));
+  }, [filtered]);
 
   const autoOpen = regions.length === 1 ? regions[0].label : null;
   useEffect(() => {
@@ -242,8 +252,48 @@ export function DataRecapPage({ onOpenTeam, onOpenTask }) {
               title="Belum ada data"
               body="Tambahkan permintaan data, lalu isi tanggungan (pemda atau Pusat / umum), tahun dokumen, dan jenis."
             />
-          ) : !regions.length ? (
+          ) : !filtered.length ? (
             <EmptyState icon={<Search size={22} />} title="Tidak ada yang cocok" body="Coba kata kunci atau filter lain." />
+          ) : groupBy === "matrix" ? (
+            <>
+              <p className="recap-filter-hint">{uniqueVisible} data unik × {matrixTeams.length} tim{hasFilter ? " sesuai filter" : ""}</p>
+              <div className="recap-matrix-wrap" data-testid="recap-matrix">
+                <table className="recap-matrix">
+                  <thead>
+                    <tr>
+                      <th>Dokumen</th>
+                      {matrixTeams.map(t => <th key={t.team_id} title={t.team_name}>{t.team_name}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(item => (
+                      <tr key={item.key}>
+                        <td>
+                          <b>{item.name}</b>
+                          <div className="dr-doc-meta">
+                            {item.wilayah ? <span>{item.wilayah}</span> : null}
+                            {item.doc_year ? <span>{item.doc_year}</span> : null}
+                            {item.doc_type ? <span>{item.doc_type}</span> : null}
+                          </div>
+                        </td>
+                        {matrixTeams.map(col => {
+                          const cell = (item.teams || []).find(t => t.team_id === col.team_id);
+                          if (!cell) return <td key={col.team_id} className="recap-cell empty">—</td>;
+                          const tone = STATUS_TONE[cell.status] || "req";
+                          return (
+                            <td key={col.team_id} className={`recap-cell ${tone}`}>
+                              <button type="button" onClick={() => onOpenTeam?.(col.team_id, "data-requests")}>
+                                {STATUS_LABEL[cell.status] || cell.status}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <>
               <p className="recap-filter-hint">{uniqueVisible} data unik{hasFilter ? " sesuai filter" : ""}</p>

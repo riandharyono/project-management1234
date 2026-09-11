@@ -3,7 +3,7 @@ import { shortDate, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { priorityKey } from "../lib/priority";
 import { linkedDataSummary } from "../lib/dataDocs";
-import { titleStyle } from "../lib/titleStyle";
+import { TitleHtml } from "./TitleEditor";
 
 function checklistBits(task) {
   const bits = [];
@@ -28,7 +28,7 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
     <article className={`kb-card ${dueReached ? "is-overdue" : ""} ${done ? "is-done-card" : ""}`} onClick={onOpen} data-testid={`task-card-${task.id}`}>
       <span hidden data-testid={`task-stage-badge-${task.id}`}>{stage}</span>
       {task.is_private && <Lock size={12} className="kb-private-icon" />}
-      <h4 style={titleStyle(task, "card")}>{task.title}</h4>
+      <h4><TitleHtml task={task} /></h4>
       {!!taskLabels.length && (
         <div className="tags">{taskLabels.map((l, i) => <span key={i} className="kb-label-chip" style={{ background: l.color + "26", color: l.color, border: `1px solid ${l.color}55` }}>{l.name}</span>)}</div>
       )}

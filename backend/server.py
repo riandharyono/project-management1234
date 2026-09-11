@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-import os, uuid, bcrypt, jwt, logging, re, mimetypes, asyncio, base64, json
+import os, uuid, bcrypt, jwt, logging, re, mimetypes, asyncio, base64, json, html as html_lib
 from pywebpush import webpush, WebPushException
 
 ROOT_DIR = Path(__file__).parent
@@ -149,7 +149,8 @@ async def log_activity(task_id, user, action, detail="", team_id=None):
     return doc
 
 NOTIF_PUSH_TITLES = {"mention": "Anda Disebut", "announcement": "Pengumuman Baru", "answer": "Pertanyaan Dijawab",
-                      "assignment": "Ditugaskan ke Anda", "deadline": "Tenggat Tugas", "question": "Pertanyaan Rutin"}
+                      "assignment": "Ditugaskan ke Anda", "deadline": "Tenggat Tugas", "question": "Pertanyaan Rutin",
+                      "data_status": "Status Data"}
 
 async def user_from_token(raw):
     if not raw: return None
@@ -248,6 +249,7 @@ class TaskCreate(BaseModel):
     data_request_ids: List[str] = []
     title_color: str = ""
     title_size: str = "md"
+    title_html: str = ""
 class TaskDuplicate(BaseModel):
     title: Optional[str] = None
     target_team_id: Optional[str] = None
@@ -277,6 +279,7 @@ class TaskUpdate(BaseModel):
     data_request_ids: Optional[List[str]] = None
     title_color: Optional[str] = None
     title_size: Optional[str] = None
+    title_html: Optional[str] = Field(default=None, max_length=8000)
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
@@ -355,6 +358,37 @@ class RenameSheetInput(BaseModel):
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 TASK_TITLE_COLORS = {"", "#dc6863", "#ec9a2b", "#20a76a", "#2879ed", "#8b5cf6"}
 TASK_TITLE_SIZES = {"sm", "md", "lg"}
+
+def plain_from_html(s):
+    text = re.sub(r"<[^>]+>", " ", s or "")
+    text = html_lib.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+DATA_STATUS_LABELS = {
+    "diminta": "Diminta",
+    "diterima_sebagian": "diterima sebagian",
+    "diterima_lengkap": "diterima lengkap",
+    "tidak_tersedia": "tidak tersedia",
+    "tidak_relevan": "tidak relevan",
+}
+
+async def notify_linked_tasks_data_status(item, old_status, new_status, actor):
+    if old_status == new_status or not new_status:
+        return
+    tasks = await db.tasks.find(
+        {"data_request_ids": item["id"], "archived": {"$ne": True}},
+        {"_id": 0, "id": 1, "team_id": 1, "assignees": 1, "created_by": 1, "title": 1},
+    ).to_list(200)
+    label = DATA_STATUS_LABELS.get(new_status, new_status)
+    text = f"Data \"{item.get('name') or ''}\" sekarang {label}"
+    actor_id = (actor or {}).get("id")
+    for t in tasks:
+        recipients = set(t.get("assignees") or [])
+        if t.get("created_by"):
+            recipients.add(t["created_by"])
+        recipients.discard(actor_id)
+        for uid in recipients:
+            await notify(uid, "data_status", f"{text} (tugas: {t.get('title') or ''})", team_id=t.get("team_id"), task_id=t["id"])
 
 def normalize_title_style(color=None, size=None):
     out = {}
@@ -1052,6 +1086,14 @@ async def create_task(team_id: str, data: TaskCreate, user=Depends(current_user)
     if ids:
         valid = {d["id"] async for d in db.data_requests.find({"id": {"$in": ids}, "team_id": team_id}, {"_id": 0, "id": 1})}
         ids = [i for i in ids if i in valid]
+    title_html = (task.get("title_html") or "").strip()
+    if title_html:
+        task["title_html"] = title_html
+        plain = plain_from_html(title_html)
+        if plain:
+            task["title"] = plain
+    else:
+        task["title_html"] = ""
     task.update({"id": str(uuid.uuid4()), "team_id": team_id, "order": count, "checklist": [], "attachments": [],
                   "data_request_ids": list(dict.fromkeys(ids)),
                   "title_color": style.get("title_color", ""), "title_size": style.get("title_size", "md"),
@@ -1080,6 +1122,13 @@ async def update_task(task_id: str, data: TaskUpdate, user=Depends(current_user)
         updates["assignees"] = [a for a in task.get("assignees", []) if a in target_member_ids]
         updates["labels"] = []  # label ids are team-scoped
         updates["data_request_ids"] = []
+    if "title_html" in updates:
+        html = (updates.get("title_html") or "").strip()
+        updates["title_html"] = html
+        if "title" not in updates:
+            plain = plain_from_html(html) or task.get("title")
+            if plain:
+                updates["title"] = plain
     if "title_color" in updates or "title_size" in updates:
         updates.update(normalize_title_style(updates.get("title_color", task.get("title_color")), updates.get("title_size", task.get("title_size"))))
     if "data_request_ids" in updates:
@@ -1347,6 +1396,8 @@ async def update_data_request(item_id: str, data: DataRequestPatch, user=Depends
     if updates: await db.data_requests.update_one({"id": item_id}, {"$set": updates})
     team = await db.teams.find_one({"id": item["team_id"]}, {"_id": 0})
     updated = await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+    if "status" in updates:
+        await notify_linked_tasks_data_status(updated or item, item.get("status"), updates.get("status"), user)
     return decorate_data_request(updated, team)
 
 @api.post("/teams/{team_id}/data-requests/apply-year")
