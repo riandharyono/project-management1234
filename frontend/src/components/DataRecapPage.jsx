@@ -3,7 +3,8 @@ import { ChevronRight, Database, Download, FileOutput, Link2, Search } from "luc
 import { client } from "../lib/api";
 import { EmptyState } from "./EmptyState";
 import { currentYear } from "../lib/years";
-import { downloadPdfBytes, downloadTextFile, flattenRecapItems, recapToCsv, recapToPdfBytes } from "../lib/exportRecap";
+import { NO_DOC_TYPE_LABEL, PUSAT_LABEL, weakestStatus } from "../lib/dataDocs";
+import { downloadPdfBytes, downloadTextFile, flattenRecapItems, recapToCsv, recapToCsvDetail, recapToPdfBytes } from "../lib/exportRecap";
 
 const STATUS_LABEL = {
   diminta: "Diminta",
@@ -15,13 +16,11 @@ const STATUS_LABEL = {
 const STATUS_TONE = {
   diminta: "req", diterima_sebagian: "part", diterima_lengkap: "ok", tidak_tersedia: "na", tidak_relevan: "nr",
 };
-
-function bestStatus(counts) {
-  for (const s of ["diterima_lengkap", "diterima_sebagian", "tidak_tersedia", "diminta", "tidak_relevan"]) {
-    if (counts?.[s]) return s;
-  }
-  return "diminta";
-}
+const GROUP_OPTIONS = [
+  { key: "wilayah", label: "Per tanggungan" },
+  { key: "doc_type", label: "Per jenis" },
+  { key: "doc_year", label: "Per tahun dokumen" },
+];
 
 function statusSummary(counts) {
   return ["diterima_lengkap", "diterima_sebagian", "diminta", "tidak_tersedia", "tidak_relevan"]
@@ -33,8 +32,48 @@ function statusSummary(counts) {
 function matchItem(it, needle) {
   return it.name.toLowerCase().includes(needle)
     || (it.wilayah || "").toLowerCase().includes(needle)
+    || (it.doc_type || "").toLowerCase().includes(needle)
+    || String(it.doc_year || "").includes(needle)
     || (it.sheets || []).some(s => s.toLowerCase().includes(needle))
     || (it.teams || []).some(t => (t.team_name || "").toLowerCase().includes(needle) || (t.pic || "").toLowerCase().includes(needle));
+}
+
+function groupLabel(item, groupBy) {
+  if (groupBy === "doc_type") return item.doc_type || NO_DOC_TYPE_LABEL;
+  if (groupBy === "doc_year") return item.doc_year ? String(item.doc_year) : "(Tanpa tahun)";
+  return item.wilayah || PUSAT_LABEL;
+}
+
+function groupRecap(items, groupBy) {
+  const by = new Map();
+  for (const it of items) {
+    const label = groupLabel(it, groupBy);
+    if (!by.has(label)) by.set(label, []);
+    by.get(label).push(it);
+  }
+  const labels = [...by.keys()].sort((a, b) => {
+    if (a === PUSAT_LABEL) return -1;
+    if (b === PUSAT_LABEL) return 1;
+    if (a === NO_DOC_TYPE_LABEL || a === "(Tanpa tahun)" || a === "(Tanpa wilayah)") return 1;
+    if (b === NO_DOC_TYPE_LABEL || b === "(Tanpa tahun)" || b === "(Tanpa wilayah)") return -1;
+    if (groupBy === "doc_year") return Number(b) - Number(a);
+    return String(a).localeCompare(String(b), "id");
+  });
+  return labels.map(label => {
+    const rows = by.get(label);
+    const bySheet = new Map();
+    for (const it of rows) {
+      const sheets = it.sheets?.length ? it.sheets : ["(Tanpa klasifikasi)"];
+      for (const sh of sheets) {
+        if (!bySheet.has(sh)) bySheet.set(sh, []);
+        if (!bySheet.get(sh).some(x => x.key === it.key)) bySheet.get(sh).push(it);
+      }
+    }
+    const groups = [...bySheet.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], "id"))
+      .map(([sheet, list]) => ({ sheet, count: list.length, items: list }));
+    return { wilayah: label, count: rows.length, groups };
+  });
 }
 
 export function DataRecapPage({ initialYear, onOpenTeam }) {
@@ -42,6 +81,11 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
   const [wilayah, setWilayah] = useState("all");
+  const [docType, setDocType] = useState("all");
+  const [docYear, setDocYear] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [noLink, setNoLink] = useState(false);
+  const [groupBy, setGroupBy] = useState("wilayah");
   const [openKey, setOpenKey] = useState(null);
   const [openSheets, setOpenSheets] = useState(() => new Set());
   const [openRegions, setOpenRegions] = useState(() => new Set());
@@ -52,35 +96,49 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
 
   useEffect(() => {
     setData(null);
-    setWilayah("all");
+    setWilayah("all"); setDocType("all"); setDocYear("all"); setStatus("all"); setNoLink(false);
     client.get("/data-recap", { params: { year } }).then(r => {
       setData(r.data);
-      const regions = r.data.regions || [];
-      setOpenRegions(new Set(regions.map(reg => reg.wilayah)));
-      setOpenSheets(new Set(regions.flatMap(reg => (reg.groups || []).map(g => `${reg.wilayah}::${g.sheet}`))));
-    }).catch(() => setData({ year, years: [year], groups: [], regions: [], unique_count: 0, total_requests: 0, team_count: 0, wilayahs: [] }));
+      const items = flattenRecapItems(r.data);
+      setOpenRegions(new Set(items.map(it => it.wilayah).filter(Boolean)));
+      setOpenSheets(new Set(items.flatMap(it => (it.sheets || []).map(s => `${it.wilayah}::${s}`))));
+    }).catch(() => setData({
+      year, years: [year], groups: [], regions: [], items: [], unique_count: 0,
+      total_requests: 0, team_count: 0, wilayahs: [], doc_years: [], doc_types: [],
+      complete_count: 0, pending_count: 0, no_link_count: 0, pusat_count: 0,
+    }));
   }, [year]);
 
-  const regions = useMemo(() => {
-    const list = data?.regions?.length ? data.regions : [{ wilayah: "Semua", groups: data?.groups || [], count: data?.unique_count || 0 }];
-    const scoped = wilayah === "all" ? list : list.filter(r => r.wilayah === wilayah);
-    const needle = q.trim().toLowerCase();
-    if (!needle) return scoped;
-    return scoped.map(r => {
-      const groups = (r.groups || []).map(g => ({
-        ...g,
-        items: g.items.filter(it => matchItem(it, needle)),
-      })).filter(g => g.items.length).map(g => ({ ...g, count: g.items.length }));
-      const count = new Set(groups.flatMap(g => g.items.map(it => it.key))).size;
-      return { ...r, groups, count };
-    }).filter(r => r.count);
-  }, [data, q, wilayah]);
+  const allItems = useMemo(() => flattenRecapItems(data || {}), [data]);
 
-  const uniqueVisible = useMemo(() => {
-    const seen = new Set();
-    for (const r of regions) for (const g of r.groups || []) for (const it of g.items) seen.add(it.key);
-    return seen.size;
-  }, [regions]);
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return allItems.filter(it => {
+      if (wilayah !== "all" && it.wilayah !== wilayah) return false;
+      if (docType !== "all" && (it.doc_type || NO_DOC_TYPE_LABEL) !== docType) return false;
+      if (docYear !== "all" && String(it.doc_year) !== String(docYear)) return false;
+      const weak = it.weakest_status || weakestStatus(it.status_counts);
+      if (status === "pending" && !["diminta", "diterima_sebagian"].includes(weak)) return false;
+      if (status !== "all" && status !== "pending" && weak !== status) return false;
+      if (noLink && it.has_link) return false;
+      if (needle && !matchItem(it, needle)) return false;
+      return true;
+    });
+  }, [allItems, q, wilayah, docType, docYear, status, noLink]);
+
+  const regions = useMemo(() => groupRecap(filtered, groupBy), [filtered, groupBy]);
+
+  useEffect(() => {
+    setOpenRegions(new Set(regions.map(r => r.wilayah)));
+    setOpenSheets(new Set(regions.flatMap(r => (r.groups || []).map(g => `${r.wilayah}::${g.sheet}`))));
+  }, [groupBy, wilayah, docType, docYear, status, noLink, year]);
+
+  const uniqueVisible = filtered.length;
+  const completeVisible = filtered.filter(i => (i.weakest_status || weakestStatus(i.status_counts)) === "diterima_lengkap").length;
+  const pendingVisible = filtered.filter(i => ["diminta", "diterima_sebagian"].includes(i.weakest_status || weakestStatus(i.status_counts))).length;
+  const noLinkVisible = filtered.filter(i => !i.has_link).length;
+  const pusatVisible = filtered.filter(i => i.wilayah === PUSAT_LABEL).length;
+  const pemdaVisible = new Set(filtered.filter(i => i.wilayah && i.wilayah !== PUSAT_LABEL && i.wilayah !== "(Tanpa wilayah)").map(i => i.wilayah)).size;
 
   const toggleSheet = id => {
     setOpenSheets(prev => {
@@ -97,14 +155,15 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
     });
   };
 
-  const exportItems = flattenRecapItems(data);
   const fileBase = `Rekap-Data-${data?.year || year}`;
   const exportCsv = () => {
-    const csv = recapToCsv(exportItems, data?.year || year);
-    downloadTextFile(csv, `${fileBase}.csv`, "text/csv;charset=utf-8");
+    downloadTextFile(recapToCsv(filtered, data?.year || year), `${fileBase}.csv`, "text/csv;charset=utf-8");
+  };
+  const exportCsvDetail = () => {
+    downloadTextFile(recapToCsvDetail(filtered, data?.year || year), `${fileBase}-rinci.csv`, "text/csv;charset=utf-8");
   };
   const exportPdf = () => {
-    const bytes = recapToPdfBytes(exportItems, data?.year || year, {
+    const bytes = recapToPdfBytes(filtered, data?.year || year, {
       totalRequests: data?.total_requests,
       teamCount: data?.team_count,
     });
@@ -116,14 +175,17 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
       <div className="page-heading">
         <div>
           <h1>Rekap Data</h1>
-          <p className="muted">Database permintaan data per tahun, dikelompokkan per wilayah/pemda — tanpa duplikat di wilayah yang sama.</p>
+          <p className="muted">Katalog dokumen unik per tanggungan, tahun dokumen, dan jenis — peraturan pusat tidak ikut pemda tim.</p>
         </div>
-        {!!data?.unique_count && (
+        {!!allItems.length && (
           <div className="recap-export" data-testid="recap-export-actions">
-            <button className="secondary" onClick={exportCsv} disabled={!exportItems.length} data-testid="recap-export-csv">
+            <button className="secondary" onClick={exportCsv} disabled={!filtered.length} data-testid="recap-export-csv">
               <Download size={14} /> CSV
             </button>
-            <button className="secondary" onClick={exportPdf} disabled={!exportItems.length} data-testid="recap-export-pdf">
+            <button className="secondary" onClick={exportCsvDetail} disabled={!filtered.length} data-testid="recap-export-csv-detail">
+              <Download size={14} /> CSV rinci
+            </button>
+            <button className="secondary" onClick={exportPdf} disabled={!filtered.length} data-testid="recap-export-pdf">
               <FileOutput size={14} /> PDF
             </button>
           </div>
@@ -144,40 +206,76 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
         <p className="muted">Memuat…</p>
       ) : (
         <>
-          <div className="dr-stats recap-stats recap-stats-4">
-            <div className="dr-stat tot"><b>{data.unique_count}</b><span>Data unik</span></div>
-            <div className="dr-stat ok"><b>{data.total_requests}</b><span>Permintaan</span></div>
-            <div className="dr-stat part"><b>{data.wilayah_count ?? (data.wilayahs || []).length}</b><span>Wilayah</span></div>
-            <div className="dr-stat nr"><b>{data.team_count}</b><span>Tim {data.year}</span></div>
+          <div className="dr-stats recap-stats recap-stats-6">
+            <div className="dr-stat tot"><b>{uniqueVisible}</b><span>Data unik</span></div>
+            <div className="dr-stat ok"><b>{completeVisible}</b><span>Lengkap semua tim</span></div>
+            <div className="dr-stat part"><b>{pendingVisible}</b><span>Belum lengkap</span></div>
+            <div className="dr-stat na"><b>{noLinkVisible}</b><span>Tanpa tautan</span></div>
+            <div className="dr-stat nr"><b>{pusatVisible}</b><span>Pusat / umum</span></div>
+            <div className="dr-stat tot"><b>{pemdaVisible}</b><span>Pemda</span></div>
           </div>
 
-          {!!(data.wilayahs || []).length && (
-            <div className="mon-year-filters" data-testid="recap-wilayah-filter">
-              <button type="button" className={wilayah === "all" ? "active" : ""} onClick={() => setWilayah("all")} data-testid="recap-wilayah-all">Semua wilayah</button>
-              {data.wilayahs.map(w => (
-                <button key={w} type="button" className={wilayah === w ? "active" : ""} onClick={() => setWilayah(w)} data-testid={`recap-wilayah-${w}`}>
-                  {w}
+          <div className="recap-toolbar">
+            <div className="mon-year-filters" data-testid="recap-group-by">
+              {GROUP_OPTIONS.map(opt => (
+                <button key={opt.key} type="button" className={groupBy === opt.key ? "active" : ""} onClick={() => setGroupBy(opt.key)} data-testid={`recap-group-${opt.key}`}>
+                  {opt.label}
                 </button>
               ))}
             </div>
-          )}
+            {!!(data.wilayahs || []).length && (
+              <div className="mon-year-filters" data-testid="recap-wilayah-filter">
+                <button type="button" className={wilayah === "all" ? "active" : ""} onClick={() => setWilayah("all")} data-testid="recap-wilayah-all">Semua tanggungan</button>
+                {data.wilayahs.map(w => (
+                  <button key={w} type="button" className={wilayah === w ? "active" : ""} onClick={() => setWilayah(w)} data-testid={`recap-wilayah-${w}`}>
+                    {w}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!!(data.doc_years || []).length && (
+              <div className="mon-year-filters" data-testid="recap-doc-year-filter">
+                <button type="button" className={docYear === "all" ? "active" : ""} onClick={() => setDocYear("all")}>Semua tahun dokumen</button>
+                {data.doc_years.map(y => (
+                  <button key={y} type="button" className={String(docYear) === String(y) ? "active" : ""} onClick={() => setDocYear(y)} data-testid={`recap-doc-year-${y}`}>
+                    {y}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!!(data.doc_types || []).length && (
+              <div className="mon-year-filters" data-testid="recap-doc-type-filter">
+                <button type="button" className={docType === "all" ? "active" : ""} onClick={() => setDocType("all")}>Semua jenis</button>
+                {data.doc_types.map(t => (
+                  <button key={t} type="button" className={docType === t ? "active" : ""} onClick={() => setDocType(t)} data-testid={`recap-doc-type-${t}`}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mon-year-filters" data-testid="recap-status-filter">
+              <button type="button" className={status === "all" && !noLink ? "active" : ""} onClick={() => { setStatus("all"); setNoLink(false); }}>Semua status</button>
+              <button type="button" className={status === "pending" ? "active" : ""} onClick={() => setStatus("pending")}>Belum lengkap</button>
+              <button type="button" className={noLink ? "active" : ""} onClick={() => setNoLink(v => !v)} data-testid="recap-filter-no-link">Tanpa tautan</button>
+            </div>
+          </div>
 
           <div className="recap-search">
             <Search size={14} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari nama data, wilayah, sheet, atau tim…" data-testid="recap-search-input" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Cari nama, pemda, jenis, sheet, atau tim…" data-testid="recap-search-input" />
           </div>
 
-          {!data.unique_count ? (
+          {!allItems.length ? (
             <EmptyState
               icon={<Database size={22} />}
               title={`Belum ada data ${data.year}`}
-              body="Tambahkan permintaan data di tab Permintaan Data, dan isi wilayah/pemda di pengaturan tim agar rekap terkelompok."
+              body="Tambahkan permintaan data, lalu isi tanggungan (pemda atau Pusat / umum), tahun dokumen, dan jenis."
             />
           ) : !regions.length ? (
-            <EmptyState icon={<Search size={22} />} title="Tidak ada yang cocok" body="Coba kata kunci lain atau pilih wilayah berbeda." />
+            <EmptyState icon={<Search size={22} />} title="Tidak ada yang cocok" body="Coba kata kunci atau filter lain." />
           ) : (
             <>
-              {q.trim() && <p className="recap-filter-hint">{uniqueVisible} data unik cocok</p>}
+              <p className="recap-filter-hint">{uniqueVisible} data unik{q.trim() || wilayah !== "all" || docType !== "all" || docYear !== "all" || status !== "all" || noLink ? " sesuai filter" : ""}</p>
               {regions.map(region => {
                 const regionOpen = openRegions.has(region.wilayah);
                 return (
@@ -199,19 +297,22 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
                           </button>
                           {open && g.items.map(item => {
                             const expanded = openKey === `${sheetId}:${item.key}`;
-                            const tone = STATUS_TONE[bestStatus(item.status_counts)] || "req";
+                            const weak = item.weakest_status || weakestStatus(item.status_counts);
+                            const tone = STATUS_TONE[weak] || "req";
+                            const complete = item.complete_teams ?? item.status_counts?.diterima_lengkap ?? 0;
                             return (
                               <div className="recap-item" key={item.key} data-testid={`recap-item-${item.key}`}>
                                 <button type="button" className="recap-item-main" onClick={() => setOpenKey(expanded ? null : `${sheetId}:${item.key}`)}>
                                   <div className="recap-item-name">
                                     <span>{item.name}</span>
-                                    {item.sheets.length > 1 && (
-                                      <div className="dr-tags">
-                                        {item.sheets.filter(s => s !== g.sheet).map(s => <span className="dr-tag" key={s}>{s}</span>)}
-                                      </div>
-                                    )}
+                                    <div className="dr-doc-meta">
+                                      {groupBy !== "wilayah" && item.wilayah ? <span>{item.wilayah}</span> : null}
+                                      {item.doc_year ? <span>{item.doc_year}</span> : null}
+                                      {item.doc_type ? <span>{item.doc_type}</span> : null}
+                                      {!item.has_link ? <span className="warn">tanpa tautan</span> : null}
+                                    </div>
                                   </div>
-                                  <span className={`recap-pill ${tone}`}>{item.team_count} tim</span>
+                                  <span className={`recap-pill ${tone}`}>{complete}/{item.team_count} lengkap</span>
                                   <span className="recap-meta">{statusSummary(item.status_counts)}</span>
                                   <ChevronRight size={14} className={expanded ? "rot" : ""} />
                                 </button>

@@ -5,21 +5,20 @@ import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
 import { currentYear, teamYear, yearChoices } from "../lib/years";
+import { DOC_TYPE_SUGGESTIONS, PUSAT_LABEL, itemScope, itemWilayahLabel, mergeSuggestions } from "../lib/dataDocs";
 
 function normName(s) {
   return (s || "").trim().toLowerCase().replace(/[\s\u00a0]+/g, " ").replace(/["'`]+/g, "").trim();
 }
 
 function flattenCatalog(recap) {
-  const groups = recap?.regions?.length
-    ? recap.regions.flatMap(r => r.groups || [])
-    : (recap?.groups || []);
+  const source = recap?.items?.length
+    ? recap.items
+    : (recap?.regions?.length ? recap.regions.flatMap(r => (r.groups || []).flatMap(g => g.items || [])) : (recap?.groups || []).flatMap(g => g.items || []));
   const seen = new Map();
-  for (const g of groups) {
-    for (const it of g.items || []) {
-      const k = it.name_key || it.key;
-      if (k && !seen.has(k)) seen.set(k, { ...it, key: k });
-    }
+  for (const it of source) {
+    const k = it.name_key || it.key;
+    if (k && !seen.has(k)) seen.set(k, { ...it, key: k });
   }
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
 }
@@ -41,7 +40,8 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [loading, setLoading] = useState(true);
   const [openSheet, setOpenSheet] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: "", pic: "", notes: "" });
+  const [editForm, setEditForm] = useState({ name: "", pic: "", notes: "", scope: "pemda", wilayah: "", doc_year: currentYear(), doc_type: "" });
+  const [docTypes, setDocTypes] = useState([]);
   const [attachingId, setAttachingId] = useState(null);
   const [linkUrlDraft, setLinkUrlDraft] = useState("");
   const [linkNameDraft, setLinkNameDraft] = useState("");
@@ -64,7 +64,10 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     setYearMode(localStorage.getItem(`fs-dr-year-mode-${team.id}`) || "all");
     setWilayahSaved(false); setWilayahError("");
   }, [team.id, team.wilayah, team.year]);
-  useEffect(() => { client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([])); }, []);
+  useEffect(() => {
+    client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([]));
+    client.get("/doc-types").then(r => setDocTypes(r.data || [])).catch(() => setDocTypes([]));
+  }, []);
   useEffect(() => {
     client.get("/data-recap", { params: { year: teamYear(team) } })
       .then(r => setCatalog(flattenCatalog(r.data)))
@@ -122,12 +125,28 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     localStorage.setItem(`fs-dr-year-mode-${team.id}`, mode);
     setWilayahSaved(false);
   };
-  const startEdit = item => { setEditingId(item.id); setEditForm({ name: item.name, pic: item.pic || "", notes: item.notes || "" }); };
+  const startEdit = item => {
+    setEditingId(item.id);
+    setEditForm({
+      name: item.name,
+      pic: item.pic || "",
+      notes: item.notes || "",
+      scope: itemScope(item),
+      wilayah: item.wilayah || wilayah.trim() || team.wilayah || "",
+      doc_year: item.doc_year || item.year || year,
+      doc_type: item.doc_type || "",
+    });
+  };
   const saveEdit = async () => {
     const id = editingId; setEditingId(null);
-    await client.patch(`/data-requests/${id}`, { name: editForm.name.trim(), pic: editForm.pic.trim(), notes: editForm.notes.trim() });
+    await client.patch(`/data-requests/${id}`, {
+      name: editForm.name.trim(), pic: editForm.pic.trim(), notes: editForm.notes.trim(),
+      scope: editForm.scope, wilayah: editForm.scope === "pusat" ? "" : editForm.wilayah.trim(),
+      doc_year: Number(editForm.doc_year), doc_type: editForm.doc_type.trim(),
+    });
     load();
   };
+  const typeSuggestions = mergeSuggestions(DOC_TYPE_SUGGESTIONS, [...docTypes, ...items.map(i => i.doc_type)]);
   const removeItem = async item => {
     const ok = await confirm({ title: `Hapus "${item.name}"?`, body: "Item permintaan data ini akan dihapus permanen.", confirmLabel: "Hapus", danger: true });
     if (ok) { await client.delete(`/data-requests/${item.id}`); load(); }
@@ -162,7 +181,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       <div className="page-heading">
         <div>
           <h1>Permintaan Data</h1>
-          <p className="muted">Data yang diminta ke pemerintah daerah. Tahun dan wilayah di bawah ini menentukan di rekap mana data ini muncul.</p>
+          <p className="muted">Tanggungan, tahun dokumen, dan jenis diatur per data — peraturan pusat tidak ikut wilayah pemda tim.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
@@ -191,16 +210,17 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
           </label>
         </fieldset>
         <label>
-          Wilayah pemerintah (kabupaten / provinsi)
+          Pemda default (dokumen daerah)
           <input
             value={wilayah}
             onChange={e => { setWilayah(e.target.value); setWilayahSaved(false); }}
             list="dr-wilayah-suggestions"
-            placeholder="Contoh: Kabupaten Karawang, atau Provinsi Jawa Barat"
+            placeholder="Contoh: Kabupaten Fakfak — tidak dipakai untuk dokumen pusat"
             data-testid="data-request-wilayah-input"
           />
         </label>
         <datalist id="dr-wilayah-suggestions">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
+        <datalist id="dr-doc-type-suggestions">{typeSuggestions.map(t => <option key={t} value={t} />)}</datalist>
         <button className="primary" disabled={wilayahSaving} data-testid="save-data-request-wilayah">{wilayahSaving ? "Menyimpan…" : "Simpan"}</button>
         {wilayahSaved && (
           <span className="dr-wilayah-ok">
@@ -210,9 +230,9 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
           </span>
         )}
         {wilayahError && <div className="error">{wilayahError}</div>}
-        {yearMode === "all" && <p className="muted">Mode semua data: tombol Simpan menimpa tahun setiap item di tim ini.</p>}
-        {yearMode === "each" && <p className="muted">Mode per data: pilih tahun di tiap baris. Tahun di atas hanya default untuk data baru.</p>}
-        {!wilayah.trim() && !wilayahSaved && <p className="muted">Wilayah wajib diisi supaya data masuk kelompok kabupaten/provinsi di Rekap Data.</p>}
+        {yearMode === "all" && <p className="muted">Mode semua data: Simpan menimpa tahun penugasan setiap item. Tahun dokumen dan tanggungan tetap per data.</p>}
+        {yearMode === "each" && <p className="muted">Mode per data: tahun penugasan di tiap baris. Tahun di atas hanya default data baru.</p>}
+        {!wilayah.trim() && !wilayahSaved && <p className="muted">Isi pemda default untuk dokumen daerah. Dokumen peraturan pusat dipilih per baris sebagai Pusat / umum.</p>}
       </form>
       {exportOpen && (
         <ExportSuratModal
@@ -276,6 +296,17 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                     {editingId === item.id ? (
                       <div className="dr-edit-form">
                         <input autoFocus value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} placeholder="Nama data" data-testid={`edit-name-${item.id}`} />
+                        <select value={editForm.scope} onChange={e => setEditForm({ ...editForm, scope: e.target.value })} data-testid={`edit-scope-${item.id}`}>
+                          <option value="pemda">Pemda</option>
+                          <option value="pusat">Pusat / umum</option>
+                        </select>
+                        {editForm.scope === "pemda" && (
+                          <input value={editForm.wilayah} onChange={e => setEditForm({ ...editForm, wilayah: e.target.value })} list="dr-wilayah-suggestions" placeholder="Kabupaten / provinsi" data-testid={`edit-wilayah-${item.id}`} />
+                        )}
+                        <select value={editForm.doc_year} onChange={e => setEditForm({ ...editForm, doc_year: Number(e.target.value) })} data-testid={`edit-doc-year-${item.id}`}>
+                          {yearChoices(editForm.doc_year, year, team).map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                        <input value={editForm.doc_type} onChange={e => setEditForm({ ...editForm, doc_type: e.target.value })} list="dr-doc-type-suggestions" placeholder="Jenis dokumen" data-testid={`edit-doc-type-${item.id}`} />
                         <input value={editForm.pic} onChange={e => setEditForm({ ...editForm, pic: e.target.value })} placeholder="PIC pemda (opsional)" />
                         <input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Catatan (opsional)" />
                         <button className="icon-button" onClick={saveEdit} data-testid={`save-edit-${item.id}`}><Check size={14} /></button>
@@ -287,6 +318,11 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                           {item.name}
                           {item.pic && <small> · {item.pic}</small>}
                           <button className="icon-button tiny" onClick={() => startEdit(item)} data-testid={`edit-item-${item.id}`}><Pencil size={11} /></button>
+                        </div>
+                        <div className="dr-doc-meta">
+                          <span className={`dr-scope ${itemScope(item)}`}>{itemWilayahLabel(item, wilayah.trim() || team.wilayah)}</span>
+                          {item.doc_year ? <span>{item.doc_year}</span> : null}
+                          {item.doc_type ? <span>{item.doc_type}</span> : null}
                         </div>
                         {item.notes && <p className="dr-note">{item.notes}</p>}
                         {!!item.sheets?.length && (
@@ -349,6 +385,10 @@ function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, 
   const [sheetInput, setSheetInput] = useState("");
   const [pic, setPic] = useState("");
   const [itemYear, setItemYear] = useState(year || currentYear());
+  const [scope, setScope] = useState("pemda");
+  const [itemWilayah, setItemWilayah] = useState(wilayah || "");
+  const [docYear, setDocYear] = useState(year || currentYear());
+  const [docType, setDocType] = useState("");
   const [error, setError] = useState("");
 
   const addSheetTag = () => {
@@ -368,22 +408,55 @@ function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, 
     e.preventDefault();
     const typed = name.trim();
     if (!typed) return;
-    const existing = items.find(i => normName(i.name) === normName(typed) && Number(i.year || year) === Number(itemYear || year));
+    const existing = items.find(i =>
+      normName(i.name) === normName(typed)
+      && Number(i.year || year) === Number(itemYear || year)
+      && Number(i.doc_year || i.year || year) === Number(docYear)
+      && itemScope(i) === scope
+      && (scope === "pusat" || normName(i.wilayah || wilayah) === normName(itemWilayah || wilayah))
+    );
     if (existing) { await attachToExisting(existing); return; }
-    const canon = (catalog || []).find(c => c.key === normName(typed));
+    const canon = (catalog || []).find(c => c.key === normName(typed) || c.name_key === normName(typed));
     try {
-      await client.post(`/teams/${team.id}/data-requests`, { name: canon ? canon.name : typed, sheets, pic: pic.trim(), year: Number(itemYear || year) });
+      await client.post(`/teams/${team.id}/data-requests`, {
+        name: canon ? canon.name : typed, sheets, pic: pic.trim(),
+        year: Number(itemYear || year),
+        doc_year: Number(docYear || year),
+        doc_type: docType.trim(),
+        scope,
+        wilayah: scope === "pusat" ? "" : (itemWilayah.trim() || wilayah || ""),
+      });
       onDone();
     } catch (x) { setError(apiError(x)); }
   };
 
   return (
     <form className="inline-form dr-add-form" onSubmit={submit} data-testid="data-request-add-form">
-      <p className={wilayah ? "dr-wilayah-context" : "dr-wilayah-context missing"} data-testid="data-request-wilayah-context">
-        {wilayah ? `${wilayah}` : "Wilayah belum diisi — simpan kabupaten/provinsi di atas supaya data ini masuk rekap per pemda."}
-      </p>
+      <div className="dr-doc-fields">
+        <label>Tanggungan
+          <select value={scope} onChange={e => setScope(e.target.value)} data-testid="new-data-scope">
+            <option value="pemda">Pemda</option>
+            <option value="pusat">Pusat / umum</option>
+          </select>
+        </label>
+        {scope === "pemda" ? (
+          <label>Pemda / wilayah
+            <input value={itemWilayah} onChange={e => setItemWilayah(e.target.value)} list="dr-wilayah-suggestions" placeholder="Kabupaten / provinsi" data-testid="new-data-wilayah" />
+          </label>
+        ) : (
+          <p className="dr-wilayah-context" data-testid="data-request-wilayah-context">{PUSAT_LABEL} — tidak masuk rekap per pemda</p>
+        )}
+        <label>Tahun dokumen
+          <select value={docYear} onChange={e => setDocYear(Number(e.target.value))} data-testid="new-data-doc-year">
+            {yearChoices(docYear, year, team).map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </label>
+        <label>Jenis dokumen
+          <input value={docType} onChange={e => setDocType(e.target.value)} list="dr-doc-type-suggestions" placeholder="LKPD, Peraturan pusat, …" data-testid="new-data-doc-type" />
+        </label>
+      </div>
       {yearMode === "each" && (
-        <label className="dr-add-year">Tahun data ini
+        <label className="dr-add-year">Tahun penugasan
           <select value={itemYear} onChange={e => setItemYear(Number(e.target.value))} data-testid="new-data-year-select">
             {yearChoices(itemYear, year, team).map(y => (
               <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : ""}</option>

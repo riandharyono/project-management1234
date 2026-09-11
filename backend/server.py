@@ -326,6 +326,10 @@ class DataRequestCreate(BaseModel):
     pic: str = ""
     notes: str = ""
     year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_type: str = Field(default="", max_length=120)
+    scope: str = "pemda"
+    wilayah: Optional[str] = Field(default=None, max_length=160)
 class DataRequestPatch(BaseModel):
     name: Optional[str] = None
     sheets: Optional[List[str]] = None
@@ -333,18 +337,34 @@ class DataRequestPatch(BaseModel):
     pic: Optional[str] = None
     notes: Optional[str] = None
     year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    doc_type: Optional[str] = Field(default=None, max_length=120)
+    scope: Optional[str] = None
+    wilayah: Optional[str] = Field(default=None, max_length=160)
 class ApplyYearInput(BaseModel):
     year: int = Field(ge=2000, le=2100)
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
 DATA_REQUEST_RECEIVED_STATUSES = {"diterima_sebagian", "diterima_lengkap"}
+DATA_REQUEST_SCOPES = ["pemda", "pusat"]
 NO_SHEET_LABEL = "(Tanpa klasifikasi)"
 NO_WILAYAH_LABEL = "(Tanpa wilayah)"
+PUSAT_WILAYAH_LABEL = "Pusat / umum"
+NO_DOC_TYPE_LABEL = "(Tanpa jenis)"
+WEAK_STATUS_RANK = ["diminta", "diterima_sebagian", "tidak_tersedia", "tidak_relevan", "diterima_lengkap"]
 
 def team_wilayah(team):
     w = ((team or {}).get("wilayah") or "").strip()
     return w or NO_WILAYAH_LABEL
+
+def item_scope(item):
+    s = ((item or {}).get("scope") or "pemda").strip().lower()
+    return s if s in DATA_REQUEST_SCOPES else "pemda"
+
+def normalize_scope(scope):
+    s = (scope or "pemda").strip().lower()
+    return s if s in DATA_REQUEST_SCOPES else "pemda"
 
 def infer_item_year(item, team=None):
     y = (item or {}).get("year")
@@ -355,6 +375,52 @@ def infer_item_year(item, team=None):
     except (TypeError, ValueError):
         pass
     return infer_team_year(team or {})
+
+def infer_doc_year(item, team=None):
+    y = (item or {}).get("doc_year")
+    try:
+        y = int(y)
+        if 2000 <= y <= 2100:
+            return y
+    except (TypeError, ValueError):
+        pass
+    return infer_item_year(item, team)
+
+def item_wilayah(item, team=None):
+    if item_scope(item) == "pusat":
+        return PUSAT_WILAYAH_LABEL
+    w = ((item or {}).get("wilayah") or "").strip()
+    if w:
+        return w
+    return team_wilayah(team)
+
+def item_doc_type(item):
+    return ((item or {}).get("doc_type") or "").strip()
+
+def decorate_data_request(item, team=None):
+    if not item:
+        return item
+    item["year"] = infer_item_year(item, team)
+    item["doc_year"] = infer_doc_year(item, team)
+    item["scope"] = item_scope(item)
+    item["doc_type"] = item_doc_type(item)
+    stored = ((item.get("wilayah") or "").strip()) or None
+    item["wilayah"] = None if item["scope"] == "pusat" else stored
+    item["wilayah_label"] = item_wilayah(item, team)
+    return item
+
+def weakest_status(counts):
+    for s in WEAK_STATUS_RANK:
+        if counts.get(s):
+            return s
+    return "diminta"
+
+def _region_sort_key(label):
+    if label == PUSAT_WILAYAH_LABEL:
+        return (0, "")
+    if label in (NO_WILAYAH_LABEL, NO_DOC_TYPE_LABEL, NO_SHEET_LABEL):
+        return (2, "")
+    return (1, str(label).lower())
 
 def normalize_data_name(name):
     s = (name or "").strip().lower()
@@ -464,6 +530,30 @@ async def migrate_data_request_years():
     async for it in db.data_requests.find({"$or": [{"year": {"$exists": False}}, {"year": None}]}):
         await db.data_requests.update_one({"id": it["id"]}, {"$set": {"year": infer_item_year(it, teams.get(it.get("team_id")))}})
 
+async def migrate_data_request_doc_attrs():
+    teams = {t["id"]: t async for t in db.teams.find({}, {"_id": 0, "id": 1, "year": 1, "created_at": 1, "wilayah": 1})}
+    query = {"$or": [
+        {"scope": {"$exists": False}},
+        {"doc_year": {"$exists": False}},
+        {"doc_type": {"$exists": False}},
+        {"wilayah": {"$exists": False}},
+    ]}
+    async for it in db.data_requests.find(query):
+        updates = {}
+        if it.get("scope") not in DATA_REQUEST_SCOPES:
+            updates["scope"] = "pemda"
+        scope = updates.get("scope") or it.get("scope") or "pemda"
+        if scope != "pusat" and not (it.get("wilayah") or "").strip():
+            tw = ((teams.get(it.get("team_id")) or {}).get("wilayah") or "").strip()
+            if tw:
+                updates["wilayah"] = tw
+        if it.get("doc_year") is None:
+            updates["doc_year"] = infer_item_year(it, teams.get(it.get("team_id")))
+        if "doc_type" not in it:
+            updates["doc_type"] = ""
+        if updates:
+            await db.data_requests.update_one({"id": it["id"]}, {"$set": updates})
+
 _scheduler_task = None
 _reminder_task = None
 
@@ -495,6 +585,7 @@ async def startup():
     await migrate_list_done_flag()
     await migrate_team_years()
     await migrate_data_request_years()
+    await migrate_data_request_doc_attrs()
     await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
@@ -605,17 +696,45 @@ async def list_teams(user=Depends(current_user)):
     result.sort(key=lambda t: (-int(t.get("year") or 0), t.get("created_at") or ""))
     return result
 
-@api.get("/wilayahs")
-async def list_wilayahs(user=Depends(current_user)):
+async def _visible_team_ids(user):
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
     if can_view_all_teams(user):
+        return None, memberships
+    return [m["team_id"] for m in memberships], memberships
+
+@api.get("/wilayahs")
+async def list_wilayahs(user=Depends(current_user)):
+    team_ids, memberships = await _visible_team_ids(user)
+    if team_ids is None:
         teams = await db.teams.find({}, {"_id": 0, "wilayah": 1}).to_list(1000)
+        item_q = {"scope": {"$ne": "pusat"}, "wilayah": {"$nin": [None, ""]}}
     else:
         if not memberships:
             return []
-        teams = await db.teams.find({"id": {"$in": [m["team_id"] for m in memberships]}}, {"_id": 0, "wilayah": 1}).to_list(200)
-    names = sorted({(t.get("wilayah") or "").strip() for t in teams if (t.get("wilayah") or "").strip()}, key=str.lower)
-    return names
+        teams = await db.teams.find({"id": {"$in": team_ids}}, {"_id": 0, "wilayah": 1}).to_list(200)
+        item_q = {"team_id": {"$in": team_ids}, "scope": {"$ne": "pusat"}, "wilayah": {"$nin": [None, ""]}}
+    names = {(t.get("wilayah") or "").strip() for t in teams if (t.get("wilayah") or "").strip()}
+    async for it in db.data_requests.find(item_q, {"_id": 0, "wilayah": 1}):
+        w = (it.get("wilayah") or "").strip()
+        if w and w != PUSAT_WILAYAH_LABEL:
+            names.add(w)
+    return sorted(names, key=str.lower)
+
+@api.get("/doc-types")
+async def list_doc_types(user=Depends(current_user)):
+    team_ids, memberships = await _visible_team_ids(user)
+    if team_ids is None:
+        item_q = {"doc_type": {"$nin": [None, ""]}}
+    else:
+        if not memberships:
+            return []
+        item_q = {"team_id": {"$in": team_ids}, "doc_type": {"$nin": [None, ""]}}
+    names = set()
+    async for it in db.data_requests.find(item_q, {"_id": 0, "doc_type": 1}):
+        t = (it.get("doc_type") or "").strip()
+        if t:
+            names.add(t)
+    return sorted(names, key=str.lower)
 
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
@@ -793,6 +912,8 @@ def _data_request_summary(d):
         "id": d.get("id"), "name": d.get("name") or "", "status": d.get("status") or "diminta",
         "attachments": d.get("attachments") or [], "year": d.get("year"),
         "sheets": d.get("sheets") or [], "pic": d.get("pic") or "",
+        "scope": item_scope(d), "wilayah": (d.get("wilayah") or "").strip() or None,
+        "wilayah_label": item_wilayah(d), "doc_year": d.get("doc_year"), "doc_type": item_doc_type(d),
     }
 
 async def with_linked_data_requests(tasks):
@@ -1127,8 +1248,8 @@ async def list_data_requests(team_id: str, user=Depends(current_user)):
     team = await db.teams.find_one({"id": team_id}, {"_id": 0})
     items = await db.data_requests.find({"team_id": team_id}, {"_id": 0}).to_list(2000)
     for i in items:
-        i["year"] = infer_item_year(i, team)
-    items.sort(key=lambda i: (i.get("year") or 0, i.get("created_at") or ""))
+        decorate_data_request(i, team)
+    items.sort(key=lambda i: (i.get("year") or 0, i.get("doc_year") or 0, i.get("created_at") or ""))
     return items
 
 @api.post("/teams/{team_id}/data-requests")
@@ -1139,13 +1260,22 @@ async def create_data_request(team_id: str, data: DataRequestCreate, user=Depend
     if not team: raise HTTPException(404, "Tim tidak ditemukan")
     sheets = [s.strip() for s in data.sheets if s.strip()]
     year = data.year if data.year is not None else infer_team_year(team)
+    scope = normalize_scope(data.scope)
+    wilayah = (data.wilayah or "").strip() or None
+    if scope == "pusat":
+        wilayah = None
+    elif not wilayah:
+        wilayah = (team.get("wilayah") or "").strip() or None
+    doc_year = data.doc_year if data.doc_year is not None else year
     item = {"id": str(uuid.uuid4()), "team_id": team_id, "name": data.name.strip(), "sheets": sheets,
             "status": data.status, "pic": data.pic.strip(), "notes": data.notes.strip(), "year": year,
+            "doc_year": doc_year, "doc_type": (data.doc_type or "").strip(),
+            "scope": scope, "wilayah": wilayah,
             "requested_at": now(), "received_at": now() if data.status in DATA_REQUEST_RECEIVED_STATUSES else None,
             "attachments": [], "created_by": user["id"], "created_by_name": user["name"], "created_at": now()}
     await db.data_requests.insert_one(dict(item))
     item.pop("_id", None)
-    return item
+    return decorate_data_request(item, team)
 
 @api.patch("/data-requests/{item_id}")
 async def update_data_request(item_id: str, data: DataRequestPatch, user=Depends(current_user)):
@@ -1159,10 +1289,22 @@ async def update_data_request(item_id: str, data: DataRequestPatch, user=Depends
     if "name" in updates: updates["name"] = updates["name"].strip()
     if "pic" in updates: updates["pic"] = updates["pic"].strip()
     if "notes" in updates: updates["notes"] = updates["notes"].strip()
+    if "doc_type" in updates: updates["doc_type"] = (updates["doc_type"] or "").strip()
     if "year" in updates and updates["year"] is None:
         updates.pop("year")
+    if "doc_year" in updates and updates["doc_year"] is None:
+        updates.pop("doc_year")
+    scope = normalize_scope(updates["scope"] if "scope" in updates else item.get("scope"))
+    if "scope" in updates:
+        updates["scope"] = scope
+    if scope == "pusat":
+        updates["wilayah"] = None
+    elif "wilayah" in updates:
+        updates["wilayah"] = (updates.get("wilayah") or "").strip() or None
     if updates: await db.data_requests.update_one({"id": item_id}, {"$set": updates})
-    return await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+    team = await db.teams.find_one({"id": item["team_id"]}, {"_id": 0})
+    updated = await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+    return decorate_data_request(updated, team)
 
 @api.post("/teams/{team_id}/data-requests/apply-year")
 async def apply_year_to_all_data_requests(team_id: str, data: ApplyYearInput, user=Depends(current_user)):
@@ -1222,18 +1364,24 @@ async def data_requests_monitoring(user=Depends(current_user)):
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
 
+def _empty_recap(year):
+    return {
+        "year": year, "years": [year], "total_requests": 0, "unique_count": 0, "name_count": 0,
+        "team_count": 0, "wilayah_count": 0, "wilayahs": [], "regions": [], "groups": [],
+        "doc_years": [], "doc_types": [], "pusat_count": 0, "items": [],
+        "complete_count": 0, "pending_count": 0, "no_link_count": 0,
+    }
+
 @api.get("/data-recap")
 async def data_requests_recap(year: Optional[int] = None, user=Depends(current_user)):
-    """Unique yearly data catalog: one row per distinct data name, grouped by sheet."""
+    """Unique catalog keyed by document wilayah + name + doc year (not team wilayah)."""
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
     role_by_team = {m["team_id"]: m["role"] for m in memberships}
     if can_view_all_teams(user):
         teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
     else:
         if not memberships:
-            y = year or current_year()
-            return {"year": y, "years": [y], "total_requests": 0, "unique_count": 0, "name_count": 0,
-                    "team_count": 0, "wilayah_count": 0, "wilayahs": [], "regions": [], "groups": []}
+            return _empty_recap(year or current_year())
         teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(200)
     teams = [with_team_year(t) for t in teams]
     team_map_all = {t["id"]: t for t in teams}
@@ -1259,13 +1407,21 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
         if not key:
             continue
         team = team_map.get(it.get("team_id"))
-        wilayah = team_wilayah(team)
-        b = buckets.setdefault((wilayah, key), {
-            "key": key, "wilayah": wilayah, "names": [], "sheets": set(),
+        wilayah = item_wilayah(it, team)
+        scope = item_scope(it)
+        doc_year = infer_doc_year(it, team)
+        doc_type = item_doc_type(it)
+        b = buckets.setdefault((wilayah, key, doc_year), {
+            "key": key, "wilayah": wilayah, "scope": scope, "doc_year": doc_year,
+            "names": [], "sheets": set(), "doc_types": [],
             "status_counts": {s: 0 for s in DATA_REQUEST_STATUSES},
             "teams": {}, "attachments": [], "notes": [],
         })
         b["names"].append(it.get("name") or "")
+        if doc_type:
+            b["doc_types"].append(doc_type)
+        if scope == "pusat":
+            b["scope"] = "pusat"
         for sh in (it.get("sheets") or []):
             if sh and sh.strip():
                 b["sheets"].add(sh.strip())
@@ -1294,19 +1450,26 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
 
     unique_items = []
     for b in buckets.values():
+        counts = b["status_counts"]
         unique_items.append({
-            "key": f"{normalize_data_name(b['wilayah'])}::{b['key']}",
+            "key": f"{normalize_data_name(b['wilayah'])}::{b['key']}::{b['doc_year']}",
             "name_key": b["key"],
             "name": _most_common_name(b["names"]),
             "wilayah": b["wilayah"],
+            "scope": b["scope"],
+            "doc_year": b["doc_year"],
+            "doc_type": _most_common_name(b["doc_types"]) if b["doc_types"] else "",
             "sheets": sorted(b["sheets"]),
-            "status_counts": b["status_counts"],
+            "status_counts": counts,
+            "weakest_status": weakest_status(counts),
+            "complete_teams": counts.get("diterima_lengkap") or 0,
+            "has_link": bool(b["attachments"]),
             "team_count": len(b["teams"]),
             "teams": sorted(b["teams"].values(), key=lambda t: t.get("team_name") or ""),
             "attachments": b["attachments"][:100],
             "notes": b["notes"][:8],
         })
-    unique_items.sort(key=lambda i: (i["wilayah"] == NO_WILAYAH_LABEL, i["wilayah"].lower(), i["name"].lower(), i["key"]))
+    unique_items.sort(key=lambda i: (*_region_sort_key(i["wilayah"]), -(i.get("doc_year") or 0), i["name"].lower(), i["key"]))
 
     def sheet_groups(rows):
         by_sheet = {}
@@ -1315,7 +1478,7 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
             for sh in labels:
                 by_sheet.setdefault(sh, []).append(item)
         out = []
-        for sh in sorted(by_sheet.keys(), key=lambda s: (s == NO_SHEET_LABEL, s.lower())):
+        for sh in sorted(by_sheet.keys(), key=_region_sort_key):
             out.append({"sheet": sh, "count": len(by_sheet[sh]), "items": by_sheet[sh]})
         return out
 
@@ -1323,10 +1486,15 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     for item in unique_items:
         by_wilayah.setdefault(item["wilayah"], []).append(item)
     regions = []
-    for w in sorted(by_wilayah.keys(), key=lambda s: (s == NO_WILAYAH_LABEL, s.lower())):
+    for w in sorted(by_wilayah.keys(), key=_region_sort_key):
         rows = by_wilayah[w]
         regions.append({"wilayah": w, "count": len(rows), "groups": sheet_groups(rows)})
 
+    doc_years = sorted({i["doc_year"] for i in unique_items if i.get("doc_year")}, reverse=True)
+    doc_types = sorted({i["doc_type"] for i in unique_items if i.get("doc_type")}, key=str.lower)
+    complete_count = sum(1 for i in unique_items if i["weakest_status"] == "diterima_lengkap")
+    pending_count = sum(1 for i in unique_items if i["weakest_status"] in ("diminta", "diterima_sebagian"))
+    no_link_count = sum(1 for i in unique_items if not i["has_link"])
     return {
         "year": chosen,
         "years": years,
@@ -1334,10 +1502,17 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
         "unique_count": len(unique_items),
         "name_count": len({i["name_key"] for i in unique_items}),
         "team_count": len(year_teams),
-        "wilayah_count": len(by_wilayah),
+        "wilayah_count": len([w for w in by_wilayah if w != PUSAT_WILAYAH_LABEL]),
         "wilayahs": [r["wilayah"] for r in regions],
         "regions": regions,
         "groups": sheet_groups(unique_items),
+        "items": unique_items,
+        "doc_years": doc_years,
+        "doc_types": doc_types,
+        "pusat_count": len(by_wilayah.get(PUSAT_WILAYAH_LABEL, [])),
+        "complete_count": complete_count,
+        "pending_count": pending_count,
+        "no_link_count": no_link_count,
     }
 
 # ---------- calendar sync (iCal) ----------

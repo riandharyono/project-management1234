@@ -7,6 +7,9 @@ const STATUS_LABEL = {
 };
 
 export function flattenRecapItems(recapOrGroups) {
+  if (Array.isArray(recapOrGroups?.items) && recapOrGroups.items.length) {
+    return recapOrGroups.items;
+  }
   const regions = recapOrGroups?.regions;
   const groups = regions?.length
     ? regions.flatMap(r => r.groups || [])
@@ -35,14 +38,16 @@ function csvCell(value) {
 
 export function recapToCsv(items, year) {
   const headers = [
-    "No", "Wilayah", "Nama data", "Klasifikasi", "Jumlah tim", "Tim",
-    "Status per tim", "PIC", "Ringkasan status", "Nama tautan", "Link unduhan", "Catatan",
+    "No", "Tanggungan", "Tahun dokumen", "Jenis dokumen", "Nama data", "Klasifikasi KKE",
+    "Jumlah tim", "Tim", "Status per tim", "PIC", "Ringkasan status", "Nama tautan", "Link unduhan", "Catatan",
   ];
   const rows = (items || []).map((it, i) => {
     const atts = it.attachments || [];
     return [
       i + 1,
       it.wilayah || "",
+      it.doc_year || "",
+      it.doc_type || "",
       it.name || "",
       (it.sheets || []).join("; "),
       it.team_count ?? (it.teams || []).length,
@@ -57,6 +62,36 @@ export function recapToCsv(items, year) {
   });
   const body = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
   return `\uFEFFRekap Data ${year}\r\n${body}\r\n`;
+}
+
+export function recapToCsvDetail(items, year) {
+  const headers = [
+    "No", "Tanggungan", "Tahun dokumen", "Jenis dokumen", "Nama data", "Klasifikasi KKE",
+    "Tim", "Status", "PIC", "Nama tautan", "Link unduhan", "Catatan",
+  ];
+  const rows = [];
+  (items || []).forEach(it => {
+    const teams = it.teams?.length ? it.teams : [{ team_name: "", status: "", pic: "" }];
+    teams.forEach(t => {
+      const atts = it.attachments || [];
+      rows.push([
+        rows.length + 1,
+        it.wilayah || "",
+        it.doc_year || "",
+        it.doc_type || "",
+        it.name || "",
+        (it.sheets || []).join("; "),
+        t.team_name || "",
+        STATUS_LABEL[t.status] || t.status || "",
+        t.pic || "",
+        atts.map(a => a.name || "").filter(Boolean).join("; "),
+        atts.map(a => a.url).filter(Boolean).join("; "),
+        (it.notes || []).join("; "),
+      ]);
+    });
+  });
+  const body = [headers, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+  return `\uFEFFRekap Data rinci ${year}\r\n${body}\r\n`;
 }
 
 export function downloadTextFile(content, filename, mime) {
@@ -143,8 +178,10 @@ export function recapToPdfBytes(items, year, meta = {}) {
   (items || []).forEach((it, i) => {
     if (y < margin + 90) flushPage();
     add(`${i + 1}. ${it.name || ""}`, { size: 11 });
-    if (it.wilayah) add(`Wilayah: ${it.wilayah}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
-    if ((it.sheets || []).length) add(`Klasifikasi: ${(it.sheets || []).join(", ")}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
+    if (it.wilayah) add(`Tanggungan: ${it.wilayah}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
+    if (it.doc_year) add(`Tahun dokumen: ${it.doc_year}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
+    if (it.doc_type) add(`Jenis: ${it.doc_type}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
+    if ((it.sheets || []).length) add(`Klasifikasi KKE: ${(it.sheets || []).join(", ")}`, { size: 9, indent: 14, color: [0.25, 0.3, 0.4] });
     add(`Tim (${it.team_count ?? (it.teams || []).length}): ${(it.teams || []).map(t => `${t.team_name} [${STATUS_LABEL[t.status] || t.status}]`).join(", ") || "-"}`, { size: 9, indent: 14 });
     const pics = (it.teams || []).map(t => t.pic).filter(Boolean);
     if (pics.length) add(`PIC: ${pics.join("; ")}`, { size: 9, indent: 14 });
