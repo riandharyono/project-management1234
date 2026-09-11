@@ -4,6 +4,7 @@ import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
+import { DataPackageModal } from "./DataPackageModal";
 import { currentYear, teamYear } from "../lib/years";
 import { DOC_TYPE_SUGGESTIONS, PUSAT_LABEL, itemScope, itemWilayahLabel, mergeSuggestions } from "../lib/dataDocs";
 import { createTaskFromDataRequest } from "../lib/createTaskFromData";
@@ -42,7 +43,7 @@ const STATUS_TONE = {
 };
 const NO_SHEET = "(Tanpa sheet)";
 
-export function DataRequests({ team, members, myRole, onTeamUpdated, onOpenTask }) {
+export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated, onOpenTask }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSheet, setOpenSheet] = useState(null);
@@ -54,6 +55,7 @@ export function DataRequests({ team, members, myRole, onTeamUpdated, onOpenTask 
   const [linkNameDraft, setLinkNameDraft] = useState("");
   const [attachError, setAttachError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
+  const [packageOpen, setPackageOpen] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [wilayah, setWilayah] = useState(team.wilayah || "");
   const [wilayahs, setWilayahs] = useState([]);
@@ -214,6 +216,7 @@ export function DataRequests({ team, members, myRole, onTeamUpdated, onOpenTask 
           {taskError && <div className="error">{taskError}</div>}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button className="secondary" onClick={() => setPackageOpen(true)} data-testid="data-package-button">Paket data</button>
           <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
           <button className="primary" onClick={() => setOpenSheet("__new__")} data-testid="add-data-request-button"><Plus size={16} /> Tambah Data</button>
         </div>
@@ -245,6 +248,19 @@ export function DataRequests({ team, members, myRole, onTeamUpdated, onOpenTask 
           items={items.filter(i => i.status !== "diterima_lengkap" && i.status !== "tidak_relevan")}
           onClose={() => setExportOpen(false)}
           onSaved={onTeamUpdated}
+        />
+      )}
+      {packageOpen && (
+        <DataPackageModal
+          team={team}
+          currentUser={currentUser}
+          existingItems={items}
+          onClose={() => setPackageOpen(false)}
+          onApplied={result => {
+            setPackageOpen(false);
+            load();
+            if (result?.skipped) setTaskError(`${result.created} data ditambah, ${result.skipped} dilewati karena sudah ada.`);
+          }}
         />
       )}
 

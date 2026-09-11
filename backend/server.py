@@ -354,6 +354,19 @@ class ApplyYearInput(BaseModel):
 class RenameSheetInput(BaseModel):
     from_name: str = Field(min_length=1, max_length=120)
     to_name: str = Field(min_length=1, max_length=120)
+class DataPackageItemIn(BaseModel):
+    name: str = Field(min_length=1, max_length=240)
+    doc_type: str = Field(default="", max_length=120)
+    scope: str = "pemda"
+    sheets: List[str] = []
+    notes: str = ""
+class DataPackageIn(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str = Field(default="", max_length=400)
+    items: List[DataPackageItemIn] = []
+class ApplyPackageInput(BaseModel):
+    package_id: str
+    doc_year: Optional[int] = Field(default=None, ge=1900, le=2100)
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 TASK_TITLE_COLORS = {"", "#dc6863", "#ec9a2b", "#20a76a", "#2879ed", "#8b5cf6"}
@@ -608,6 +621,33 @@ async def migrate_data_request_doc_attrs():
         if updates:
             await db.data_requests.update_one({"id": it["id"]}, {"$set": updates})
 
+async def seed_data_packages():
+    if await db.data_packages.count_documents({}) > 0:
+        return
+    await db.data_packages.insert_one({
+        "id": str(uuid.uuid4()),
+        "name": "PKPT Kabupaten",
+        "description": "Paket awal permintaan data penugasan kabupaten. Tahun dokumen diisi saat paket dipakai.",
+        "items": [
+            {"name": "LKPD", "doc_type": "LKPD", "scope": "pemda", "sheets": ["Keuangan"], "notes": ""},
+            {"name": "LHP BPK", "doc_type": "Laporan", "scope": "pemda", "sheets": ["Keuangan"], "notes": ""},
+            {"name": "RPJMD", "doc_type": "Dokumen perencanaan", "scope": "pemda", "sheets": [], "notes": ""},
+            {"name": "Renstra OPD", "doc_type": "Dokumen perencanaan", "scope": "pemda", "sheets": [], "notes": ""},
+            {"name": "Data realisasi kinerja", "doc_type": "Data statistik", "scope": "pemda", "sheets": [], "notes": ""},
+            {"name": "Peraturan pusat terkait", "doc_type": "Peraturan pusat", "scope": "pusat", "sheets": [], "notes": ""},
+        ],
+        "created_at": now(),
+    })
+
+def can_manage_data_packages(user):
+    return can_create_team(user) or can_view_all_teams(user)
+
+def _package_public(doc):
+    if not doc:
+        return doc
+    doc.pop("_id", None)
+    return doc
+
 async def migrate_data_request_year_to_team():
     """Assignment year follows the team; leftover per-item years (e.g. 2027) were recap bugs."""
     teams = {t["id"]: infer_team_year(t) async for t in db.teams.find({}, {"_id": 0, "id": 1, "year": 1, "created_at": 1})}
@@ -655,6 +695,7 @@ async def startup():
     await migrate_data_request_years()
     await migrate_data_request_doc_attrs()
     await migrate_data_request_year_to_team()
+    await seed_data_packages()
     await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
@@ -1494,6 +1535,107 @@ async def rename_data_request_sheet(team_id: str, data: RenameSheetInput, user=D
             await db.data_requests.update_one({"id": it["id"]}, {"$set": {"sheets": [new]}})
             updated += 1
     return {"ok": True, "updated": updated, "from_name": old, "to_name": new}
+
+@api.get("/data-packages")
+async def list_data_packages(user=Depends(current_user)):
+    rows = await db.data_packages.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    return rows
+
+@api.post("/data-packages")
+async def create_data_package(data: DataPackageIn, user=Depends(current_user)):
+    if not can_manage_data_packages(user):
+        raise HTTPException(403, "Tidak diizinkan mengelola paket data")
+    items = []
+    for it in data.items:
+        name = it.name.strip()
+        if not name:
+            continue
+        items.append({
+            "name": name, "doc_type": (it.doc_type or "").strip(),
+            "scope": normalize_scope(it.scope), "sheets": [s.strip() for s in (it.sheets or []) if s.strip()],
+            "notes": (it.notes or "").strip(),
+        })
+    if not items:
+        raise HTTPException(400, "Paket harus berisi minimal satu data")
+    doc = {
+        "id": str(uuid.uuid4()), "name": data.name.strip(), "description": (data.description or "").strip(),
+        "items": items, "created_by": user["id"], "created_at": now(),
+    }
+    await db.data_packages.insert_one(dict(doc))
+    return _package_public(doc)
+
+@api.patch("/data-packages/{package_id}")
+async def update_data_package(package_id: str, data: DataPackageIn, user=Depends(current_user)):
+    if not can_manage_data_packages(user):
+        raise HTTPException(403, "Tidak diizinkan mengelola paket data")
+    existing = await db.data_packages.find_one({"id": package_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    items = []
+    for it in data.items:
+        name = it.name.strip()
+        if not name:
+            continue
+        items.append({
+            "name": name, "doc_type": (it.doc_type or "").strip(),
+            "scope": normalize_scope(it.scope), "sheets": [s.strip() for s in (it.sheets or []) if s.strip()],
+            "notes": (it.notes or "").strip(),
+        })
+    if not items:
+        raise HTTPException(400, "Paket harus berisi minimal satu data")
+    await db.data_packages.update_one({"id": package_id}, {"$set": {
+        "name": data.name.strip(), "description": (data.description or "").strip(), "items": items,
+    }})
+    return await db.data_packages.find_one({"id": package_id}, {"_id": 0})
+
+@api.delete("/data-packages/{package_id}")
+async def delete_data_package(package_id: str, user=Depends(current_user)):
+    if not can_manage_data_packages(user):
+        raise HTTPException(403, "Tidak diizinkan mengelola paket data")
+    result = await db.data_packages.delete_one({"id": package_id})
+    if not result.deleted_count:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    return {"ok": True}
+
+@api.post("/teams/{team_id}/data-requests/from-package")
+async def apply_data_package(team_id: str, data: ApplyPackageInput, user=Depends(current_user)):
+    await require_member(team_id, user)
+    pkg = await db.data_packages.find_one({"id": data.package_id}, {"_id": 0})
+    if not pkg:
+        raise HTTPException(404, "Paket tidak ditemukan")
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team:
+        raise HTTPException(404, "Tim tidak ditemukan")
+    year = infer_team_year(team)
+    doc_year = data.doc_year if data.doc_year is not None else year
+    existing = await db.data_requests.find({"team_id": team_id}, {"_id": 0, "name": 1, "doc_year": 1, "scope": 1, "year": 1}).to_list(2000)
+    seen = {(normalize_data_name(i.get("name")), infer_doc_year(i, team), item_scope(i)) for i in existing}
+    created = []
+    skipped = 0
+    team_wil = (team.get("wilayah") or "").strip() or None
+    for it in pkg.get("items") or []:
+        name = (it.get("name") or "").strip()
+        if not name:
+            continue
+        scope = normalize_scope(it.get("scope"))
+        key = (normalize_data_name(name), doc_year, scope)
+        if key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
+        item = {
+            "id": str(uuid.uuid4()), "team_id": team_id, "name": name,
+            "sheets": [s.strip() for s in (it.get("sheets") or []) if s and str(s).strip()],
+            "status": "diminta", "pic": "", "notes": (it.get("notes") or "").strip(),
+            "year": year, "doc_year": doc_year, "doc_type": (it.get("doc_type") or "").strip(),
+            "scope": scope, "wilayah": None if scope == "pusat" else team_wil,
+            "requested_at": now(), "received_at": None, "attachments": [],
+            "created_by": user["id"], "created_by_name": user["name"], "created_at": now(),
+        }
+        await db.data_requests.insert_one(dict(item))
+        item.pop("_id", None)
+        created.append(decorate_data_request(item, team))
+    return {"ok": True, "created": len(created), "skipped": skipped, "items": created}
 
 @api.delete("/data-requests/{item_id}")
 async def delete_data_request(item_id: str, user=Depends(current_user)):

@@ -382,7 +382,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
-          <DataRequests team={activeTeam} members={members} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} onOpenTask={openTask} />
+          <DataRequests team={activeTeam} members={members} myRole={activeTeam.my_role} currentUser={user} onTeamUpdated={() => loadTeams()} onOpenTask={openTask} />
         ) : tab === "data-recap" ? (
           <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} onOpenTask={openTask} />
         ) : tab === "announcements" ? (
