@@ -41,7 +41,7 @@ export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask })
     <div className="page overview-page">
       <div className="page-heading">
         <div>
-          <h1>{team.name} <small className="year-badge">{teamYear(team)}{teamYear(team) < currentYear() ? " · arsip" : ""}</small></h1>
+          <h1>{team.name} <small className="year-badge">{teamYear(team)}{teamYear(team) < currentYear() ? " · arsip" : ""}{team.wilayah ? ` · ${team.wilayah}` : ""}</small></h1>
           <p className="muted">{total ? `${pct}% selesai · ${open.length} masih berjalan` : "Belum ada tugas di tim ini."}</p>
         </div>
         <button className="primary" onClick={() => onNavigate("tasks")} data-testid="overview-goto-tasks">Buka papan</button>

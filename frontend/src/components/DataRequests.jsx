@@ -10,11 +10,15 @@ function normName(s) {
   return (s || "").trim().toLowerCase().replace(/[\s\u00a0]+/g, " ").replace(/["'`]+/g, "").trim();
 }
 
-function flattenCatalog(groups) {
+function flattenCatalog(recap) {
+  const groups = recap?.regions?.length
+    ? recap.regions.flatMap(r => r.groups || [])
+    : (recap?.groups || []);
   const seen = new Map();
-  for (const g of groups || []) {
+  for (const g of groups) {
     for (const it of g.items || []) {
-      if (it?.key && !seen.has(it.key)) seen.set(it.key, it);
+      const k = it.name_key || it.key;
+      if (k && !seen.has(k)) seen.set(k, { ...it, key: k });
     }
   }
   return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
@@ -50,7 +54,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   useEffect(() => { setLoading(true); load(); setOpenSheet(null); }, [team.id]);
   useEffect(() => {
     client.get("/data-recap", { params: { year: teamYear(team) } })
-      .then(r => setCatalog(flattenCatalog(r.data.groups)))
+      .then(r => setCatalog(flattenCatalog(r.data)))
       .catch(() => setCatalog([]));
   }, [team.id, team.year, items.length]);
 
@@ -114,7 +118,13 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   return (
     <div className="page dr-page" data-testid="data-requests-page">
       <div className="page-heading">
-        <div><h1>Permintaan Data</h1><p className="muted">Data yang dibutuhkan tiap sheet kertas kerja evaluasi, dan status permintaannya ke pemda.</p></div>
+        <div>
+          <h1>Permintaan Data</h1>
+          <p className="muted">
+            Data yang dibutuhkan tiap sheet kertas kerja evaluasi, dan status permintaannya ke pemda.
+            {team.wilayah ? ` Wilayah: ${team.wilayah}.` : " Isi wilayah/pemda di pengaturan tim agar rekap terkelompok."}
+          </p>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="secondary" onClick={() => setExportOpen(true)} data-testid="export-surat-button"><FileOutput size={14} /> Ekspor Surat</button>
           <button className="primary" onClick={() => setOpenSheet("__new__")} data-testid="add-data-request-button"><Plus size={16} /> Tambah Data</button>

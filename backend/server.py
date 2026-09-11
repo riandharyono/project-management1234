@@ -208,6 +208,7 @@ class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
     year: Optional[int] = Field(default=None, ge=2000, le=2100)
+    wilayah: Optional[str] = Field(default=None, max_length=160)
     laporan_deadline: Optional[str] = None
     kke_deadline: Optional[str] = None
     laporan_link: Optional[str] = None
@@ -334,6 +335,11 @@ DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
 DATA_REQUEST_RECEIVED_STATUSES = {"diterima_sebagian", "diterima_lengkap"}
 NO_SHEET_LABEL = "(Tanpa klasifikasi)"
+NO_WILAYAH_LABEL = "(Tanpa wilayah)"
+
+def team_wilayah(team):
+    w = ((team or {}).get("wilayah") or "").strip()
+    return w or NO_WILAYAH_LABEL
 
 def normalize_data_name(name):
     s = (name or "").strip().lower()
@@ -361,9 +367,10 @@ async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
     await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
-async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None, year=None):
+async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None, year=None, wilayah=None):
     team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now(),
             "year": year if year is not None else current_year(),
+            "wilayah": (wilayah or "").strip() or None,
             "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline,
             "laporan_link": laporan_link, "kke_link": kke_link}
     await db.teams.insert_one(team)
@@ -577,11 +584,23 @@ async def list_teams(user=Depends(current_user)):
     result.sort(key=lambda t: (-int(t.get("year") or 0), t.get("created_at") or ""))
     return result
 
+@api.get("/wilayahs")
+async def list_wilayahs(user=Depends(current_user)):
+    memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
+    if can_view_all_teams(user):
+        teams = await db.teams.find({}, {"_id": 0, "wilayah": 1}).to_list(1000)
+    else:
+        if not memberships:
+            return []
+        teams = await db.teams.find({"id": {"$in": [m["team_id"] for m in memberships]}}, {"_id": 0, "wilayah": 1}).to_list(200)
+    names = sorted({(t.get("wilayah") or "").strip() for t in teams if (t.get("wilayah") or "").strip()}, key=str.lower)
+    return names
+
 @api.post("/teams")
 async def create_team(data: TeamInput, user=Depends(current_user)):
     if not can_create_team(user):
         raise HTTPException(403, "Role Anda tidak dapat membuat tim")
-    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link, data.year)
+    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link, data.year, data.wilayah)
     return {**with_team_year(team), "my_role": "admin", "member_count": 1}
 
 def _task_progress_fraction(task, lst):
@@ -643,6 +662,8 @@ async def update_team(team_id: str, data: TeamInput, user=Depends(current_user))
     }
     if data.year is not None:
         fields["year"] = data.year
+    if data.wilayah is not None:
+        fields["wilayah"] = data.wilayah.strip() or None
     await db.teams.update_one({"id": team_id}, {"$set": fields})
     team = await db.teams.find_one({"id": team_id}, {"_id": 0})
     return with_team_year(team) if team else team
@@ -1138,7 +1159,8 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     else:
         if not memberships:
             y = year or current_year()
-            return {"year": y, "years": [y], "total_requests": 0, "unique_count": 0, "team_count": 0, "groups": []}
+            return {"year": y, "years": [y], "total_requests": 0, "unique_count": 0, "name_count": 0,
+                    "team_count": 0, "wilayah_count": 0, "wilayahs": [], "regions": [], "groups": []}
         teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(200)
     teams = [with_team_year(t) for t in teams]
     years = sorted({t["year"] for t in teams} | {current_year()}, reverse=True)
@@ -1154,12 +1176,16 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     items = await db.data_requests.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(50000) if team_ids else []
 
     buckets = {}
+    rank = {s: i for i, s in enumerate(["tidak_relevan", "diminta", "tidak_tersedia", "diterima_sebagian", "diterima_lengkap"])}
     for it in items:
         key = normalize_data_name(it.get("name") or "")
         if not key:
             continue
-        b = buckets.setdefault(key, {
-            "key": key, "names": [], "sheets": set(), "status_counts": {s: 0 for s in DATA_REQUEST_STATUSES},
+        team = team_map.get(it.get("team_id"))
+        wilayah = team_wilayah(team)
+        b = buckets.setdefault((wilayah, key), {
+            "key": key, "wilayah": wilayah, "names": [], "sheets": set(),
+            "status_counts": {s: 0 for s in DATA_REQUEST_STATUSES},
             "teams": {}, "attachments": [], "notes": [],
         })
         b["names"].append(it.get("name") or "")
@@ -1168,16 +1194,13 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
                 b["sheets"].add(sh.strip())
         status = it.get("status") if it.get("status") in DATA_REQUEST_STATUSES else "diminta"
         b["status_counts"][status] = b["status_counts"].get(status, 0) + 1
-        team = team_map.get(it.get("team_id"))
         if team and team["id"] not in b["teams"]:
             b["teams"][team["id"]] = {
                 "team_id": team["id"], "team_name": team.get("name"), "team_color": team.get("color"),
-                "status": status, "pic": it.get("pic") or "", "item_id": it.get("id"),
+                "wilayah": wilayah, "status": status, "pic": it.get("pic") or "", "item_id": it.get("id"),
             }
         elif team and team["id"] in b["teams"]:
-            # keep the "best" status if the same team listed the same data more than once
             prev = b["teams"][team["id"]]["status"]
-            rank = {s: i for i, s in enumerate(["tidak_relevan", "diminta", "tidak_tersedia", "diterima_sebagian", "diterima_lengkap"])}
             if rank.get(status, 0) > rank.get(prev, 0):
                 b["teams"][team["id"]]["status"] = status
                 b["teams"][team["id"]]["item_id"] = it.get("id")
@@ -1187,7 +1210,7 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
             url = (att.get("url") or "").strip()
             name = att.get("name") or att.get("filename") or url
             if url and not any(a.get("url") == url for a in b["attachments"]):
-                b["attachments"].append({"name": name, "url": url, "team_name": team.get("name") if team else ""})
+                b["attachments"].append({"name": name, "url": url, "team_name": team.get("name") if team else "", "wilayah": wilayah})
         note = (it.get("notes") or "").strip()
         if note and note not in b["notes"]:
             b["notes"].append(note)
@@ -1195,8 +1218,10 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     unique_items = []
     for b in buckets.values():
         unique_items.append({
-            "key": b["key"],
+            "key": f"{normalize_data_name(b['wilayah'])}::{b['key']}",
+            "name_key": b["key"],
             "name": _most_common_name(b["names"]),
+            "wilayah": b["wilayah"],
             "sheets": sorted(b["sheets"]),
             "status_counts": b["status_counts"],
             "team_count": len(b["teams"]),
@@ -1204,24 +1229,38 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
             "attachments": b["attachments"][:100],
             "notes": b["notes"][:8],
         })
-    unique_items.sort(key=lambda i: (i["name"].lower(), i["key"]))
+    unique_items.sort(key=lambda i: (i["wilayah"] == NO_WILAYAH_LABEL, i["wilayah"].lower(), i["name"].lower(), i["key"]))
 
-    by_sheet = {}
+    def sheet_groups(rows):
+        by_sheet = {}
+        for item in rows:
+            labels = item["sheets"] or [NO_SHEET_LABEL]
+            for sh in labels:
+                by_sheet.setdefault(sh, []).append(item)
+        out = []
+        for sh in sorted(by_sheet.keys(), key=lambda s: (s == NO_SHEET_LABEL, s.lower())):
+            out.append({"sheet": sh, "count": len(by_sheet[sh]), "items": by_sheet[sh]})
+        return out
+
+    by_wilayah = {}
     for item in unique_items:
-        labels = item["sheets"] or [NO_SHEET_LABEL]
-        for sh in labels:
-            by_sheet.setdefault(sh, []).append(item)
-    groups = []
-    for sh in sorted(by_sheet.keys(), key=lambda s: (s == NO_SHEET_LABEL, s.lower())):
-        groups.append({"sheet": sh, "count": len(by_sheet[sh]), "items": by_sheet[sh]})
+        by_wilayah.setdefault(item["wilayah"], []).append(item)
+    regions = []
+    for w in sorted(by_wilayah.keys(), key=lambda s: (s == NO_WILAYAH_LABEL, s.lower())):
+        rows = by_wilayah[w]
+        regions.append({"wilayah": w, "count": len(rows), "groups": sheet_groups(rows)})
 
     return {
         "year": chosen,
         "years": years,
         "total_requests": len(items),
         "unique_count": len(unique_items),
+        "name_count": len({i["name_key"] for i in unique_items}),
         "team_count": len(year_teams),
-        "groups": groups,
+        "wilayah_count": len(by_wilayah),
+        "wilayahs": [r["wilayah"] for r in regions],
+        "regions": regions,
+        "groups": sheet_groups(unique_items),
     }
 
 # ---------- calendar sync (iCal) ----------

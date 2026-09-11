@@ -15,6 +15,8 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
   const [laporanLink, setLaporanLink] = useState(team.laporan_link || "");
   const [kkeLink, setKkeLink] = useState(team.kke_link || "");
   const [teamYearValue, setTeamYearValue] = useState(teamYear(team));
+  const [wilayah, setWilayah] = useState(team.wilayah || "");
+  const [wilayahs, setWilayahs] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const isAdmin = myRole === "admin";
@@ -22,6 +24,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
 
   const loadAvailable = () => client.get(`/teams/${team.id}/available-members`).then(r => setAvailable(r.data));
   useEffect(() => { if (tab === "add") loadAvailable(); }, [tab, team.id]);
+  useEffect(() => { client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([])); }, []);
 
   const add = async id => { await client.post(`/teams/${team.id}/members`, { user_id: id }); onChanged(); loadAvailable(); };
   const setRole = async (id, role) => { await client.patch(`/teams/${team.id}/members/${id}`, { role }); onChanged(); };
@@ -35,7 +38,7 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
     setError("");
     try {
       await client.patch(`/teams/${team.id}`, {
-        name: teamName.trim(), color: teamColor, year: Number(teamYearValue),
+        name: teamName.trim(), color: teamColor, year: Number(teamYearValue), wilayah: wilayah.trim() || "",
         laporan_deadline: laporanDeadline || null, kke_deadline: kkeDeadline || null,
         laporan_link: laporanLink.trim() || null, kke_link: kkeLink.trim() || null,
       });
@@ -92,6 +95,10 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
               </select>
             </label>
             <p className="muted" style={{ marginTop: -8, fontSize: 12 }}>Pindahkan ke tahun lalu untuk mengarsipkan tim di sidebar tanpa menghapus datanya.</p>
+            <label className="sf-label">WILAYAH / PEMDA
+              <input value={wilayah} onChange={e => setWilayah(e.target.value)} list="team-wilayahs" placeholder="Contoh: Kabupaten Karawang" data-testid="team-wilayah-input" />
+              <datalist id="team-wilayahs">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
+            </label>
             <label className="sf-label">WARNA<div className="td-label-swatches">{LABEL_COLORS.map(c => <button type="button" key={c} style={{ background: c, outline: teamColor === c ? "2px solid #10213b" : "none" }} onClick={() => setTeamColor(c)} data-testid={`team-edit-color-${c}`} />)}</div></label>
             <label className="sf-label">TENGGAT UPLOAD LAPORAN<input type="date" value={laporanDeadline} onChange={e => setLaporanDeadline(e.target.value)} data-testid="team-laporan-deadline-input" /></label>
             <label className="sf-label">LINK UPLOAD LAPORAN<input value={laporanLink} onChange={e => setLaporanLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-laporan-link-input" /></label>

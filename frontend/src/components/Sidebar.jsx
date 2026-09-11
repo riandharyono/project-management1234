@@ -18,7 +18,7 @@ function readOpenArchives() {
 
 function TeamRow({ team, active, onSelect, onPrefetch }) {
   return (
-    <a className={`ts-item ${active ? "active" : ""}`} onClick={() => onSelect(team.id)} onMouseEnter={() => onPrefetch?.(team.id)} onFocus={() => onPrefetch?.(team.id)} data-testid={`sidebar-team-${team.id}`}>
+    <a className={`ts-item ${active ? "active" : ""}`} onClick={() => onSelect(team.id)} onMouseEnter={() => onPrefetch?.(team.id)} onFocus={() => onPrefetch?.(team.id)} title={team.wilayah || team.name} data-testid={`sidebar-team-${team.id}`}>
       <i className="ts-dot" style={{ background: team.color }} /> <span>{team.name}</span>
     </a>
   );
