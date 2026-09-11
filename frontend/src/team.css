@@ -725,10 +725,16 @@ html, body, #root { overflow-x: hidden; }
 
 /* ===== Permintaan Data & Monitoring ===== */
 .dr-wilayah-bar {
-  display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
+  display: grid; grid-template-columns: 150px 170px minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 14px 16px; margin: 0 0 18px;
 }
+.dr-year-mode { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.dr-year-mode legend { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0; }
+.dr-year-mode-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.dr-item-year { border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; background: var(--paper); color: var(--ink); }
+.dr-add-year { display: grid; gap: 6px; font-size: 12px; font-weight: 600; }
+.dr-add-year select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; background: var(--paper); color: var(--ink); }
 .dr-wilayah-bar.missing { border-color: var(--warning); background: var(--warning-tint); }
 .dr-wilayah-bar label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .dr-wilayah-bar input, .dr-wilayah-bar select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-size: 13.5px; background: var(--paper); color: var(--ink); font-weight: 600; }
@@ -765,6 +771,7 @@ html, body, #root { overflow-x: hidden; }
 .sheet .add-btn { border: 1px dashed var(--line); background: none; color: var(--accent); font: inherit; font-weight: 600; font-size: 11px; border-radius: var(--r-sm); padding: 4px 9px; cursor: pointer; }
 
 .dr-row { display: grid; grid-template-columns: 1.8fr .95fr .8fr 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.dr-row.with-year { grid-template-columns: 1.55fr .55fr .95fr .8fr 1fr auto; }
 .sheet .dr-row:last-child { border-bottom: 0; }
 .dr-main { min-width: 0; }
 .dr-name { font-weight: 600; display: flex; align-items: center; gap: 5px; }

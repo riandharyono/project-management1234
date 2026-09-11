@@ -324,12 +324,16 @@ class DataRequestCreate(BaseModel):
     status: str = "diminta"
     pic: str = ""
     notes: str = ""
+    year: Optional[int] = Field(default=None, ge=2000, le=2100)
 class DataRequestPatch(BaseModel):
     name: Optional[str] = None
     sheets: Optional[List[str]] = None
     status: Optional[str] = None
     pic: Optional[str] = None
     notes: Optional[str] = None
+    year: Optional[int] = Field(default=None, ge=2000, le=2100)
+class ApplyYearInput(BaseModel):
+    year: int = Field(ge=2000, le=2100)
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
@@ -340,6 +344,16 @@ NO_WILAYAH_LABEL = "(Tanpa wilayah)"
 def team_wilayah(team):
     w = ((team or {}).get("wilayah") or "").strip()
     return w or NO_WILAYAH_LABEL
+
+def infer_item_year(item, team=None):
+    y = (item or {}).get("year")
+    try:
+        y = int(y)
+        if 2000 <= y <= 2100:
+            return y
+    except (TypeError, ValueError):
+        pass
+    return infer_team_year(team or {})
 
 def normalize_data_name(name):
     s = (name or "").strip().lower()
@@ -444,6 +458,11 @@ async def migrate_team_years():
     async for t in db.teams.find({"$or": [{"year": {"$exists": False}}, {"year": None}]}):
         await db.teams.update_one({"id": t["id"]}, {"$set": {"year": infer_team_year(t)}})
 
+async def migrate_data_request_years():
+    teams = {t["id"]: t async for t in db.teams.find({}, {"_id": 0, "id": 1, "year": 1, "created_at": 1})}
+    async for it in db.data_requests.find({"$or": [{"year": {"$exists": False}}, {"year": None}]}):
+        await db.data_requests.update_one({"id": it["id"]}, {"$set": {"year": infer_item_year(it, teams.get(it.get("team_id")))}})
+
 _scheduler_task = None
 _reminder_task = None
 
@@ -474,6 +493,7 @@ async def startup():
     await migrate_task_labels()
     await migrate_list_done_flag()
     await migrate_team_years()
+    await migrate_data_request_years()
     await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
@@ -1065,17 +1085,23 @@ async def data_request_or_404(item_id):
 @api.get("/teams/{team_id}/data-requests")
 async def list_data_requests(team_id: str, user=Depends(current_user)):
     await require_member(team_id, user)
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
     items = await db.data_requests.find({"team_id": team_id}, {"_id": 0}).to_list(2000)
-    items.sort(key=lambda i: i.get("created_at") or "")
+    for i in items:
+        i["year"] = infer_item_year(i, team)
+    items.sort(key=lambda i: (i.get("year") or 0, i.get("created_at") or ""))
     return items
 
 @api.post("/teams/{team_id}/data-requests")
 async def create_data_request(team_id: str, data: DataRequestCreate, user=Depends(current_user)):
     await require_member(team_id, user)
     if data.status not in DATA_REQUEST_STATUSES: raise HTTPException(400, "Status tidak valid")
+    team = await db.teams.find_one({"id": team_id}, {"_id": 0})
+    if not team: raise HTTPException(404, "Tim tidak ditemukan")
     sheets = [s.strip() for s in data.sheets if s.strip()]
+    year = data.year if data.year is not None else infer_team_year(team)
     item = {"id": str(uuid.uuid4()), "team_id": team_id, "name": data.name.strip(), "sheets": sheets,
-            "status": data.status, "pic": data.pic.strip(), "notes": data.notes.strip(),
+            "status": data.status, "pic": data.pic.strip(), "notes": data.notes.strip(), "year": year,
             "requested_at": now(), "received_at": now() if data.status in DATA_REQUEST_RECEIVED_STATUSES else None,
             "attachments": [], "created_by": user["id"], "created_by_name": user["name"], "created_at": now()}
     await db.data_requests.insert_one(dict(item))
@@ -1094,8 +1120,16 @@ async def update_data_request(item_id: str, data: DataRequestPatch, user=Depends
     if "name" in updates: updates["name"] = updates["name"].strip()
     if "pic" in updates: updates["pic"] = updates["pic"].strip()
     if "notes" in updates: updates["notes"] = updates["notes"].strip()
+    if "year" in updates and updates["year"] is None:
+        updates.pop("year")
     if updates: await db.data_requests.update_one({"id": item_id}, {"$set": updates})
     return await db.data_requests.find_one({"id": item_id}, {"_id": 0})
+
+@api.post("/teams/{team_id}/data-requests/apply-year")
+async def apply_year_to_all_data_requests(team_id: str, data: ApplyYearInput, user=Depends(current_user)):
+    await require_member(team_id, user)
+    result = await db.data_requests.update_many({"team_id": team_id}, {"$set": {"year": data.year}})
+    return {"ok": True, "updated": result.modified_count, "year": data.year}
 
 @api.delete("/data-requests/{item_id}")
 async def delete_data_request(item_id: str, user=Depends(current_user)):
@@ -1163,17 +1197,21 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
                     "team_count": 0, "wilayah_count": 0, "wilayahs": [], "regions": [], "groups": []}
         teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(200)
     teams = [with_team_year(t) for t in teams]
-    years = sorted({t["year"] for t in teams} | {current_year()}, reverse=True)
+    team_map_all = {t["id"]: t for t in teams}
+    team_ids_all = list(team_map_all.keys())
+    raw_items = await db.data_requests.find({"team_id": {"$in": team_ids_all}}, {"_id": 0}).to_list(50000) if team_ids_all else []
+    item_years = {infer_item_year(it, team_map_all.get(it.get("team_id"))) for it in raw_items}
+    years = sorted({t["year"] for t in teams} | item_years | {current_year()}, reverse=True)
     if year is None:
         chosen = current_year()
     else:
         chosen = year
         if chosen not in years:
             years = sorted({*years, chosen}, reverse=True)
-    year_teams = [t for t in teams if t["year"] == chosen]
-    team_map = {t["id"]: t for t in year_teams}
-    team_ids = list(team_map.keys())
-    items = await db.data_requests.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(50000) if team_ids else []
+    items = [it for it in raw_items if infer_item_year(it, team_map_all.get(it.get("team_id"))) == chosen]
+    used_ids = {it.get("team_id") for it in items}
+    team_map = {tid: team_map_all[tid] for tid in used_ids if tid in team_map_all}
+    year_teams = [t for t in teams if t["id"] in team_map or t["year"] == chosen]
 
     buckets = {}
     rank = {s: i for i, s in enumerate(["tidak_relevan", "diminta", "tidak_tersedia", "diterima_sebagian", "diterima_lengkap"])}

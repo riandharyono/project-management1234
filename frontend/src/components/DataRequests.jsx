@@ -50,6 +50,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [catalog, setCatalog] = useState([]);
   const [wilayah, setWilayah] = useState(team.wilayah || "");
   const [year, setYear] = useState(teamYear(team));
+  const [yearMode, setYearMode] = useState(() => localStorage.getItem(`fs-dr-year-mode-${team.id}`) || "all");
   const [wilayahs, setWilayahs] = useState([]);
   const [wilayahSaving, setWilayahSaving] = useState(false);
   const [wilayahSaved, setWilayahSaved] = useState(false);
@@ -60,6 +61,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   useEffect(() => {
     setLoading(true); load(); setOpenSheet(null);
     setWilayah(team.wilayah || ""); setYear(teamYear(team));
+    setYearMode(localStorage.getItem(`fs-dr-year-mode-${team.id}`) || "all");
     setWilayahSaved(false); setWilayahError("");
   }, [team.id, team.wilayah, team.year]);
   useEffect(() => { client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([])); }, []);
@@ -96,6 +98,10 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
         laporan_deadline: team.laporan_deadline || null, kke_deadline: team.kke_deadline || null,
         laporan_link: team.laporan_link || null, kke_link: team.kke_link || null,
       });
+      if (yearMode === "all") {
+        await client.post(`/teams/${team.id}/data-requests/apply-year`, { year: Number(year) });
+        await load();
+      }
       setWilayahSaved(true);
       onTeamUpdated?.();
     } catch (x) { setWilayahError(apiError(x)); }
@@ -105,6 +111,16 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const setStatus = async (item, status) => {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, status } : i));
     try { await client.patch(`/data-requests/${item.id}`, { status }); } catch (e) { load(); }
+  };
+  const setItemYear = async (item, nextYear) => {
+    const y = Number(nextYear);
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, year: y } : i));
+    try { await client.patch(`/data-requests/${item.id}`, { year: y }); } catch (e) { load(); }
+  };
+  const changeYearMode = mode => {
+    setYearMode(mode);
+    localStorage.setItem(`fs-dr-year-mode-${team.id}`, mode);
+    setWilayahSaved(false);
   };
   const startEdit = item => { setEditingId(item.id); setEditForm({ name: item.name, pic: item.pic || "", notes: item.notes || "" }); };
   const saveEdit = async () => {
@@ -158,11 +174,22 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
         <label>
           Tahun penugasan
           <select value={year} onChange={e => { setYear(Number(e.target.value)); setWilayahSaved(false); }} data-testid="data-request-year-select">
-            {yearChoices(year, team).map(y => (
+            {yearChoices(year, team, ...(items.map(i => i.year))).map(y => (
               <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : y < currentYear() ? " (arsip)" : ""}</option>
             ))}
           </select>
         </label>
+        <fieldset className="dr-year-mode">
+          <legend>Penerapan tahun</legend>
+          <label className="dr-year-mode-opt">
+            <input type="radio" name="year-mode" checked={yearMode === "all"} onChange={() => changeYearMode("all")} data-testid="year-mode-all" />
+            Semua data
+          </label>
+          <label className="dr-year-mode-opt">
+            <input type="radio" name="year-mode" checked={yearMode === "each"} onChange={() => changeYearMode("each")} data-testid="year-mode-each" />
+            Per data
+          </label>
+        </fieldset>
         <label>
           Wilayah pemerintah (kabupaten / provinsi)
           <input
@@ -175,8 +202,16 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
         </label>
         <datalist id="dr-wilayah-suggestions">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
         <button className="primary" disabled={wilayahSaving} data-testid="save-data-request-wilayah">{wilayahSaving ? "Menyimpan…" : "Simpan"}</button>
-        {wilayahSaved && <span className="dr-wilayah-ok">Tersimpan — rekap memakai tahun {year}{wilayah.trim() ? ` · ${wilayah.trim()}` : ""}.</span>}
+        {wilayahSaved && (
+          <span className="dr-wilayah-ok">
+            {yearMode === "all"
+              ? `Tersimpan — semua data tim memakai tahun ${year}${wilayah.trim() ? ` · ${wilayah.trim()}` : ""}.`
+              : `Tersimpan — tahun ${year} jadi default data baru. Tahun tiap item diatur di barisnya.`}
+          </span>
+        )}
         {wilayahError && <div className="error">{wilayahError}</div>}
+        {yearMode === "all" && <p className="muted">Mode semua data: tombol Simpan menimpa tahun setiap item di tim ini.</p>}
+        {yearMode === "each" && <p className="muted">Mode per data: pilih tahun di tiap baris. Tahun di atas hanya default untuk data baru.</p>}
         {!wilayah.trim() && !wilayahSaved && <p className="muted">Wilayah wajib diisi supaya data masuk kelompok kabupaten/provinsi di Rekap Data.</p>}
       </form>
       {exportOpen && (
@@ -210,7 +245,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       )}
 
       {openSheet === "__new__" && (
-        <AddForm team={team} items={items} catalog={catalog} year={year} wilayah={wilayah.trim() || team.wilayah} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+        <AddForm team={team} items={items} catalog={catalog} year={year} yearMode={yearMode} wilayah={wilayah.trim() || team.wilayah} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
       )}
 
       {!items.length ? (
@@ -233,10 +268,10 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                 <button className="add-btn" onClick={() => setOpenSheet(sheet)} data-testid={`add-to-sheet-${sheet}`}>+ Tambah data</button>
               </div>
               {openSheet === sheet && (
-                <AddForm team={team} items={items} catalog={catalog} year={year} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+                <AddForm team={team} items={items} catalog={catalog} year={year} yearMode={yearMode} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
               )}
               {rows.map(item => (
-                <div className="dr-row" key={item.id} data-testid={`data-request-row-${item.id}`}>
+                <div className={`dr-row ${yearMode === "each" ? "with-year" : ""}`} key={item.id} data-testid={`data-request-row-${item.id}`}>
                   <div className="dr-main">
                     {editingId === item.id ? (
                       <div className="dr-edit-form">
@@ -264,6 +299,11 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                       </>
                     )}
                   </div>
+                  {yearMode === "each" && (
+                    <select className="dr-item-year" value={item.year || year} onChange={e => setItemYear(item, e.target.value)} data-testid={`year-select-${item.id}`} title="Tahun data ini">
+                      {yearChoices(item.year, year, team).map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  )}
                   <select className={`pill-select ${STATUS_TONE[item.status]}`} value={item.status} onChange={e => setStatus(item, e.target.value)} data-testid={`status-select-${item.id}`}>
                     {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -303,11 +343,12 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   );
 }
 
-function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, onCancel, allSheets }) {
+function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, onDone, onCancel, allSheets }) {
   const [name, setName] = useState("");
   const [sheets, setSheets] = useState(defaultSheet ? [defaultSheet] : []);
   const [sheetInput, setSheetInput] = useState("");
   const [pic, setPic] = useState("");
+  const [itemYear, setItemYear] = useState(year || currentYear());
   const [error, setError] = useState("");
 
   const addSheetTag = () => {
@@ -327,11 +368,11 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
     e.preventDefault();
     const typed = name.trim();
     if (!typed) return;
-    const existing = items.find(i => normName(i.name) === normName(typed));
+    const existing = items.find(i => normName(i.name) === normName(typed) && Number(i.year || year) === Number(itemYear || year));
     if (existing) { await attachToExisting(existing); return; }
     const canon = (catalog || []).find(c => c.key === normName(typed));
     try {
-      await client.post(`/teams/${team.id}/data-requests`, { name: canon ? canon.name : typed, sheets, pic: pic.trim() });
+      await client.post(`/teams/${team.id}/data-requests`, { name: canon ? canon.name : typed, sheets, pic: pic.trim(), year: Number(itemYear || year) });
       onDone();
     } catch (x) { setError(apiError(x)); }
   };
@@ -339,8 +380,17 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
   return (
     <form className="inline-form dr-add-form" onSubmit={submit} data-testid="data-request-add-form">
       <p className={wilayah ? "dr-wilayah-context" : "dr-wilayah-context missing"} data-testid="data-request-wilayah-context">
-        {wilayah ? `Tahun ${year || teamYear(team)} · ${wilayah}` : `Tahun ${year || teamYear(team)} — wilayah belum diisi. Simpan kabupaten/provinsi di atas supaya data ini masuk rekap per pemda.`}
+        {wilayah ? `${wilayah}` : "Wilayah belum diisi — simpan kabupaten/provinsi di atas supaya data ini masuk rekap per pemda."}
       </p>
+      {yearMode === "each" && (
+        <label className="dr-add-year">Tahun data ini
+          <select value={itemYear} onChange={e => setItemYear(Number(e.target.value))} data-testid="new-data-year-select">
+            {yearChoices(itemYear, year, team).map(y => (
+              <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : ""}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <DataNamePicker
         value={name}
         onChange={setName}
