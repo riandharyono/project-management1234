@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Database, Download, FileOutput, Link2, Search } from "lucide-react";
 import { client } from "../lib/api";
 import { EmptyState } from "./EmptyState";
-import { currentYear } from "../lib/years";
 import { NO_DOC_TYPE_LABEL, PUSAT_LABEL, weakestStatus } from "../lib/dataDocs";
 import { downloadPdfBytes, downloadTextFile, flattenRecapItems, recapToCsv, recapToCsvDetail, recapToPdfBytes } from "../lib/exportRecap";
 
@@ -62,8 +61,7 @@ function groupRecap(items, groupBy) {
   return labels.map(label => ({ label, count: by.get(label).length, items: by.get(label) }));
 }
 
-export function DataRecapPage({ initialYear, onOpenTeam }) {
-  const [assignmentYear, setAssignmentYear] = useState(initialYear || currentYear());
+export function DataRecapPage({ onOpenTeam }) {
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
   const [wilayah, setWilayah] = useState("all");
@@ -76,22 +74,15 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
   const [openGroups, setOpenGroups] = useState(() => new Set());
 
   useEffect(() => {
-    if (initialYear) setAssignmentYear(initialYear);
-  }, [initialYear]);
-
-  useEffect(() => {
     setData(null);
-    setWilayah("all"); setDocType("all"); setDocYear("all"); setStatus("all"); setNoLink(false);
-    const params = assignmentYear === "all" ? { all_years: true } : { year: assignmentYear };
-    client.get("/data-recap", { params }).then(r => {
+    client.get("/data-recap", { params: { all_years: true } }).then(r => {
       setData(r.data);
     }).catch(() => setData({
-      year: assignmentYear === "all" ? null : assignmentYear, all_years: assignmentYear === "all",
-      years: [currentYear()], groups: [], regions: [], items: [], unique_count: 0,
+      year: null, all_years: true, years: [], groups: [], regions: [], items: [], unique_count: 0,
       total_requests: 0, team_count: 0, wilayahs: [], doc_years: [], doc_types: [],
       complete_count: 0, pending_count: 0, no_link_count: 0, pusat_count: 0,
     }));
-  }, [assignmentYear]);
+  }, []);
 
   const allItems = useMemo(() => flattenRecapItems(data || {}), [data]);
 
@@ -140,7 +131,7 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
     if (key === "pusat") { setWilayah(wilayah === PUSAT_LABEL ? "all" : PUSAT_LABEL); return; }
   };
 
-  const fileLabel = assignmentYear === "all" ? "semua-penugasan" : assignmentYear;
+  const fileLabel = docYear !== "all" ? docYear : "semua";
   const exportCsv = () => {
     downloadTextFile(recapToCsv(filtered, fileLabel), `Rekap-Data-${fileLabel}.csv`, "text/csv;charset=utf-8");
   };
@@ -154,7 +145,6 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
     }), `Rekap-Data-${fileLabel}.pdf`);
   };
 
-  const years = data?.years || [];
   const hasFilter = q.trim() || wilayah !== "all" || docType !== "all" || docYear !== "all" || status !== "all" || noLink;
 
   return (
@@ -162,7 +152,7 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
       <div className="page-heading">
         <div>
           <h1>Rekap Data</h1>
-          <p className="muted">Katalog dokumen unik per tanggungan, tahun dokumen, dan jenis. Pilih Semua untuk seluruh tahun penugasan.</p>
+          <p className="muted">Katalog seluruh dokumen unik — filter tahun memakai tahun dokumen, bukan tahun penugasan tim.</p>
         </div>
         {!!allItems.length && (
           <div className="recap-export" data-testid="recap-export-actions">
@@ -178,20 +168,6 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
           </div>
         )}
       </div>
-
-      {!!years.length && (
-        <div className="mon-year-filters" data-testid="recap-year-filter">
-          <span className="recap-year-label">Penugasan</span>
-          {years.map(y => (
-            <button key={y} type="button" className={assignmentYear === y ? "active" : ""} onClick={() => setAssignmentYear(y)} data-testid={`recap-year-${y}`}>
-              {y}{y === currentYear() ? "" : y < currentYear() ? " · arsip" : ""}
-            </button>
-          ))}
-          <button type="button" className={assignmentYear === "all" ? "active" : ""} onClick={() => setAssignmentYear("all")} data-testid="recap-year-all">
-            Semua
-          </button>
-        </div>
-      )}
 
       {!data ? (
         <p className="muted">Memuat…</p>
@@ -249,14 +225,14 @@ export function DataRecapPage({ initialYear, onOpenTeam }) {
           {!allItems.length ? (
             <EmptyState
               icon={<Database size={22} />}
-              title={assignmentYear === "all" ? "Belum ada data" : `Belum ada data penugasan ${assignmentYear}`}
+              title="Belum ada data"
               body="Tambahkan permintaan data, lalu isi tanggungan (pemda atau Pusat / umum), tahun dokumen, dan jenis."
             />
           ) : !regions.length ? (
             <EmptyState icon={<Search size={22} />} title="Tidak ada yang cocok" body="Coba kata kunci atau filter lain." />
           ) : (
             <>
-              <p className="recap-filter-hint">{uniqueVisible} data unik{hasFilter ? " sesuai filter" : assignmentYear === "all" ? " · semua penugasan" : ` · penugasan ${assignmentYear}`}</p>
+              <p className="recap-filter-hint">{uniqueVisible} data unik{hasFilter ? " sesuai filter" : ""}</p>
               {regions.map(region => {
                 const open = openGroups.has(region.label);
                 return (

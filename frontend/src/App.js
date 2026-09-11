@@ -16,7 +16,6 @@ import { Documents } from "./components/Documents";
 import { DataRequests } from "./components/DataRequests";
 import { DataRecapPage } from "./components/DataRecapPage";
 import { MonitoringPage } from "./components/MonitoringPage";
-import { teamYear } from "./lib/years";
 import { NewTaskModal } from "./components/NewTaskModal";
 import { TaskDetailModal } from "./components/TaskDetailModal";
 import { MembersModal } from "./components/MembersModal";
@@ -385,7 +384,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         ) : tab === "data-requests" ? (
           <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} />
         ) : tab === "data-recap" ? (
-          <DataRecapPage initialYear={teamYear(activeTeam)} onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
+          <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} />
         ) : tab === "announcements" ? (
           <Announcements team={activeTeam} members={members} currentUser={user} myRole={activeTeam.my_role} />
         ) : tab === "schedule" ? (
