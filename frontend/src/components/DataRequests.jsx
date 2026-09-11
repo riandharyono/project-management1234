@@ -474,7 +474,6 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
         catalog={catalog}
         teamItems={items}
         year={teamYear(team)}
-        onPickTeamItem={attachToExisting}
       />
       <div className="dr-tags editable">
         {sheets.map(s => <span className="dr-tag" key={s}>{s}<button type="button" onClick={() => removeSheetTag(s)}><X size={9} /></button></span>)}
@@ -490,7 +489,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
   );
 }
 
-function DataNamePicker({ value, onChange, catalog, teamItems, year, onPickTeamItem }) {
+function DataNamePicker({ value, onChange, catalog, teamItems, year }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const boxRef = useRef(null);
@@ -543,8 +542,8 @@ function DataNamePicker({ value, onChange, catalog, teamItems, year, onPickTeamI
   }, [open]);
 
   const pick = row => {
-    if (row.inTeam) onPickTeamItem(row.inTeam);
-    else { onChange(row.name); setOpen(false); }
+    onChange(row.name);
+    setOpen(false);
   };
 
   const onKeyDown = e => {

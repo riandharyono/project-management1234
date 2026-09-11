@@ -387,7 +387,7 @@ def infer_doc_year(item, team=None):
             return y
     except (TypeError, ValueError):
         pass
-    return infer_item_year(item, team)
+    return infer_team_year(team or {})
 
 def item_wilayah(item, team=None):
     if item_scope(item) == "pusat":
@@ -557,6 +557,20 @@ async def migrate_data_request_doc_attrs():
         if updates:
             await db.data_requests.update_one({"id": it["id"]}, {"$set": updates})
 
+async def migrate_data_request_year_to_team():
+    """Assignment year follows the team; leftover per-item years (e.g. 2027) were recap bugs."""
+    teams = {t["id"]: infer_team_year(t) async for t in db.teams.find({}, {"_id": 0, "id": 1, "year": 1, "created_at": 1})}
+    async for it in db.data_requests.find({}, {"_id": 0, "id": 1, "team_id": 1, "year": 1}):
+        ty = teams.get(it.get("team_id"))
+        if ty is None:
+            continue
+        try:
+            current = int(it["year"]) if it.get("year") is not None else None
+        except (TypeError, ValueError):
+            current = None
+        if current != ty:
+            await db.data_requests.update_one({"id": it["id"]}, {"$set": {"year": ty}})
+
 _scheduler_task = None
 _reminder_task = None
 
@@ -589,6 +603,7 @@ async def startup():
     await migrate_team_years()
     await migrate_data_request_years()
     await migrate_data_request_doc_attrs()
+    await migrate_data_request_year_to_team()
     await purge_member_created_teams()
     global _scheduler_task, _reminder_task
     _scheduler_task = asyncio.create_task(question_scheduler_loop())
