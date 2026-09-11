@@ -1400,11 +1400,11 @@ def _empty_recap(year):
         "year": year, "years": [year], "total_requests": 0, "unique_count": 0, "name_count": 0,
         "team_count": 0, "wilayah_count": 0, "wilayahs": [], "regions": [], "groups": [],
         "doc_years": [], "doc_types": [], "pusat_count": 0, "items": [],
-        "complete_count": 0, "pending_count": 0, "no_link_count": 0,
+        "complete_count": 0, "pending_count": 0, "no_link_count": 0, "all_years": False,
     }
 
 @api.get("/data-recap")
-async def data_requests_recap(year: Optional[int] = None, user=Depends(current_user)):
+async def data_requests_recap(year: Optional[int] = None, all_years: bool = False, user=Depends(current_user)):
     """Unique catalog keyed by document wilayah + name + doc year (not team wilayah)."""
     memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(200)
     role_by_team = {m["team_id"]: m["role"] for m in memberships}
@@ -1420,16 +1420,20 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     raw_items = await db.data_requests.find({"team_id": {"$in": team_ids_all}}, {"_id": 0}).to_list(50000) if team_ids_all else []
     item_years = {infer_item_year(it, team_map_all.get(it.get("team_id"))) for it in raw_items}
     years = sorted({t["year"] for t in teams} | item_years | {current_year()}, reverse=True)
-    if year is None:
+    if all_years:
+        chosen = None
+        items = raw_items
+    elif year is None:
         chosen = current_year()
+        items = [it for it in raw_items if infer_item_year(it, team_map_all.get(it.get("team_id"))) == chosen]
     else:
         chosen = year
         if chosen not in years:
             years = sorted({*years, chosen}, reverse=True)
-    items = [it for it in raw_items if infer_item_year(it, team_map_all.get(it.get("team_id"))) == chosen]
+        items = [it for it in raw_items if infer_item_year(it, team_map_all.get(it.get("team_id"))) == chosen]
     used_ids = {it.get("team_id") for it in items}
     team_map = {tid: team_map_all[tid] for tid in used_ids if tid in team_map_all}
-    year_teams = [t for t in teams if t["id"] in team_map or t["year"] == chosen]
+    year_teams = [t for t in teams if t["id"] in team_map or (chosen is not None and t["year"] == chosen)]
 
     buckets = {}
     rank = {s: i for i, s in enumerate(["tidak_relevan", "diminta", "tidak_tersedia", "diterima_sebagian", "diterima_lengkap"])}
@@ -1528,6 +1532,7 @@ async def data_requests_recap(year: Optional[int] = None, user=Depends(current_u
     no_link_count = sum(1 for i in unique_items if not i["has_link"])
     return {
         "year": chosen,
+        "all_years": all_years,
         "years": years,
         "total_requests": len(items),
         "unique_count": len(unique_items),
