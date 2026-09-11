@@ -343,6 +343,9 @@ class DataRequestPatch(BaseModel):
     wilayah: Optional[str] = Field(default=None, max_length=160)
 class ApplyYearInput(BaseModel):
     year: int = Field(ge=2000, le=2100)
+class RenameSheetInput(BaseModel):
+    from_name: str = Field(min_length=1, max_length=120)
+    to_name: str = Field(min_length=1, max_length=120)
 
 DEFAULT_LISTS = ["Belum dikerjakan", "Dikerjakan", "Selesai", "Batal"]
 DATA_REQUEST_STATUSES = ["diminta", "diterima_sebagian", "diterima_lengkap", "tidak_tersedia", "tidak_relevan"]
@@ -1311,6 +1314,34 @@ async def apply_year_to_all_data_requests(team_id: str, data: ApplyYearInput, us
     await require_member(team_id, user)
     result = await db.data_requests.update_many({"team_id": team_id}, {"$set": {"year": data.year}})
     return {"ok": True, "updated": result.modified_count, "year": data.year}
+
+@api.post("/teams/{team_id}/data-requests/rename-sheet")
+async def rename_data_request_sheet(team_id: str, data: RenameSheetInput, user=Depends(current_user)):
+    await require_member(team_id, user)
+    old = data.from_name.strip()
+    new = data.to_name.strip()
+    if not old or not new:
+        raise HTTPException(400, "Nama sheet tidak boleh kosong")
+    if old == new:
+        return {"ok": True, "updated": 0, "from_name": old, "to_name": new}
+    items = await db.data_requests.find({"team_id": team_id}, {"_id": 0, "id": 1, "sheets": 1}).to_list(2000)
+    updated = 0
+    for it in items:
+        sheets = [s for s in (it.get("sheets") or []) if isinstance(s, str) and s.strip()]
+        if old in sheets:
+            next_sheets = []
+            seen = set()
+            for s in sheets:
+                name = new if s == old else s
+                if name not in seen:
+                    seen.add(name)
+                    next_sheets.append(name)
+            await db.data_requests.update_one({"id": it["id"]}, {"$set": {"sheets": next_sheets}})
+            updated += 1
+        elif not sheets and old in ("(Tanpa sheet)", "(Tanpa klasifikasi)"):
+            await db.data_requests.update_one({"id": it["id"]}, {"$set": {"sheets": [new]}})
+            updated += 1
+    return {"ok": True, "updated": updated, "from_name": old, "to_name": new}
 
 @api.delete("/data-requests/{item_id}")
 async def delete_data_request(item_id: str, user=Depends(current_user)):

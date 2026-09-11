@@ -758,16 +758,14 @@ html, body, #root { overflow-x: hidden; }
 
 /* ===== Permintaan Data & Monitoring ===== */
 .dr-wilayah-bar {
-  display: grid; grid-template-columns: 150px 170px minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 14px 16px; margin: 0 0 18px;
 }
-.dr-year-mode { border: 0; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
-.dr-year-mode legend { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0; }
-.dr-year-mode-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); text-transform: none; letter-spacing: 0; cursor: pointer; }
-.dr-item-year { border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; background: var(--paper); color: var(--ink); }
-.dr-add-year { display: grid; gap: 6px; font-size: 12px; font-weight: 600; }
-.dr-add-year select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; background: var(--paper); color: var(--ink); }
+.dr-assignment {
+  margin: 0; font-size: 13px; font-weight: 700; align-self: center;
+  background: var(--accent-tint); color: var(--accent); border-radius: 999px; padding: 8px 12px; white-space: nowrap;
+}
 .dr-wilayah-bar.missing { border-color: var(--warning); background: var(--warning-tint); }
 .dr-wilayah-bar label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .dr-wilayah-bar input, .dr-wilayah-bar select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-size: 13.5px; background: var(--paper); color: var(--ink); font-weight: 600; }
@@ -797,7 +795,13 @@ html, body, #root { overflow-x: hidden; }
 
 .sheet { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); margin-bottom: 14px; }
 .sheet-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.sheet-head b { font-size: 13.5px; font-weight: 700; flex: 1; }
+.sheet-title { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.sheet-head b { font-size: 13.5px; font-weight: 700; }
+.sheet-rename { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.sheet-rename input { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; background: var(--paper); color: var(--ink); }
+.dr-tag.add { background: transparent; border: 1px dashed var(--line); color: var(--muted); cursor: pointer; }
+.dr-tag.add:hover { border-color: var(--accent); color: var(--accent); }
+.dr-add-sheet-input { border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: 11px; width: 140px; background: var(--paper); }
 .sheet-head .prog { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sheet-head .mini-track { width: 70px; height: 5px; border-radius: 99px; background: var(--column); overflow: hidden; }
 .sheet-head .mini-track i { display: block; height: 100%; background: var(--success); }

@@ -49,20 +49,23 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [wilayah, setWilayah] = useState(team.wilayah || "");
-  const [year, setYear] = useState(teamYear(team));
-  const [yearMode, setYearMode] = useState(() => localStorage.getItem(`fs-dr-year-mode-${team.id}`) || "all");
   const [wilayahs, setWilayahs] = useState([]);
   const [wilayahSaving, setWilayahSaving] = useState(false);
   const [wilayahSaved, setWilayahSaved] = useState(false);
   const [wilayahError, setWilayahError] = useState("");
+  const [renamingSheet, setRenamingSheet] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [addingSheetId, setAddingSheetId] = useState(null);
+  const [sheetDraft, setSheetDraft] = useState("");
   const confirm = useConfirm();
+  const assignmentYear = teamYear(team);
 
   const load = () => client.get(`/teams/${team.id}/data-requests`).then(r => { setItems(r.data); setLoading(false); });
   useEffect(() => {
     setLoading(true); load(); setOpenSheet(null);
-    setWilayah(team.wilayah || ""); setYear(teamYear(team));
-    setYearMode(localStorage.getItem(`fs-dr-year-mode-${team.id}`) || "all");
+    setWilayah(team.wilayah || "");
     setWilayahSaved(false); setWilayahError("");
+    setRenamingSheet(null); setAddingSheetId(null);
   }, [team.id, team.wilayah, team.year]);
   useEffect(() => {
     client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([]));
@@ -97,14 +100,10 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     setWilayahSaving(true); setWilayahError(""); setWilayahSaved(false);
     try {
       await client.patch(`/teams/${team.id}`, {
-        name: team.name, color: team.color, year: Number(year), wilayah: wilayah.trim(),
+        name: team.name, color: team.color, year: assignmentYear, wilayah: wilayah.trim(),
         laporan_deadline: team.laporan_deadline || null, kke_deadline: team.kke_deadline || null,
         laporan_link: team.laporan_link || null, kke_link: team.kke_link || null,
       });
-      if (yearMode === "all") {
-        await client.post(`/teams/${team.id}/data-requests/apply-year`, { year: Number(year) });
-        await load();
-      }
       setWilayahSaved(true);
       onTeamUpdated?.();
     } catch (x) { setWilayahError(apiError(x)); }
@@ -115,16 +114,6 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, status } : i));
     try { await client.patch(`/data-requests/${item.id}`, { status }); } catch (e) { load(); }
   };
-  const setItemYear = async (item, nextYear) => {
-    const y = Number(nextYear);
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, year: y } : i));
-    try { await client.patch(`/data-requests/${item.id}`, { year: y }); } catch (e) { load(); }
-  };
-  const changeYearMode = mode => {
-    setYearMode(mode);
-    localStorage.setItem(`fs-dr-year-mode-${team.id}`, mode);
-    setWilayahSaved(false);
-  };
   const startEdit = item => {
     setEditingId(item.id);
     setEditForm({
@@ -133,7 +122,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       notes: item.notes || "",
       scope: itemScope(item),
       wilayah: item.wilayah || wilayah.trim() || team.wilayah || "",
-      doc_year: item.doc_year || item.year || year,
+      doc_year: item.doc_year || assignmentYear,
       doc_type: item.doc_type || "",
     });
   };
@@ -154,6 +143,26 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   const removeSheetTag = async (item, sheet) => {
     const next = (item.sheets || []).filter(s => s !== sheet);
     await client.patch(`/data-requests/${item.id}`, { sheets: next });
+    load();
+  };
+  const addSheetToItem = async item => {
+    const v = sheetDraft.trim();
+    if (!v) return;
+    const next = [...new Set([...(item.sheets || []), v])];
+    setAddingSheetId(null); setSheetDraft("");
+    await client.patch(`/data-requests/${item.id}`, { sheets: next });
+    load();
+  };
+  const startRenameSheet = sheet => {
+    if (sheet === NO_SHEET) setRenameDraft("");
+    else setRenameDraft(sheet);
+    setRenamingSheet(sheet);
+  };
+  const saveRenameSheet = async oldName => {
+    const next = renameDraft.trim();
+    if (!next || next === oldName) { setRenamingSheet(null); return; }
+    await client.post(`/teams/${team.id}/data-requests/rename-sheet`, { from_name: oldName, to_name: next });
+    setRenamingSheet(null); setRenameDraft("");
     load();
   };
 
@@ -190,25 +199,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       </div>
 
       <form className={`dr-wilayah-bar ${wilayah.trim() ? "" : "missing"}`} onSubmit={saveWilayah} data-testid="data-request-wilayah-form">
-        <label>
-          Tahun penugasan
-          <select value={year} onChange={e => { setYear(Number(e.target.value)); setWilayahSaved(false); }} data-testid="data-request-year-select">
-            {yearChoices(year, team, ...(items.map(i => i.year))).map(y => (
-              <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : y < currentYear() ? " (arsip)" : ""}</option>
-            ))}
-          </select>
-        </label>
-        <fieldset className="dr-year-mode">
-          <legend>Penerapan tahun</legend>
-          <label className="dr-year-mode-opt">
-            <input type="radio" name="year-mode" checked={yearMode === "all"} onChange={() => changeYearMode("all")} data-testid="year-mode-all" />
-            Semua data
-          </label>
-          <label className="dr-year-mode-opt">
-            <input type="radio" name="year-mode" checked={yearMode === "each"} onChange={() => changeYearMode("each")} data-testid="year-mode-each" />
-            Per data
-          </label>
-        </fieldset>
+        <p className="dr-assignment" data-testid="data-request-assignment-year">Penugasan {assignmentYear}</p>
         <label>
           Pemda default (dokumen daerah)
           <input
@@ -221,18 +212,11 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
         </label>
         <datalist id="dr-wilayah-suggestions">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
         <datalist id="dr-doc-type-suggestions">{typeSuggestions.map(t => <option key={t} value={t} />)}</datalist>
+        <datalist id="dr-sheet-suggestions-row">{allSheets.filter(s => s !== NO_SHEET).map(s => <option key={s} value={s} />)}</datalist>
         <button className="primary" disabled={wilayahSaving} data-testid="save-data-request-wilayah">{wilayahSaving ? "Menyimpan…" : "Simpan"}</button>
-        {wilayahSaved && (
-          <span className="dr-wilayah-ok">
-            {yearMode === "all"
-              ? `Tersimpan — semua data tim memakai tahun ${year}${wilayah.trim() ? ` · ${wilayah.trim()}` : ""}.`
-              : `Tersimpan — tahun ${year} jadi default data baru. Tahun tiap item diatur di barisnya.`}
-          </span>
-        )}
+        {wilayahSaved && <span className="dr-wilayah-ok">Pemda default tersimpan{wilayah.trim() ? ` · ${wilayah.trim()}` : ""}.</span>}
         {wilayahError && <div className="error">{wilayahError}</div>}
-        {yearMode === "all" && <p className="muted">Mode semua data: Simpan menimpa tahun penugasan setiap item. Tahun dokumen dan tanggungan tetap per data.</p>}
-        {yearMode === "each" && <p className="muted">Mode per data: tahun penugasan di tiap baris. Tahun di atas hanya default data baru.</p>}
-        {!wilayah.trim() && !wilayahSaved && <p className="muted">Isi pemda default untuk dokumen daerah. Dokumen peraturan pusat dipilih per baris sebagai Pusat / umum.</p>}
+        {!wilayah.trim() && !wilayahSaved && <p className="muted">Isi pemda default untuk dokumen daerah. Peraturan pusat dipilih per data sebagai Pusat / umum. Tahun penugasan diubah di pengaturan tim.</p>}
       </form>
       {exportOpen && (
         <ExportSuratModal
@@ -265,7 +249,7 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
       )}
 
       {openSheet === "__new__" && (
-        <AddForm team={team} items={items} catalog={catalog} year={year} yearMode={yearMode} wilayah={wilayah.trim() || team.wilayah} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+        <AddForm team={team} items={items} catalog={catalog} year={assignmentYear} wilayah={wilayah.trim() || team.wilayah} defaultSheet="" onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
       )}
 
       {!items.length ? (
@@ -282,16 +266,27 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
           return (
             <div className="sheet" key={sheet} data-testid={`sheet-group-${sheet}`}>
               <div className="sheet-head">
-                <b>{sheet}</b>
+                {renamingSheet === sheet ? (
+                  <form className="sheet-rename" onSubmit={e => { e.preventDefault(); saveRenameSheet(sheet); }} data-testid={`rename-sheet-form-${sheet}`}>
+                    <input autoFocus value={renameDraft} onChange={e => setRenameDraft(e.target.value)} placeholder="Nama sheet KKE" data-testid={`rename-sheet-input-${sheet}`} />
+                    <button type="submit" className="icon-button" title="Simpan nama"><Check size={14} /></button>
+                    <button type="button" className="icon-button" onClick={() => setRenamingSheet(null)}><X size={14} /></button>
+                  </form>
+                ) : (
+                  <div className="sheet-title">
+                    <b>{sheet}</b>
+                    <button type="button" className="icon-button tiny" onClick={() => startRenameSheet(sheet)} title="Ubah nama sheet" data-testid={`rename-sheet-${sheet}`}><Pencil size={12} /></button>
+                  </div>
+                )}
                 <div className="mini-track"><i style={{ width: `${pct}%` }} /></div>
                 <span className="prog">{done}/{rows.length} lengkap</span>
                 <button className="add-btn" onClick={() => setOpenSheet(sheet)} data-testid={`add-to-sheet-${sheet}`}>+ Tambah data</button>
               </div>
               {openSheet === sheet && (
-                <AddForm team={team} items={items} catalog={catalog} year={year} yearMode={yearMode} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
+                <AddForm team={team} items={items} catalog={catalog} year={assignmentYear} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
               )}
               {rows.map(item => (
-                <div className={`dr-row ${yearMode === "each" ? "with-year" : ""}`} key={item.id} data-testid={`data-request-row-${item.id}`}>
+                <div className="dr-row" key={item.id} data-testid={`data-request-row-${item.id}`}>
                   <div className="dr-main">
                     {editingId === item.id ? (
                       <div className="dr-edit-form">
@@ -303,8 +298,8 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                         {editForm.scope === "pemda" && (
                           <input value={editForm.wilayah} onChange={e => setEditForm({ ...editForm, wilayah: e.target.value })} list="dr-wilayah-suggestions" placeholder="Kabupaten / provinsi" data-testid={`edit-wilayah-${item.id}`} />
                         )}
-                        <select value={editForm.doc_year} onChange={e => setEditForm({ ...editForm, doc_year: Number(e.target.value) })} data-testid={`edit-doc-year-${item.id}`}>
-                          {yearChoices(editForm.doc_year, year, team).map(y => <option key={y} value={y}>{y}</option>)}
+                        <select value={editForm.doc_year} onChange={e => setEditForm({ ...editForm, doc_year: Number(e.target.value) })} data-testid={`edit-doc-year-${item.id}`} title="Tahun dokumen">
+                          {yearChoices(editForm.doc_year, assignmentYear, team).map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                         <input value={editForm.doc_type} onChange={e => setEditForm({ ...editForm, doc_type: e.target.value })} list="dr-doc-type-suggestions" placeholder="Jenis dokumen" data-testid={`edit-doc-type-${item.id}`} />
                         <input value={editForm.pic} onChange={e => setEditForm({ ...editForm, pic: e.target.value })} placeholder="PIC pemda (opsional)" />
@@ -325,21 +320,29 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
                           {item.doc_type ? <span>{item.doc_type}</span> : null}
                         </div>
                         {item.notes && <p className="dr-note">{item.notes}</p>}
-                        {!!item.sheets?.length && (
-                          <div className="dr-tags">
-                            {item.sheets.map(s => (
-                              <span className="dr-tag" key={s}>{s}<button onClick={() => removeSheetTag(item, s)} title="Hapus dari sheet ini"><X size={9} /></button></span>
-                            ))}
-                          </div>
-                        )}
+                        <div className="dr-tags">
+                          {(item.sheets || []).map(s => (
+                            <span className="dr-tag" key={s}>{s}<button onClick={() => removeSheetTag(item, s)} title="Hapus dari sheet ini"><X size={9} /></button></span>
+                          ))}
+                          {addingSheetId === item.id ? (
+                            <input
+                              autoFocus
+                              className="dr-add-sheet-input"
+                              value={sheetDraft}
+                              onChange={e => setSheetDraft(e.target.value)}
+                              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSheetToItem(item); } if (e.key === "Escape") setAddingSheetId(null); }}
+                              onBlur={() => { if (sheetDraft.trim()) addSheetToItem(item); else setAddingSheetId(null); }}
+                              placeholder="Nama sheet…"
+                              list="dr-sheet-suggestions-row"
+                              data-testid={`add-sheet-input-${item.id}`}
+                            />
+                          ) : (
+                            <button type="button" className="dr-tag add" onClick={() => { setAddingSheetId(item.id); setSheetDraft(""); }} title="Tambah sheet" data-testid={`add-sheet-${item.id}`}>+ sheet</button>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
-                  {yearMode === "each" && (
-                    <select className="dr-item-year" value={item.year || year} onChange={e => setItemYear(item, e.target.value)} data-testid={`year-select-${item.id}`} title="Tahun data ini">
-                      {yearChoices(item.year, year, team).map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  )}
                   <select className={`pill-select ${STATUS_TONE[item.status]}`} value={item.status} onChange={e => setStatus(item, e.target.value)} data-testid={`status-select-${item.id}`}>
                     {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -379,15 +382,14 @@ export function DataRequests({ team, myRole, onTeamUpdated }) {
   );
 }
 
-function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, onDone, onCancel, allSheets }) {
+function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, onCancel, allSheets }) {
   const [name, setName] = useState("");
   const [sheets, setSheets] = useState(defaultSheet ? [defaultSheet] : []);
   const [sheetInput, setSheetInput] = useState("");
   const [pic, setPic] = useState("");
-  const [itemYear, setItemYear] = useState(year || currentYear());
   const [scope, setScope] = useState("pemda");
   const [itemWilayah, setItemWilayah] = useState(wilayah || "");
-  const [docYear, setDocYear] = useState(year || currentYear());
+  const [docYear, setDocYear] = useState(currentYear());
   const [docType, setDocType] = useState("");
   const [error, setError] = useState("");
 
@@ -410,7 +412,7 @@ function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, 
     if (!typed) return;
     const existing = items.find(i =>
       normName(i.name) === normName(typed)
-      && Number(i.year || year) === Number(itemYear || year)
+      && Number(i.year || year) === Number(year)
       && Number(i.doc_year || i.year || year) === Number(docYear)
       && itemScope(i) === scope
       && (scope === "pusat" || normName(i.wilayah || wilayah) === normName(itemWilayah || wilayah))
@@ -420,7 +422,7 @@ function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, 
     try {
       await client.post(`/teams/${team.id}/data-requests`, {
         name: canon ? canon.name : typed, sheets, pic: pic.trim(),
-        year: Number(itemYear || year),
+        year: Number(year),
         doc_year: Number(docYear || year),
         doc_type: docType.trim(),
         scope,
@@ -455,15 +457,6 @@ function AddForm({ team, items, catalog, year, yearMode, wilayah, defaultSheet, 
           <input value={docType} onChange={e => setDocType(e.target.value)} list="dr-doc-type-suggestions" placeholder="LKPD, Peraturan pusat, …" data-testid="new-data-doc-type" />
         </label>
       </div>
-      {yearMode === "each" && (
-        <label className="dr-add-year">Tahun penugasan
-          <select value={itemYear} onChange={e => setItemYear(Number(e.target.value))} data-testid="new-data-year-select">
-            {yearChoices(itemYear, year, team).map(y => (
-              <option key={y} value={y}>{y}{y === currentYear() ? " (tahun ini)" : ""}</option>
-            ))}
-          </select>
-        </label>
-      )}
       <DataNamePicker
         value={name}
         onChange={setName}
