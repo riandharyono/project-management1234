@@ -725,19 +725,19 @@ html, body, #root { overflow-x: hidden; }
 
 /* ===== Permintaan Data & Monitoring ===== */
 .dr-wilayah-bar {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
+  display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 10px 12px; align-items: end;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 14px 16px; margin: 0 0 18px;
 }
 .dr-wilayah-bar.missing { border-color: var(--warning); background: var(--warning-tint); }
 .dr-wilayah-bar label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.dr-wilayah-bar input { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-size: 13.5px; background: var(--paper); color: var(--ink); font-weight: 600; }
+.dr-wilayah-bar input, .dr-wilayah-bar select { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-size: 13.5px; background: var(--paper); color: var(--ink); font-weight: 600; }
 .dr-wilayah-bar button { white-space: nowrap; height: 40px; }
 .dr-wilayah-bar .error, .dr-wilayah-bar .muted, .dr-wilayah-ok { grid-column: 1 / -1; margin: 0; font-size: 12px; }
 .dr-wilayah-ok { color: var(--success); font-weight: 600; }
 .dr-wilayah-context { font-size: 12.5px; font-weight: 600; color: var(--accent); margin: 0 0 4px; }
 .dr-wilayah-context.missing { color: var(--warning); }
-@media (max-width: 700px) {
+@media (max-width: 800px) {
   .dr-wilayah-bar { grid-template-columns: 1fr; }
 }
 
