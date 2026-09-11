@@ -373,7 +373,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onOpenMention={openNotification}
             onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} />
         ) : tab === "overview" ? (
-          <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} onNavigate={setTab}
+          <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} members={members} onNavigate={setTab}
             onOpenTask={openTask} />
         ) : tab === "tasks" ? (
           <KanbanBoard team={activeTeam} teams={teams} lists={lists} tasks={tasks} members={members} labels={labels} myRole={activeTeam.my_role}
@@ -382,7 +382,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onCreateTask={listId => setTaskModal({ mode: "new", listId })}
             onReload={() => loadTeamData(activeTeamId)} />
         ) : tab === "data-requests" ? (
-          <DataRequests team={activeTeam} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} onOpenTask={openTask} />
+          <DataRequests team={activeTeam} members={members} myRole={activeTeam.my_role} onTeamUpdated={() => loadTeams()} onOpenTask={openTask} />
         ) : tab === "data-recap" ? (
           <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} onOpenTask={openTask} />
         ) : tab === "announcements" ? (

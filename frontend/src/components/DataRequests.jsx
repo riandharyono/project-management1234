@@ -42,7 +42,7 @@ const STATUS_TONE = {
 };
 const NO_SHEET = "(Tanpa sheet)";
 
-export function DataRequests({ team, myRole, onTeamUpdated, onOpenTask }) {
+export function DataRequests({ team, members, myRole, onTeamUpdated, onOpenTask }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSheet, setOpenSheet] = useState(null);
@@ -62,6 +62,8 @@ export function DataRequests({ team, myRole, onTeamUpdated, onOpenTask }) {
   const [wilayahError, setWilayahError] = useState("");
   const [creatingTaskId, setCreatingTaskId] = useState(null);
   const [taskError, setTaskError] = useState("");
+  const [assignItem, setAssignItem] = useState(null);
+  const [assignIds, setAssignIds] = useState([]);
   const [renamingSheet, setRenamingSheet] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [addingSheetId, setAddingSheetId] = useState(null);
@@ -103,10 +105,11 @@ export function DataRequests({ team, myRole, onTeamUpdated, onOpenTask }) {
   const pctNr = counts.total ? Math.round((counts.tidak_relevan / counts.total) * 100) : 0;
 
   const canDelete = myRole === "admin";
-  const createTask = async item => {
+  const createTask = async (item, assignees) => {
     setCreatingTaskId(item.id); setTaskError("");
     try {
-      const task = await createTaskFromDataRequest({ teamId: team.id, item, dueDate: team.kke_deadline || "" });
+      const task = await createTaskFromDataRequest({ teamId: team.id, item, dueDate: team.kke_deadline || "", assignees });
+      setAssignItem(null); setAssignIds([]);
       onOpenTask?.(task);
     } catch (e) { setTaskError(apiError(e) || e.message || "Gagal membuat tugas"); }
     finally { setCreatingTaskId(null); }
@@ -396,9 +399,24 @@ export function DataRequests({ team, myRole, onTeamUpdated, onOpenTask }) {
                       </div>
                     )}
                   </div>
-                  <button className="icon-button" title="Buat tugas" onClick={() => createTask(item)} disabled={creatingTaskId === item.id} data-testid={`create-task-from-data-${item.id}`}>
+                  <button className="icon-button" title="Buat tugas" onClick={() => { setAssignItem(item); setAssignIds([]); }} disabled={creatingTaskId === item.id} data-testid={`create-task-from-data-${item.id}`}>
                     <ClipboardList size={13} />
                   </button>
+                  {assignItem?.id === item.id && (
+                    <div className="dr-assign-pop" data-testid={`assign-task-from-data-${item.id}`}>
+                      <small>Tugaskan ke</small>
+                      {(members || []).map(m => (
+                        <label key={m.id}>
+                          <input type="checkbox" checked={assignIds.includes(m.id)} onChange={() => setAssignIds(ids => ids.includes(m.id) ? ids.filter(x => x !== m.id) : [...ids, m.id])} />
+                          {m.name}
+                        </label>
+                      ))}
+                      <div className="dr-assign-actions">
+                        <button type="button" className="primary" onClick={() => createTask(item, assignIds)} disabled={creatingTaskId === item.id}>Buat tugas</button>
+                        <button type="button" className="secondary" onClick={() => setAssignItem(null)}>Batal</button>
+                      </div>
+                    </div>
+                  )}
                   {canDelete && <button className="icon-button" onClick={() => removeItem(item)} data-testid={`delete-data-request-${item.id}`}><Trash2 size={13} /></button>}
                 </div>
               ))}

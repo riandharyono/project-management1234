@@ -1,4 +1,4 @@
-import { Clock, CheckCircle2, AlignJustify, Paperclip, Lock, Database, CheckSquare } from "lucide-react";
+import { Clock, CheckCircle2, AlignJustify, Paperclip, Lock, Database, CheckSquare, Plus } from "lucide-react";
 import { shortDate, isDueReached } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { priorityKey } from "../lib/priority";
@@ -14,7 +14,7 @@ function checklistBits(task) {
   return bits;
 }
 
-export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "todo" }) {
+export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "todo", assignOpen, onAssignOpen, onToggleAssignee }) {
   const done = stage === "done";
   const assignedMembers = members.filter(m => (task.assignees || []).includes(m.id));
   const taskLabels = (task.labels || []).map(id => (labels || []).find(l => l.id === id)).filter(Boolean);
@@ -57,7 +57,23 @@ export function TaskCard({ task, members, labels, onOpen, onQuickMenu, stage = "
             <AlignJustify size={15} />
           </button>
         )}
-        <div className="kb-avatars">{assignedMembers.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}</div>
+        <div className="kb-avatars kb-assign-wrap">
+          {assignedMembers.slice(0, 3).map(m => <Avatar key={m.id} id={m.id} name={m.name} photo={m.avatar} />)}
+          {onAssignOpen && (
+            <button type="button" className="kb-assign-plus" title="Tugaskan anggota" onClick={e => { e.stopPropagation(); onAssignOpen(); }} data-testid={`task-assign-${task.id}`}>
+              <Plus size={12} />
+            </button>
+          )}
+          {assignOpen && (
+            <div className="kb-assign-pop" onClick={e => e.stopPropagation()} data-testid={`task-assign-panel-${task.id}`}>
+              {members.map(m => (
+                <button type="button" key={m.id} className={(task.assignees || []).includes(m.id) ? "on" : ""} onClick={() => onToggleAssignee?.(m.id)}>
+                  <Avatar id={m.id} name={m.name} photo={m.avatar} /> {m.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </article>
   );

@@ -28,7 +28,7 @@ function taskProgressFraction(task, list) {
   return bits.length ? bits.filter(Boolean).length / bits.length : 0;
 }
 
-export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask }) {
+export function TeamOverview({ team, tasks, listsById, members, onNavigate, onOpenTask }) {
   const today = localISODate();
   const open = tasks.filter(t => !listsById[t.list_id]?.is_done && !listsById[t.list_id]?.is_cancelled);
   const total = tasks.length;
@@ -104,6 +104,28 @@ export function TeamOverview({ team, tasks, listsById, onNavigate, onOpenTask })
           ) : <p className="muted">Semua tugas sudah selesai, atau belum ada yang dibuat.</p>}
         </div>
       </div>
+      {!!(members || []).length && (
+        <div className="overview-members" data-testid="overview-member-progress">
+          <header><h3>Progres anggota</h3></header>
+          {(members || []).map(m => {
+            const mine = tasks.filter(t => (t.assignees || []).includes(m.id));
+            const mDone = mine.filter(t => listsById[t.list_id]?.is_done).length;
+            const mOpen = mine.filter(t => !listsById[t.list_id]?.is_done && !listsById[t.list_id]?.is_cancelled);
+            const mOverdue = mOpen.filter(t => t.due_date && t.due_date < today).length;
+            const pct = mine.length ? Math.round((mDone / mine.length) * 100) : 0;
+            return (
+              <button key={m.id} type="button" className="overview-member-row" onClick={() => onNavigate("tasks")}>
+                <span className="ot-title">{m.name}</span>
+                <span className="muted">{mDone}/{mine.length} selesai{mOverdue ? ` · ${mOverdue} terlambat` : ""}</span>
+                <span className="overview-member-pct">{pct}%</span>
+              </button>
+            );
+          })}
+          {tasks.filter(t => !listsById[t.list_id]?.is_done && !listsById[t.list_id]?.is_cancelled && !(t.assignees || []).length).length > 0 && (
+            <p className="muted">Ada tugas berjalan yang belum ditugaskan ke siapa pun.</p>
+          )}
+        </div>
+      )}
       <div className="overview-shortcuts" data-testid="overview-grid">
         {CARDS.map(c => (
           <button key={c.key} className={`overview-shortcut tone-${c.tone}`} onClick={() => onNavigate(c.key)} data-testid={`overview-card-${c.key}`}>

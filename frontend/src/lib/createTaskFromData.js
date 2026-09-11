@@ -1,6 +1,6 @@
 import { client } from "./api";
 
-export async function createTaskFromDataRequest({ teamId, item, itemId, dueDate }) {
+export async function createTaskFromDataRequest({ teamId, item, itemId, dueDate, assignees }) {
   const lists = (await client.get(`/teams/${teamId}/lists`)).data || [];
   const first = lists
     .filter(l => !l.archived && !l.is_done && !l.is_cancelled)
@@ -13,6 +13,7 @@ export async function createTaskFromDataRequest({ teamId, item, itemId, dueDate 
     list_id: first.id,
     due_date: dueDate || undefined,
     data_request_ids: [itemId || item.id],
+    assignees: assignees || [],
   });
   return r.data;
 }

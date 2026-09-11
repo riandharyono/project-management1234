@@ -225,10 +225,36 @@
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 10px; background: var(--surface); color: var(--muted);
 }
 .kb-search input { border: 0; outline: 0; width: 100%; font-size: 13px; background: none; color: var(--ink); font-weight: 600; }
-.kb-inline-add { display: flex; gap: 6px; padding: 6px 0 4px; }
+.kb-inline-add { display: grid; gap: 8px; padding: 6px 0 4px; }
 .kb-inline-add input {
-  flex: 1; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; font-size: 13px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; font-size: 13px; background: var(--paper);
 }
+.kb-inline-assignees { display: flex; flex-wrap: wrap; gap: 4px; }
+.kb-inline-assignees button { border: 1px solid transparent; background: none; padding: 1px; border-radius: 999px; cursor: pointer; opacity: .45; }
+.kb-inline-assignees button.on { opacity: 1; border-color: var(--accent); }
+.kb-inline-add-actions { display: flex; gap: 6px; }
+.kb-assign-wrap { position: relative; margin-left: auto; }
+.kb-assign-plus { width: 22px; height: 22px; border-radius: 50%; border: 1px dashed var(--line); background: var(--paper); color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.kb-assign-pop {
+  position: absolute; right: 0; bottom: calc(100% + 6px); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); box-shadow: 0 12px 24px #17140f22; padding: 6px; z-index: 20; min-width: 180px;
+  display: grid; gap: 2px;
+}
+.kb-assign-pop button { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 6px 8px; font-size: 12px; text-align: left; border-radius: 6px; cursor: pointer; color: var(--ink); }
+.kb-assign-pop button.on { background: var(--accent-tint); }
+.mon-member { display: flex; align-items: center; gap: 10px; text-align: left; }
+.mon-unassigned { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.mon-unassigned-chip { border: 1px solid var(--warning); background: var(--warning-tint); color: var(--warning); border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.overview-members { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; margin: 0 0 16px; display: grid; gap: 6px; }
+.overview-members header h3 { margin: 0 0 6px; font-size: 13px; }
+.overview-member-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; border: 0; background: none; text-align: left; padding: 6px 0; cursor: pointer; font: inherit; color: inherit; border-bottom: 1px solid var(--line); }
+.overview-member-pct { font-weight: 700; font-size: 12px; }
+.dr-assign-pop {
+  position: absolute; right: 40px; top: 36px; z-index: 12; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); box-shadow: 0 12px 24px #17140f22; padding: 10px; display: grid; gap: 6px; min-width: 200px;
+}
+.dr-assign-pop label { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.dr-assign-actions { display: flex; gap: 6px; }
 .kb-archive-menu { right: 0; left: auto; top: calc(100% + 4px); }
 .kb-pri { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: var(--danger-tint); color: var(--danger); }
 .kb-check-count { display: inline-flex; align-items: center; gap: 4px; }
@@ -864,7 +890,7 @@ button.dr-stat:hover, .dr-stat.on { border-color: var(--accent); box-shadow: 0 0
 .sheet-head .mini-track i { display: block; height: 100%; background: var(--success); }
 .sheet .add-btn { border: 1px dashed var(--line); background: none; color: var(--accent); font: inherit; font-weight: 600; font-size: 11px; border-radius: var(--r-sm); padding: 4px 9px; cursor: pointer; }
 
-.dr-row { display: grid; grid-template-columns: 1.8fr .95fr .8fr 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.dr-row { position: relative; display: grid; grid-template-columns: 1.8fr .95fr .8fr 1fr auto; gap: 10px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; }
 .dr-row.with-year { grid-template-columns: 1.55fr .55fr .95fr .8fr 1fr auto; }
 .sheet .dr-row:last-child { border-bottom: 0; }
 .dr-main { min-width: 0; }

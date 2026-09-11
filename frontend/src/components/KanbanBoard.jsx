@@ -26,6 +26,8 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
   const [archiveView, setArchiveView] = useState(null);
   const [addingList, setAddingList] = useState(null);
   const [newTitle, setNewTitle] = useState("");
+  const [addAssignees, setAddAssignees] = useState([]);
+  const [assignTaskId, setAssignTaskId] = useState(null);
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [archivedLists, setArchivedLists] = useState([]);
   const [error, setError] = useState("");
@@ -63,7 +65,9 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     const needle = filters.q.trim().toLowerCase();
     if (needle && !(t.title || "").toLowerCase().includes(needle)) return false;
     if (filters.priority && t.priority !== filters.priority) return false;
-    if (filters.assignee && !(t.assignees || []).includes(filters.assignee)) return false;
+    if (filters.assignee === "__none__") {
+      if ((t.assignees || []).length) return false;
+    } else if (filters.assignee && !(t.assignees || []).includes(filters.assignee)) return false;
     if (filters.label && !(t.labels || []).includes(filters.label)) return false;
     if (filters.overdue) {
       const list = localLists.find(l => l.id === t.list_id);
@@ -142,11 +146,34 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     const title = newTitle.trim();
     if (!title) { setAddingList(null); return; }
     try {
-      await client.post(`/teams/${team.id}/tasks`, { title, list_id: listId, priority: "Medium" });
-      setNewTitle(""); setAddingList(null); onReload();
+      await client.post(`/teams/${team.id}/tasks`, { title, list_id: listId, priority: "Medium", assignees: addAssignees });
+      setNewTitle(""); setAddAssignees([]); setAddingList(null); onReload();
     } catch (e) { setError(apiError(e)); }
   };
   const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
+  const openCountByMember = (() => {
+    const counts = {};
+    localTasks.forEach(t => {
+      if (t.archived) return;
+      const list = localLists.find(l => l.id === t.list_id);
+      if (list?.is_done || list?.is_cancelled) return;
+      (t.assignees || []).forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    });
+    return counts;
+  })();
+  const unassignedOpen = localTasks.filter(t => {
+    if (t.archived || (t.assignees || []).length) return false;
+    const list = localLists.find(l => l.id === t.list_id);
+    return list && !list.is_done && !list.is_cancelled;
+  }).length;
+  const toggleTaskAssignee = async (task, memberId) => {
+    const current = task.assignees || [];
+    const next = current.includes(memberId) ? current.filter(x => x !== memberId) : [...current, memberId];
+    setLocalTasks(prev => prev.map(t => t.id === task.id ? { ...t, assignees: next } : t));
+    try { await client.patch(`/tasks/${task.id}`, { assignees: next }); }
+    catch (e) { setError(apiError(e)); onReload(); }
+  };
+  const toggleAddAssignee = id => setAddAssignees(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const renameList = async (id) => {
     if (!renameValue.trim()) { setRenaming(null); return; }
     try { await client.patch(`/lists/${id}`, { name: renameValue.trim() }); } catch (e) { setError(apiError(e)); }
@@ -198,7 +225,8 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
         <button type="button" className={`secondary ${filters.waitingData ? "selected" : ""}`} onClick={() => setFilter("waitingData", !filters.waitingData)} data-testid="filter-waiting-data">Menunggu data</button>
         <select value={filters.assignee} onChange={e => setFilter("assignee", e.target.value)} data-testid="filter-assignee-select">
           <option value="">Semua anggota</option>
-          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          <option value="__none__">Belum ditugaskan{unassignedOpen ? ` (${unassignedOpen})` : ""}</option>
+          {members.map(m => <option key={m.id} value={m.id}>{m.name}{openCountByMember[m.id] ? ` (${openCountByMember[m.id]})` : ""}</option>)}
         </select>
         {!!(labels || []).length && (
           <select value={filters.label} onChange={e => setFilter("label", e.target.value)} data-testid="filter-label-select">
@@ -252,7 +280,17 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                                 <Draggable draggableId={t.id} index={idx} key={t.id}>
                                   {(p, dragSnapshot) => (
                                     <div className={`kb-drag ${dragSnapshot.isDragging ? "is-dragging" : ""}`} ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps}>
-                                      <TaskCard task={t} members={members} labels={labels} stage={stageOf(list)} onOpen={() => onOpenTask(t)} onQuickMenu={() => setQuickMenuTask(t)} />
+                                      <TaskCard
+                                        task={t}
+                                        members={members}
+                                        labels={labels}
+                                        stage={stageOf(list)}
+                                        onOpen={() => onOpenTask(t)}
+                                        onQuickMenu={() => setQuickMenuTask(t)}
+                                        assignOpen={assignTaskId === t.id}
+                                        onAssignOpen={() => setAssignTaskId(assignTaskId === t.id ? null : t.id)}
+                                        onToggleAssignee={id => toggleTaskAssignee(t, id)}
+                                      />
                                     </div>
                                   )}
                                 </Draggable>
@@ -263,11 +301,21 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
                         </Droppable>
                         {addingList === list.id ? (
                           <form className="kb-inline-add" onSubmit={e => { e.preventDefault(); createInlineTask(list.id); }}>
-                            <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Judul tugas" onBlur={() => { if (!newTitle.trim()) setAddingList(null); }} data-testid={`add-task-${list.id}`} />
-                            <button type="submit" className="primary">Tambah</button>
+                            <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Judul tugas" data-testid={`add-task-${list.id}`} />
+                            <div className="kb-inline-assignees">
+                              {members.map(m => (
+                                <button type="button" key={m.id} className={addAssignees.includes(m.id) ? "on" : ""} title={m.name} onClick={() => toggleAddAssignee(m.id)}>
+                                  <Avatar id={m.id} name={m.name} photo={m.avatar} />
+                                </button>
+                              ))}
+                            </div>
+                            <div className="kb-inline-add-actions">
+                              <button type="submit" className="primary">Tambah</button>
+                              <button type="button" className="secondary" onClick={() => { setAddingList(null); setNewTitle(""); setAddAssignees([]); }}>Batal</button>
+                            </div>
                           </form>
                         ) : (
-                          <button className="kb-add-task" onClick={() => { setAddingList(list.id); setNewTitle(""); }} data-testid={`add-task-${list.id}`}><Plus size={14} /> Buat Tugas</button>
+                          <button className="kb-add-task" onClick={() => { setAddingList(list.id); setNewTitle(""); setAddAssignees([]); }} data-testid={`add-task-${list.id}`}><Plus size={14} /> Buat Tugas</button>
                         )}
                         {showOnboardFor(list) && (
                           <div className="kb-onboard-tip" data-testid={`onboard-tooltip-${list.id}`}>

@@ -854,6 +854,67 @@ async def tasks_monitoring(user=Depends(current_user)):
     result.sort(key=lambda r: (r["pct_complete"], -r["total"]))
     return result
 
+@api.get("/teams/members-monitoring")
+async def members_monitoring(user=Depends(current_user)):
+    if not can_view_all_teams(user):
+        raise HTTPException(403, "Tidak diizinkan mengakses ringkasan ini")
+    teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+    team_map = {t["id"]: t for t in teams}
+    team_ids = list(team_map)
+    lists_by_id = {l["id"]: l async for l in db.lists.find({"team_id": {"$in": team_ids}}, {"_id": 0})}
+    tasks = await db.tasks.find({"team_id": {"$in": team_ids}, "archived": False}, {"_id": 0}).to_list(50000)
+    memberships = await db.team_members.find({"team_id": {"$in": team_ids}}, {"_id": 0}).to_list(5000)
+    user_ids = list({m["user_id"] for m in memberships})
+    users = {u["id"]: u async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "name": 1, "avatar": 1})}
+    today = datetime.now(timezone(timedelta(hours=7))).date().isoformat()
+    by_team = {}
+    for t in tasks:
+        by_team.setdefault(t["team_id"], []).append(t)
+    unassigned = []
+    for tid, tlist in by_team.items():
+        team = team_map.get(tid)
+        if not team:
+            continue
+        n = 0
+        for task in tlist:
+            lst = lists_by_id.get(task.get("list_id"))
+            if lst and (lst.get("is_done") or lst.get("is_cancelled")):
+                continue
+            if not (task.get("assignees") or []):
+                n += 1
+        if n:
+            unassigned.append({"team_id": tid, "team_name": team.get("name"), "count": n, "year": infer_team_year(team)})
+    rows = []
+    for m in memberships:
+        team = team_map.get(m["team_id"])
+        if not team:
+            continue
+        uid = m["user_id"]
+        u = users.get(uid) or {}
+        assigned = [t for t in by_team.get(m["team_id"], []) if uid in (t.get("assignees") or [])]
+        done = overdue = open_n = 0
+        progress_sum = 0.0
+        for task in assigned:
+            lst = lists_by_id.get(task.get("list_id"))
+            progress_sum += _task_progress_fraction(task, lst)
+            if lst and lst.get("is_done"):
+                done += 1
+            elif not (lst and lst.get("is_cancelled")):
+                open_n += 1
+                due = task.get("due_date")
+                if due and due < today:
+                    overdue += 1
+        total = len(assigned)
+        rows.append({
+            "user_id": uid, "user_name": u.get("name") or "", "user_avatar": u.get("avatar"),
+            "team_id": m["team_id"], "team_name": team.get("name"), "team_color": team.get("color"),
+            "year": infer_team_year(team), "total": total, "done": done, "open": open_n,
+            "overdue": overdue, "pct_complete": round((progress_sum / total) * 100) if total else 0,
+        })
+    rows.sort(key=lambda r: (-r["overdue"], -r["open"], r["pct_complete"], r["user_name"] or ""))
+    unassigned.sort(key=lambda r: -r["count"])
+    return {"members": rows, "unassigned": unassigned}
+
 @api.get("/teams/{team_id}")
 async def get_team(team_id: str, user=Depends(current_user)):
     role = await require_member(team_id, user)
