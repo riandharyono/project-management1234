@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@/App.css"; import "@/extra.css"; import "@/team.css";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { client, apiError } from "./lib/api";
-import { canCreateTeam, canViewAllTeams } from "./lib/roles";
+import { canCreateTeam } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
 import loginPhoto from "./assets/login-photo.jpg";
 import { Sidebar } from "./components/Sidebar";
@@ -23,7 +23,7 @@ import { CreateTeamModal } from "./components/CreateTeamModal";
 import { ProfileModal } from "./components/ProfileModal";
 import { NotificationsPanel } from "./components/NotificationsPanel";
 import { UserAdminPage } from "./components/UserAdminPage";
-import { MyWork } from "./components/MyWork";
+import { DashboardPage } from "./components/DashboardPage";
 import { CommandPalette } from "./components/CommandPalette";
 
 const NOTIF_TITLES = { mention: "Anda Disebut", announcement: "Pengumuman Baru", answer: "Check-in dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Check-in rutin" };
@@ -367,11 +367,13 @@ function Workspace({ user, onLogout, onUserUpdate }) {
         ) : recapOpen ? (
           <DataRecapPage onOpenTeam={(id, initialTab) => selectTeam(id, initialTab)} onOpenTask={openTask} />
         ) : !activeTeam ? (
-          <MyWork user={user} teams={teams} onOpenTeam={selectTeam}
-            onPrefetchTeam={prefetchTeam}
+          <DashboardPage user={user}
+            onOpenTeam={selectTeam}
             onOpenTask={openTask}
             onOpenMention={openNotification}
-            onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)} />
+            onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)}
+            onOpenRecap={openRecap}
+            onOpenMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); setRecapOpen(false); }} />
         ) : tab === "overview" ? (
           <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} members={members} onNavigate={setTab}
             onOpenTask={openTask} />

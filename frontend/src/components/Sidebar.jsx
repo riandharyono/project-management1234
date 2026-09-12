@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Plus, Inbox, Users, BarChart3, ChevronRight, Database } from "lucide-react";
+import { Search, Plus, LayoutDashboard, Users, BarChart3, ChevronRight, Database } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { BrandMark } from "./BrandMark";
 import { canCreateTeam, canViewAllTeams, isSuperAdmin } from "../lib/roles";
@@ -64,7 +64,7 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
       </div>
       <nav className="ts-nav">
         <a className={`ts-item ${!activeTeamId && !userAdminOpen && !monitoringOpen && !recapOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
-          <Inbox size={16} /> <span>Tugas saya</span>
+          <LayoutDashboard size={16} /> <span>Dashboard</span>
         </a>
         <a className={`ts-item ${recapOpen ? "active" : ""}`} onClick={onOpenRecap} data-testid="sidebar-recap-item">
           <Database size={16} /> <span>Rekap Data</span>

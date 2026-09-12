@@ -41,7 +41,7 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
   const actions = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = [
-      { id: "act-hq", label: "Ke Tugas saya", icon: Inbox, run: onGoHQ },
+      { id: "act-hq", label: "Ke Dashboard", icon: Inbox, run: onGoHQ },
       { id: "act-recap", label: "Buka Rekap Data", icon: Database, run: onOpenRecap },
     ];
     if (canCreateTeam) list.push({ id: "act-new-team", label: "Buat tim baru", icon: Plus, run: onCreateTeam });

@@ -863,6 +863,237 @@ def _task_progress_fraction(task, lst):
             bits.append(bool(s.get("done")))
     return (sum(bits) / len(bits)) if bits else 0.0
 
+DATA_STATUS_SHORT = {
+    "diminta": "Diminta",
+    "diterima_sebagian": "Sebagian",
+    "tidak_tersedia": "Tidak tersedia",
+    "diterima_lengkap": "Lengkap",
+    "tidak_relevan": "Tidak relevan",
+}
+
+def _empty_dashboard(year, years, scope="mine"):
+    kpis = {
+        "teams": 0, "overdue_tasks": 0, "due_today": 0, "data_pending": 0,
+        "data_unavailable": 0, "deadlines_overdue": 0, "unassigned": 0,
+    }
+    return {
+        "year": year, "years": years or [current_year()], "all_years": year is None,
+        "scope": scope, "kpis": kpis, "counts": kpis, "attention": [], "teams": [],
+        "deadlines": [], "mine": {"overdue": [], "today": [], "upcoming": [], "mentions": []},
+    }
+
+def _dash_task_preview(task, team, lst):
+    return {
+        "id": task.get("id"), "title": task.get("title") or "", "team_id": team.get("id"),
+        "team_name": team.get("name"), "team_color": team.get("color"),
+        "list_name": (lst or {}).get("name"), "due_date": task.get("due_date") or "",
+        "priority": task.get("priority") or "", "is_done": False, "is_cancelled": False,
+    }
+
+@api.get("/dashboard")
+async def workspace_dashboard(year: Optional[int] = None, all_years: bool = False, user=Depends(current_user)):
+    """One-page HQ: KPIs, exceptions, team health, personal work, upcoming deadlines."""
+    scope = "all" if can_view_all_teams(user) else "mine"
+    team_ids_filter, memberships = await _visible_team_ids(user)
+    role_by_team = {m["team_id"]: m["role"] for m in memberships}
+    if team_ids_filter is None:
+        teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+        default_role = "admin" if user.get("role") == ROLE_SUPER_ADMIN else "member"
+    else:
+        if not memberships:
+            return _empty_dashboard(None if all_years else (year or current_year()), [current_year()], scope)
+        teams = await db.teams.find({"id": {"$in": team_ids_filter}}, {"_id": 0}).to_list(200)
+        default_role = "member"
+    teams = [with_team_year(t) for t in teams]
+    years = sorted({t["year"] for t in teams} | {current_year()}, reverse=True)
+    if all_years:
+        chosen = None
+        visible = teams
+    else:
+        chosen = year if year is not None else current_year()
+        if chosen not in years:
+            years = sorted({*years, chosen}, reverse=True)
+        visible = [t for t in teams if t["year"] == chosen]
+    if not visible:
+        return _empty_dashboard(chosen, years, scope)
+
+    ids = [t["id"] for t in visible]
+    team_map = {t["id"]: t for t in visible}
+    lists_by_id = {l["id"]: l async for l in db.lists.find({"team_id": {"$in": ids}}, {"_id": 0})}
+    tasks = await db.tasks.find({"team_id": {"$in": ids}, "archived": False}, {"_id": 0}).to_list(50000)
+    data_items = await db.data_requests.find({"team_id": {"$in": ids}}, {"_id": 0}).to_list(50000)
+
+    today = datetime.now(WIB).date()
+    today_iso = today.isoformat()
+    horizon = (today + timedelta(days=14)).isoformat()
+    uid = user["id"]
+
+    buckets = {
+        tid: {
+            "task_total": 0, "task_done": 0, "task_progress": 0.0, "task_overdue": 0,
+            "due_today": 0, "unassigned": 0, "data_total": 0, "data_complete": 0,
+            "data_pending": 0, "data_unavailable": 0,
+        } for tid in ids
+    }
+    overdue_tasks, data_flags, mine_overdue, mine_today, mine_upcoming, deadlines = [], [], [], [], [], []
+
+    for task in tasks:
+        team = team_map.get(task.get("team_id"))
+        if not team:
+            continue
+        role = role_by_team.get(task["team_id"], default_role)
+        if not task_visible(task, user, role):
+            continue
+        lst = lists_by_id.get(task.get("list_id"))
+        st = buckets[team["id"]]
+        st["task_total"] += 1
+        st["task_progress"] += _task_progress_fraction(task, lst)
+        done = bool(lst and lst.get("is_done"))
+        cancelled = bool(lst and lst.get("is_cancelled"))
+        if done:
+            st["task_done"] += 1
+        open_task = not done and not cancelled
+        due = task.get("due_date") or ""
+        assignees = task.get("assignees") or []
+        if open_task and not assignees:
+            st["unassigned"] += 1
+        if open_task and due and due < today_iso:
+            st["task_overdue"] += 1
+            overdue_tasks.append(_dash_task_preview(task, team, lst))
+        if open_task and due == today_iso:
+            st["due_today"] += 1
+        if open_task and uid in assignees:
+            item = _dash_task_preview(task, team, lst)
+            if due and due < today_iso:
+                mine_overdue.append(item)
+            elif due == today_iso:
+                mine_today.append(item)
+            elif due and due <= horizon:
+                mine_upcoming.append(item)
+        if open_task and due and due <= horizon and (scope == "all" or uid in assignees):
+            deadlines.append({
+                "kind": "task", "title": task.get("title") or "", "date": due,
+                "team_id": team["id"], "team_name": team.get("name"),
+                "team_color": team.get("color"), "overdue": due < today_iso,
+                "task_id": task.get("id"), "tab": "tasks",
+            })
+
+    for it in data_items:
+        team = team_map.get(it.get("team_id"))
+        if not team:
+            continue
+        st = buckets[team["id"]]
+        st["data_total"] += 1
+        status = it.get("status") if it.get("status") in DATA_REQUEST_STATUSES else "diminta"
+        if status == "diterima_lengkap":
+            st["data_complete"] += 1
+        elif status in ("diminta", "diterima_sebagian"):
+            st["data_pending"] += 1
+        elif status == "tidak_tersedia":
+            st["data_unavailable"] += 1
+        if status in ("tidak_tersedia", "diminta", "diterima_sebagian"):
+            data_flags.append({
+                "kind": "data", "tone": "danger" if status == "tidak_tersedia" else "warning",
+                "title": it.get("name") or "Permintaan data",
+                "detail": f"{DATA_STATUS_SHORT.get(status, status)} · {team.get('name')}",
+                "team_id": team["id"], "team_name": team.get("name"),
+                "tab": "data-requests", "status": status,
+            })
+
+    attention = []
+    deadlines_overdue = 0
+    for t in visible:
+        st = buckets[t["id"]]
+        for kind, label, field in (("laporan", "Upload Laporan", "laporan_deadline"), ("kke", "KKE", "kke_deadline")):
+            d = t.get(field) or ""
+            if not d:
+                continue
+            overdue = d < today_iso
+            if overdue:
+                deadlines_overdue += 1
+                attention.append({
+                    "kind": "deadline", "tone": "danger", "title": f"{label} lewat tenggat",
+                    "detail": t.get("name"), "date": d, "team_id": t["id"],
+                    "team_name": t.get("name"), "tab": "overview",
+                })
+            if overdue or d <= horizon:
+                deadlines.append({
+                    "kind": kind, "title": f"{label} · {t.get('name')}", "date": d,
+                    "team_id": t["id"], "team_name": t.get("name"),
+                    "team_color": t.get("color"), "overdue": overdue, "tab": "overview",
+                })
+        if st["unassigned"]:
+            attention.append({
+                "kind": "unassigned", "tone": "warning",
+                "title": f"{st['unassigned']} tugas tanpa PIC",
+                "detail": t.get("name"), "team_id": t["id"], "team_name": t.get("name"), "tab": "tasks",
+            })
+
+    overdue_tasks.sort(key=lambda x: x.get("due_date") or "")
+    for item in overdue_tasks[:8]:
+        attention.append({
+            "kind": "task", "tone": "danger", "title": item["title"],
+            "detail": item.get("team_name") or "", "date": item.get("due_date"),
+            "team_id": item.get("team_id"), "team_name": item.get("team_name"),
+            "task_id": item.get("id"), "tab": "tasks",
+        })
+    data_flags.sort(key=lambda x: (0 if x["status"] == "tidak_tersedia" else 1, x["title"]))
+    attention.extend(data_flags[:8])
+    rank = {"deadline": 0, "task": 1, "data": 2, "unassigned": 3}
+    attention.sort(key=lambda a: (rank.get(a["kind"], 9), a.get("date") or "9999"))
+    attention = attention[:20]
+
+    team_rows = []
+    for t in visible:
+        st = buckets[t["id"]]
+        total = st["task_total"]
+        task_pct = round((st["task_progress"] / total) * 100) if total else 0
+        data_pct = round((st["data_complete"] / st["data_total"]) * 100) if st["data_total"] else 0
+        lap_over = bool(t.get("laporan_deadline") and t["laporan_deadline"] < today_iso)
+        kke_over = bool(t.get("kke_deadline") and t["kke_deadline"] < today_iso)
+        team_rows.append({
+            "team_id": t["id"], "team_name": t.get("name"), "team_color": t.get("color"),
+            "wilayah": t.get("wilayah") or "", "year": t.get("year"),
+            "task_total": total, "task_done": st["task_done"], "task_pct": task_pct,
+            "task_overdue": st["task_overdue"], "unassigned": st["unassigned"],
+            "data_total": st["data_total"], "data_complete": st["data_complete"],
+            "data_pct": data_pct, "data_pending": st["data_pending"],
+            "data_unavailable": st["data_unavailable"],
+            "laporan_deadline": t.get("laporan_deadline"), "kke_deadline": t.get("kke_deadline"),
+            "laporan_overdue": lap_over, "kke_overdue": kke_over,
+        })
+    team_rows.sort(key=lambda r: (
+        0 if (r["laporan_overdue"] or r["kke_overdue"]) else 1,
+        -r["task_overdue"], -r["data_unavailable"], r["task_pct"], r["data_pct"],
+        r["team_name"] or "",
+    ))
+
+    kpis = {
+        "teams": len(visible),
+        "overdue_tasks": sum(b["task_overdue"] for b in buckets.values()),
+        "due_today": sum(b["due_today"] for b in buckets.values()),
+        "data_pending": sum(b["data_pending"] for b in buckets.values()),
+        "data_unavailable": sum(b["data_unavailable"] for b in buckets.values()),
+        "deadlines_overdue": deadlines_overdue,
+        "unassigned": sum(b["unassigned"] for b in buckets.values()),
+    }
+    mine_overdue.sort(key=lambda t: t.get("due_date") or "")
+    mine_today.sort(key=lambda t: t.get("title") or "")
+    mine_upcoming.sort(key=lambda t: t.get("due_date") or "")
+    deadlines.sort(key=lambda d: (0 if d.get("overdue") else 1, d.get("date") or "9999"))
+    mentions = await db.notifications.find(
+        {"user_id": uid, "type": "mention", "read": False}, {"_id": 0}
+    ).sort("created_at", -1).to_list(8)
+    return {
+        "year": chosen, "years": years, "all_years": all_years, "scope": scope,
+        "kpis": kpis, "counts": kpis, "attention": attention, "teams": team_rows,
+        "deadlines": deadlines[:16],
+        "mine": {
+            "overdue": mine_overdue[:15], "today": mine_today[:15],
+            "upcoming": mine_upcoming[:8], "mentions": mentions,
+        },
+    }
+
 @api.get("/teams/tasks-monitoring")
 async def tasks_monitoring(user=Depends(current_user)):
     if not can_view_all_teams(user): raise HTTPException(403, "Tidak diizinkan mengakses ringkasan ini")
