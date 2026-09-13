@@ -63,3 +63,12 @@ export const shortDate = iso => {
 };
 
 export const LABEL_COLORS = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a"];
+
+export const safeHttpUrl = value => {
+  const s = String(value || "").trim();
+  try {
+    const u = new URL(s);
+    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+  } catch { /* ignore invalid */ }
+  return "";
+};

@@ -125,6 +125,7 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
         name: team.name, color: team.color, year: assignmentYear, wilayah: wilayah.trim(),
         laporan_deadline: team.laporan_deadline || null, kke_deadline: team.kke_deadline || null,
         laporan_link: team.laporan_link || null, kke_link: team.kke_link || null,
+        kertas_link: team.kertas_link || null,
       });
       setWilayahSaved(true);
       onTeamUpdated?.();

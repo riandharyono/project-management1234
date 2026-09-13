@@ -214,6 +214,7 @@ class TeamInput(BaseModel):
     kke_deadline: Optional[str] = None
     laporan_link: Optional[str] = None
     kke_link: Optional[str] = None
+    kertas_link: Optional[str] = None
 class SuratDefaultsInput(BaseModel):
     penerima_surat: str = ""
     nomor_surat_tugas: str = ""
@@ -515,12 +516,12 @@ async def migrate_user_roles():
     await db.users.update_many({"role": "admin"}, {"$set": {"role": ROLE_SUPER_ADMIN}})
     await db.users.update_many({"$or": [{"role": "member"}, {"role": {"$exists": False}}]}, {"$set": {"role": ROLE_ANGGOTA_TIM}})
 
-async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None, year=None, wilayah=None):
+async def create_team_internal(name, color, owner, laporan_deadline=None, kke_deadline=None, laporan_link=None, kke_link=None, year=None, wilayah=None, kertas_link=None):
     team = {"id": str(uuid.uuid4()), "name": name, "color": color, "created_by": owner["id"], "created_at": now(),
             "year": year if year is not None else current_year(),
             "wilayah": (wilayah or "").strip() or None,
             "laporan_deadline": laporan_deadline, "kke_deadline": kke_deadline,
-            "laporan_link": laporan_link, "kke_link": kke_link}
+            "laporan_link": laporan_link, "kke_link": kke_link, "kertas_link": kertas_link}
     await db.teams.insert_one(team)
     await db.team_members.insert_one({"id": str(uuid.uuid4()), "team_id": team["id"], "user_id": owner["id"], "role": "admin", "joined_at": now()})
     for i, name_ in enumerate(DEFAULT_LISTS):
@@ -1201,6 +1202,7 @@ async def update_team(team_id: str, data: TeamInput, user=Depends(current_user))
         "name": data.name, "color": data.color,
         "laporan_deadline": data.laporan_deadline, "kke_deadline": data.kke_deadline,
         "laporan_link": data.laporan_link, "kke_link": data.kke_link,
+        "kertas_link": data.kertas_link,
     }
     if data.year is not None:
         fields["year"] = data.year

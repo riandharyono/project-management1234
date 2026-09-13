@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban, Search } from "lucide-react";
-import { client, apiError, shortDate, isDueReached } from "../lib/api";
+import { Plus, MoreHorizontal, Archive, ArchiveRestore, Trash2, Pencil, LayoutGrid, List as ListIcon, X, Hourglass, CheckCircle2, Ban, Search, FileSpreadsheet } from "lucide-react";
+import { client, apiError, shortDate, isDueReached, safeHttpUrl } from "../lib/api";
 import { TaskCard } from "./TaskCard";
 import { TaskQuickMenu } from "./TaskQuickMenu";
 import { useConfirm } from "./ConfirmDialog";
@@ -200,6 +200,11 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
     <div className="page kanban-page">
       <div className="kb-toolbar">
         <div className="kb-toolbar-actions">
+          {safeHttpUrl(team.kertas_link) && (
+            <a className="secondary kb-kertas-btn" href={safeHttpUrl(team.kertas_link)} target="_blank" rel="noreferrer" data-testid="kanban-kertas-link">
+              <FileSpreadsheet size={14} /> Kertas kerja
+            </a>
+          )}
           <div className="view-toggle">
             <button className={view === "kanban" ? "selected" : ""} onClick={() => setViewPersist("kanban")} data-testid="kanban-view-button"><LayoutGrid size={14} /> Kanban</button>
             <button className={view === "list" ? "selected" : ""} onClick={() => setViewPersist("list")} data-testid="list-view-button"><ListIcon size={14} /> List</button>
