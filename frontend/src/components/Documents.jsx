@@ -104,7 +104,7 @@ export function Documents({ team, currentUser, myRole }) {
                   {folders.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               )}
-              <a href={fileUrl(d.file_id)} target="_blank" rel="noreferrer" data-testid={`download-document-${d.id}`}><Download size={15} /></a>
+              <a href={fileUrl(d.file_id)} target="_blank" rel="noopener noreferrer" data-testid={`download-document-${d.id}`}><Download size={15} /></a>
               {canDelete(d) && <button className="icon-button" onClick={() => remove(d)} data-testid={`delete-document-${d.id}`}><Trash2 size={15} /></button>}
             </div>
           ))}

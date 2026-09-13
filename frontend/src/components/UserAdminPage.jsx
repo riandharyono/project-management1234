@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { KeyRound, UserPlus, Trash2, ShieldCheck } from "lucide-react";
-import { client, apiError } from "../lib/api";
+import { client, apiError, MIN_NEW_PASSWORD_LENGTH } from "../lib/api";
 import { ROLE_ANGGOTA_TIM, ROLE_OPTIONS, ROLE_SUPER_ADMIN, roleLabel } from "../lib/roles";
 import { Avatar } from "./Avatar";
 import { useConfirm } from "./ConfirmDialog";
@@ -51,7 +51,7 @@ export function UserAdminPage({ currentUser }) {
         <form className="inline-form" onSubmit={submit} data-testid="create-user-form">
           <input placeholder="Nama lengkap" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} data-testid="create-user-name-input" required />
           <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} data-testid="create-user-email-input" required />
-          <input type="password" placeholder="Password (minimal 6 karakter)" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} data-testid="create-user-password-input" required />
+          <input type="password" placeholder={`Password (minimal ${MIN_NEW_PASSWORD_LENGTH} karakter)`} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} minLength={MIN_NEW_PASSWORD_LENGTH} data-testid="create-user-password-input" required />
           <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} data-testid="create-user-role-select">
             {ROLE_OPTIONS.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
@@ -74,8 +74,8 @@ export function UserAdminPage({ currentUser }) {
             </div>
             {pwFor === u.id && (
               <form className="inline-form" onSubmit={submitPassword} data-testid={`user-admin-password-form-${u.id}`}>
-                <input type="password" autoFocus placeholder="Password baru (minimal 6 karakter)" value={pwValue}
-                  onChange={e => setPwValue(e.target.value)} minLength={6} required data-testid={`user-admin-password-input-${u.id}`} />
+                <input type="password" autoFocus placeholder={`Password baru (minimal ${MIN_NEW_PASSWORD_LENGTH} karakter)`} value={pwValue}
+                  onChange={e => setPwValue(e.target.value)} minLength={MIN_NEW_PASSWORD_LENGTH} required data-testid={`user-admin-password-input-${u.id}`} />
                 {pwError && <div className="error" data-testid={`user-admin-password-error-${u.id}`}>{pwError}</div>}
                 <div><button className="primary" data-testid={`user-admin-password-submit-${u.id}`}>Simpan Password</button>
                   <button type="button" className="secondary" onClick={() => setPwFor(null)}>Batal</button></div>

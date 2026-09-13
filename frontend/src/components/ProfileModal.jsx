@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { X, Camera } from "lucide-react";
-import { client, apiError } from "../lib/api";
+import { client, apiError, MIN_NEW_PASSWORD_LENGTH } from "../lib/api";
 import { Avatar } from "./Avatar";
 
 export function ProfileModal({ user, onClose, onUpdated }) {
@@ -77,11 +77,11 @@ export function ProfileModal({ user, onClose, onUpdated }) {
         <form onSubmit={submitPassword}>
           <h3 className="profile-subhead">Ganti Password</h3>
           <label>Password saat ini<input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Password saat ini" data-testid="current-password-input" /></label>
-          <label>Password baru<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Minimal 6 karakter" data-testid="new-password-input" /></label>
+          <label>Password baru<input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder={`Minimal ${MIN_NEW_PASSWORD_LENGTH} karakter`} minLength={MIN_NEW_PASSWORD_LENGTH} data-testid="new-password-input" /></label>
           <label>Konfirmasi password baru<input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Ulangi password baru" data-testid="confirm-password-input" /></label>
           {pwError && <div className="error" data-testid="password-error">{pwError}</div>}
           {pwSuccess && <div className="success" data-testid="password-success">Password berhasil diganti</div>}
-          <div className="modal-foot"><span /><button className="primary" disabled={!currentPassword || newPassword.length < 6} data-testid="submit-password-button">Ganti Password</button></div>
+          <div className="modal-foot"><span /><button className="primary" disabled={!currentPassword || newPassword.length < MIN_NEW_PASSWORD_LENGTH} data-testid="submit-password-button">Ganti Password</button></div>
         </form>
       </section>
     </div>

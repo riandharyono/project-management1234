@@ -64,11 +64,20 @@ export const shortDate = iso => {
 
 export const LABEL_COLORS = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a"];
 
+export const MIN_NEW_PASSWORD_LENGTH = 12;
+
 export const safeHttpUrl = value => {
   const s = String(value || "").trim();
+  if (!s || /[\u0000-\u001f]/.test(s)) return "";
   try {
     const u = new URL(s);
-    if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+    if ((u.protocol === "http:" || u.protocol === "https:") && u.hostname) return u.href;
   } catch { /* ignore invalid */ }
   return "";
+};
+
+export const attachmentHref = item => {
+  if (item?.url) return safeHttpUrl(item.url);
+  const id = item?.id || item?.file_id;
+  return id ? fileUrl(id) : "";
 };

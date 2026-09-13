@@ -201,7 +201,7 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
       <div className="kb-toolbar">
         <div className="kb-toolbar-actions">
           {safeHttpUrl(team.kertas_link) && (
-            <a className="secondary kb-kertas-btn" href={safeHttpUrl(team.kertas_link)} target="_blank" rel="noreferrer" data-testid="kanban-kertas-link">
+            <a className="secondary kb-kertas-btn" href={safeHttpUrl(team.kertas_link)} target="_blank" rel="noopener noreferrer" data-testid="kanban-kertas-link">
               <FileSpreadsheet size={14} /> Kertas kerja
             </a>
           )}

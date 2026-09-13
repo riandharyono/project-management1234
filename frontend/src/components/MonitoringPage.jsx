@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Link2, Users } from "lucide-react";
 import { Avatar } from "./Avatar";
-import { client, shortDate, localISODate } from "../lib/api";
+import { client, shortDate, localISODate, safeHttpUrl } from "../lib/api";
 import { EmptyState } from "./EmptyState";
 import { currentYear, teamYear } from "../lib/years";
 
@@ -19,9 +19,9 @@ function Deadlines({ row }) {
   return (
     <div className="mon-deadlines">
       {row.laporan_deadline && <span className={tone(row.laporan_deadline)}>Laporan: {shortDate(row.laporan_deadline)}</span>}
-      {row.laporan_link && <a href={row.laporan_link} target="_blank" rel="noreferrer" onClick={stop} data-testid={`monitoring-laporan-link-${row.team_id}`}><Link2 size={10} /> Link laporan</a>}
+      {safeHttpUrl(row.laporan_link) && <a href={safeHttpUrl(row.laporan_link)} target="_blank" rel="noopener noreferrer" onClick={stop} data-testid={`monitoring-laporan-link-${row.team_id}`}><Link2 size={10} /> Link laporan</a>}
       {row.kke_deadline && <span className={tone(row.kke_deadline)}>KKE: {shortDate(row.kke_deadline)}</span>}
-      {row.kke_link && <a href={row.kke_link} target="_blank" rel="noreferrer" onClick={stop} data-testid={`monitoring-kke-link-${row.team_id}`}><Link2 size={10} /> Link KKE</a>}
+      {safeHttpUrl(row.kke_link) && <a href={safeHttpUrl(row.kke_link)} target="_blank" rel="noopener noreferrer" onClick={stop} data-testid={`monitoring-kke-link-${row.team_id}`}><Link2 size={10} /> Link KKE</a>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Paperclip, Trash2, X, Pencil, Check, FileOutput, Link2, ChevronDown, ClipboardList } from "lucide-react";
-import { client, apiError, fileUrl, formatSize, shortDate } from "../lib/api";
+import { client, apiError, formatSize, shortDate, attachmentHref } from "../lib/api";
 import { useConfirm } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { ExportSuratModal } from "./ExportSuratModal";
@@ -399,7 +399,7 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
                   <div className="dr-evidence">
                     {(item.attachments || []).map(a => (
                       <span className="dr-file" key={a.id}>
-                        <a href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer" title={a.url ? (a.name || a.url) : `${a.filename} (${formatSize(a.size)})`}>{a.url ? (a.name || a.url) : a.filename}</a>
+                        {attachmentHref(a) ? <a href={attachmentHref(a)} target="_blank" rel="noopener noreferrer" title={a.url ? (a.name || a.url) : `${a.filename} (${formatSize(a.size)})`}>{a.url ? (a.name || a.url) : a.filename}</a> : <span>{a.url ? (a.name || a.url) : a.filename}</span>}
                         <button onClick={() => removeAttachment(item, a.id)} data-testid={`remove-attachment-${item.id}-${a.id}`}><X size={10} /></button>
                       </span>
                     ))}

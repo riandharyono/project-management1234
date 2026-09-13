@@ -7,17 +7,34 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 import os, uuid, bcrypt, jwt, logging, re, mimetypes, asyncio, base64, json, html as html_lib
 from pywebpush import webpush, WebPushException
+from url_safety import normalize_http_url
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
-app = FastAPI(title="Project Management API")
+
+def _env_flag(name, default=False):
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on")
+
+# Swagger/OpenAPI off by default. Set ENABLE_DOCS=true only on a local/dev box.
+ENABLE_DOCS = _env_flag("ENABLE_DOCS")
+app = FastAPI(
+    title="Project Management API",
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
+)
 api = APIRouter(prefix="/api")
 JWT_ALGORITHM = "HS256"
 APP_NAME = os.environ["APP_NAME"]
 MAX_LOGIN_ATTEMPTS = 10
+MIN_NEW_PASSWORD_LENGTH = 12
+MAX_PASSWORD_LENGTH = 128
 
 ROLE_SUPER_ADMIN = "super_admin"
 ROLE_KOORWAS = "koorwas"
@@ -199,12 +216,12 @@ async def load_team_members(team_id):
 # ---------- models ----------
 class Credentials(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=6, max_length=MAX_PASSWORD_LENGTH)
 class ProfileUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 class PasswordUpdate(BaseModel):
-    current_password: str = Field(min_length=1)
-    new_password: str = Field(min_length=6)
+    current_password: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+    new_password: str = Field(min_length=MIN_NEW_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 class TeamInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
@@ -289,12 +306,12 @@ class LinkAttachmentInput(BaseModel):
     url: str = Field(min_length=1)
 class MemberUpdate(BaseModel): role: str
 class MemberPasswordUpdate(BaseModel):
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=MIN_NEW_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
 class MemberAdd(BaseModel): user_id: str
 class MemberCreate(BaseModel):
     name: str = Field(min_length=1)
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=MIN_NEW_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
     role: str = ROLE_ANGGOTA_TIM
 class AnnouncementInput(BaseModel):
     title: str = Field(min_length=1)
@@ -851,7 +868,13 @@ async def list_doc_types(user=Depends(current_user)):
 async def create_team(data: TeamInput, user=Depends(current_user)):
     if not can_create_team(user):
         raise HTTPException(403, "Role Anda tidak dapat membuat tim")
-    team = await create_team_internal(data.name, data.color, user, data.laporan_deadline, data.kke_deadline, data.laporan_link, data.kke_link, data.year, data.wilayah)
+    team = await create_team_internal(
+        data.name, data.color, user, data.laporan_deadline, data.kke_deadline,
+        normalize_http_url(data.laporan_link, "Link laporan"),
+        normalize_http_url(data.kke_link, "Link KKE"),
+        data.year, data.wilayah,
+        normalize_http_url(data.kertas_link, "Link kertas kerja"),
+    )
     return {**with_team_year(team), "my_role": "admin", "member_count": 1}
 
 def _task_progress_fraction(task, lst):
@@ -1201,8 +1224,9 @@ async def update_team(team_id: str, data: TeamInput, user=Depends(current_user))
     fields = {
         "name": data.name, "color": data.color,
         "laporan_deadline": data.laporan_deadline, "kke_deadline": data.kke_deadline,
-        "laporan_link": data.laporan_link, "kke_link": data.kke_link,
-        "kertas_link": data.kertas_link,
+        "laporan_link": normalize_http_url(data.laporan_link, "Link laporan"),
+        "kke_link": normalize_http_url(data.kke_link, "Link KKE"),
+        "kertas_link": normalize_http_url(data.kertas_link, "Link kertas kerja"),
     }
     if data.year is not None:
         fields["year"] = data.year
@@ -1540,8 +1564,9 @@ async def delete_task(task_id: str, user=Depends(current_user)):
 @api.post("/tasks/{task_id}/attachments")
 async def add_attachment_link(task_id: str, data: LinkAttachmentInput, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)
-    if not data.url.strip().lower().startswith(("http://", "https://")): raise HTTPException(400, "Link harus diawali http:// atau https://")
-    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": data.url.strip(), "created_at": now()}
+    url = normalize_http_url(data.url, "Link lampiran")
+    if not url: raise HTTPException(400, "Link harus diawali http:// atau https://")
+    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": url, "created_at": now()}
     await db.tasks.update_one({"id": task_id}, {"$push": {"attachments": entry}})
     await log_activity(task_id, user, "attachment", f"menambahkan lampiran {entry['name'] or entry['url']}", team_id=task["team_id"])
     return entry
@@ -1881,8 +1906,9 @@ async def delete_data_request(item_id: str, user=Depends(current_user)):
 async def add_data_request_attachment_link(item_id: str, data: LinkAttachmentInput, user=Depends(current_user)):
     item = await data_request_or_404(item_id)
     await require_member(item["team_id"], user)
-    if not data.url.strip().lower().startswith(("http://", "https://")): raise HTTPException(400, "Link harus diawali http:// atau https://")
-    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": data.url.strip(), "created_at": now()}
+    url = normalize_http_url(data.url, "Link lampiran")
+    if not url: raise HTTPException(400, "Link harus diawali http:// atau https://")
+    entry = {"id": str(uuid.uuid4()), "name": data.name.strip(), "url": url, "created_at": now()}
     await db.data_requests.update_one({"id": item_id}, {"$push": {"attachments": entry}})
     return entry
 
@@ -1896,7 +1922,9 @@ async def remove_data_request_attachment(item_id: str, file_id: str, user=Depend
 @api.patch("/teams/{team_id}/surat-defaults")
 async def update_surat_defaults(team_id: str, data: SuratDefaultsInput, user=Depends(current_user)):
     await require_member(team_id, user)
-    await db.teams.update_one({"id": team_id}, {"$set": {"surat_defaults": data.model_dump()}})
+    payload = data.model_dump()
+    payload["link_upload"] = normalize_http_url(payload.get("link_upload"), "Link unggah") or ""
+    await db.teams.update_one({"id": team_id}, {"$set": {"surat_defaults": payload}})
     return {"ok": True}
 
 @api.get("/data-requests/monitoring")

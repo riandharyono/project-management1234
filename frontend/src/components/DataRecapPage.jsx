@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Database, Download, FileOutput, Link2, Search, ClipboardList } from "lucide-react";
-import { client } from "../lib/api";
+import { client, safeHttpUrl } from "../lib/api";
 import { EmptyState } from "./EmptyState";
 import { NO_DOC_TYPE_LABEL, PUSAT_LABEL, weakestStatus } from "../lib/dataDocs";
 import { downloadPdfBytes, downloadTextFile, flattenRecapItems, recapToCsv, recapToCsvDetail, recapToPdfBytes } from "../lib/exportRecap";
@@ -355,9 +355,10 @@ export function DataRecapPage({ onOpenTeam, onOpenTask }) {
                               </div>
                               {!!item.attachments.length && (
                                 <div className="recap-links">
-                                  {item.attachments.map(a => (
-                                    <a key={a.url} href={a.url} target="_blank" rel="noreferrer"><Link2 size={11} /> {a.name || a.url}{a.team_name ? ` · ${a.team_name}` : ""}</a>
-                                  ))}
+                                  {item.attachments.map(a => {
+                                    const href = safeHttpUrl(a.url);
+                                    return href ? <a key={a.url} href={href} target="_blank" rel="noopener noreferrer"><Link2 size={11} /> {a.name || a.url}{a.team_name ? ` · ${a.team_name}` : ""}</a> : null;
+                                  })}
                                 </div>
                               )}
                               {!!item.notes.length && (

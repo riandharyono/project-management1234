@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as ImageIcon, ArrowRightLeft, Copy, Lock, Unlock, Archive, Trash2, MessageCircle, Download, FileText, Link2, ExternalLink, UserPlus, Pencil, ShieldCheck, Circle, CheckCircle2, MoreHorizontal } from "lucide-react";
-import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, isDueReached } from "../lib/api";
+import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, isDueReached, attachmentHref } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
 import { MentionText } from "./MentionText";
@@ -487,7 +487,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                       <div className="td-item-meta">
                         {itemAssignee && <Avatar id={itemAssignee.id} name={itemAssignee.name} photo={itemAssignee.avatar} className="tiny" title={itemAssignee.name} />}
                         {c.due_date && <span className={`td-item-due ${itemOverdue ? "overdue" : ""}`}>{shortDate(c.due_date)}</span>}
-                        {c.attachment && <a className="td-item-attach" href={fileUrl(c.attachment.id)} target="_blank" rel="noreferrer" title={c.attachment.filename}><Paperclip size={11} /></a>}
+                        {c.attachment && <a className="td-item-attach" href={fileUrl(c.attachment.id)} target="_blank" rel="noopener noreferrer" title={c.attachment.filename}><Paperclip size={11} /></a>}
                       </div>
                       <div className="td-item-tools">
                         <button type="button" onClick={() => setAssigneePickerFor(assigneePickerFor === c.id ? null : c.id)} data-testid={`checklist-assign-${c.id}`}><UserPlus size={13} /></button>
@@ -563,7 +563,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                       {!!(d.attachments || []).length && (
                         <div className="td-data-files">
                           {d.attachments.map(a => (
-                            <a key={a.id || a.url} href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer"><Link2 size={11} /> {a.name || a.filename || a.url}</a>
+                            attachmentHref(a) ? <a key={a.id || a.url} href={attachmentHref(a)} target="_blank" rel="noopener noreferrer"><Link2 size={11} /> {a.name || a.filename || a.url}</a> : null
                           ))}
                         </div>
                       )}
@@ -610,9 +610,11 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                     <div className="td-attachment" key={a.id} data-testid={`task-attachment-${a.id}`}>
                       {a.url ? <Link2 size={15} /> : <FileText size={15} />}
                       <div><b>{a.name || a.filename || a.url}</b>{a.url ? <small>{a.url}</small> : <small>{formatSize(a.size)}</small>}</div>
-                      <a href={a.url || fileUrl(a.id)} target="_blank" rel="noreferrer" data-testid={`download-attachment-${a.id}`}>
-                        {a.url ? <ExternalLink size={14} /> : <Download size={14} />}
-                      </a>
+                      {attachmentHref(a) ? (
+                        <a href={attachmentHref(a)} target="_blank" rel="noopener noreferrer" data-testid={`download-attachment-${a.id}`}>
+                          {a.url ? <ExternalLink size={14} /> : <Download size={14} />}
+                        </a>
+                      ) : null}
                       <button onClick={() => removeAttachment(a.id)} data-testid={`remove-attachment-${a.id}`}><X size={13} /></button>
                     </div>
                   ))}
