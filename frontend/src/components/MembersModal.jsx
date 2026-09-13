@@ -102,12 +102,15 @@ export function MembersModal({ team, mode, members, myRole, currentUser, onClose
               <datalist id="team-wilayahs">{wilayahs.map(w => <option key={w} value={w} />)}</datalist>
             </label>
             <label className="sf-label">WARNA<div className="td-label-swatches">{LABEL_COLORS.map(c => <button type="button" key={c} style={{ background: c, outline: teamColor === c ? "2px solid #10213b" : "none" }} onClick={() => setTeamColor(c)} data-testid={`team-edit-color-${c}`} />)}</div></label>
-            <label className="sf-label">TENGGAT UPLOAD LAPORAN<input type="date" value={laporanDeadline} onChange={e => setLaporanDeadline(e.target.value)} data-testid="team-laporan-deadline-input" /></label>
-            <label className="sf-label">LINK UPLOAD LAPORAN<input value={laporanLink} onChange={e => setLaporanLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-laporan-link-input" /></label>
+            <p className="sf-section">Pengumpulan hasil</p>
+            <p className="muted sf-hint">Folder Drive tempat anggota mengunggah deliverable. Bukan dokumen yang dikerjakan di papan.</p>
+            <label className="sf-label">TENGGAT LAPORAN<input type="date" value={laporanDeadline} onChange={e => setLaporanDeadline(e.target.value)} data-testid="team-laporan-deadline-input" /></label>
+            <label className="sf-label">FOLDER UNGGAH LAPORAN<input value={laporanLink} onChange={e => setLaporanLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-laporan-link-input" /></label>
             <label className="sf-label">TENGGAT KKE<input type="date" value={kkeDeadline} onChange={e => setKkeDeadline(e.target.value)} data-testid="team-kke-deadline-input" /></label>
-            <label className="sf-label">LINK UPLOAD KKE<input value={kkeLink} onChange={e => setKkeLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-kke-link-input" /></label>
-            <label className="sf-label">LINK KERTAS KERJA<input value={kertasLink} onChange={e => setKertasLink(e.target.value)} placeholder="https://docs.google.com/…" data-testid="team-kertas-link-input" /></label>
-            <p className="muted" style={{ marginTop: -8, fontSize: 12 }}>Kalau terisi, tombol Kertas kerja muncul di papan tugas.</p>
+            <label className="sf-label">FOLDER UNGGAH KKE<input value={kkeLink} onChange={e => setKkeLink(e.target.value)} placeholder="https://drive.google.com/…" data-testid="team-kke-link-input" /></label>
+            <p className="sf-section">Dokumen kerja</p>
+            <p className="muted sf-hint">Spreadsheet atau folder kertas kerja yang dibuka dari papan tugas. Kalau filenya lebih dari satu, taruh semua di satu folder Drive lalu tempel link foldernya.</p>
+            <label className="sf-label">LINK KERTAS KERJA<input value={kertasLink} onChange={e => setKertasLink(e.target.value)} placeholder="https://docs.google.com/… atau folder Drive" data-testid="team-kertas-link-input" /></label>
             <button className="primary" onClick={saveTeam} disabled={!teamName.trim()} data-testid="save-team-button">Simpan Perubahan</button>
 
             <div className="team-danger-zone">

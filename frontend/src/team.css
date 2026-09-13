@@ -679,6 +679,11 @@ html[data-theme="dark"] .kb-card.is-overdue {
 /* ===== Team settings (rename / color / delete) ===== */
 .team-settings { display: grid; gap: 14px; }
 .team-settings .sf-label { font-size: 12px; font-weight: 700; color: var(--ink); }
+.team-settings .sf-section {
+  margin: 16px 0 0; font-size: 11px; font-weight: 700; color: var(--muted);
+  letter-spacing: .06em; text-transform: uppercase;
+}
+.team-settings .sf-hint { margin: 4px 0 8px; font-size: 12px; line-height: 1.45; }
 .team-settings select { width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px; font-size: 12.5px; background: var(--surface); color: var(--ink); }
 .team-danger-zone { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 6px; display: grid; gap: 10px; }
 .team-danger-zone > .sf-label { color: var(--danger); }

@@ -52,14 +52,14 @@ export function TeamOverview({ team, tasks, listsById, members, onNavigate, onOp
             <div className={`overview-deadline ${deadlineTone(team.laporan_deadline, today)}`} data-testid="overview-deadline-laporan">
               <span>Tenggat Upload Laporan</span>
               {team.laporan_deadline && <b>{shortDate(team.laporan_deadline)}</b>}
-              {team.laporan_link && <a href={team.laporan_link} target="_blank" rel="noreferrer" data-testid="overview-laporan-link"><Link2 size={11} /> Link upload</a>}
+              {team.laporan_link && <a href={team.laporan_link} target="_blank" rel="noreferrer" data-testid="overview-laporan-link"><Link2 size={11} /> Folder laporan</a>}
             </div>
           )}
           {(team.kke_deadline || team.kke_link) && (
             <div className={`overview-deadline ${deadlineTone(team.kke_deadline, today)}`} data-testid="overview-deadline-kke">
               <span>Tenggat KKE</span>
               {team.kke_deadline && <b>{shortDate(team.kke_deadline)}</b>}
-              {team.kke_link && <a href={team.kke_link} target="_blank" rel="noreferrer" data-testid="overview-kke-link"><Link2 size={11} /> Link upload</a>}
+              {team.kke_link && <a href={team.kke_link} target="_blank" rel="noreferrer" data-testid="overview-kke-link"><Link2 size={11} /> Folder KKE</a>}
             </div>
           )}
         </div>
