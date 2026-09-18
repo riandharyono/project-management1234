@@ -69,6 +69,8 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
   const [renamingSheet, setRenamingSheet] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [addingSheetId, setAddingSheetId] = useState(null);
+  // Same item is rendered once per sheet group; bind the input to one group so extra autoFocus/blur copies cannot close it.
+  const [addingInGroup, setAddingInGroup] = useState(null);
   const [sheetDraft, setSheetDraft] = useState("");
   const confirm = useConfirm();
   const assignmentYear = teamYear(team);
@@ -78,7 +80,7 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
     setLoading(true); load(); setOpenSheet(null);
     setWilayah(team.wilayah || "");
     setWilayahSaved(false); setWilayahError("");
-    setRenamingSheet(null); setAddingSheetId(null);
+    setRenamingSheet(null); setAddingSheetId(null); setAddingInGroup(null);
   }, [team.id, team.wilayah, team.year]);
   useEffect(() => {
     client.get("/wilayahs").then(r => setWilayahs(r.data || [])).catch(() => setWilayahs([]));
@@ -168,11 +170,12 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
     await client.patch(`/data-requests/${item.id}`, { sheets: next });
     load();
   };
+  const closeAddSheet = () => { setAddingSheetId(null); setAddingInGroup(null); setSheetDraft(""); };
   const addSheetToItem = async item => {
     const v = sheetDraft.trim();
     if (!v) return;
     const next = [...new Set([...(item.sheets || []), v])];
-    setAddingSheetId(null); setSheetDraft("");
+    closeAddSheet();
     await client.patch(`/data-requests/${item.id}`, { sheets: next });
     load();
   };
@@ -324,7 +327,7 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
                 <AddForm team={team} items={items} catalog={catalog} year={assignmentYear} wilayah={wilayah.trim() || team.wilayah} defaultSheet={sheet === NO_SHEET ? "" : sheet} onDone={() => { setOpenSheet(null); load(); }} onCancel={() => setOpenSheet(null)} allSheets={allSheets} />
               )}
               {rows.map(item => (
-                <div className="dr-row" key={item.id} data-testid={`data-request-row-${item.id}`}>
+                <div className="dr-row" key={`${sheet}-${item.id}`} data-testid={`data-request-row-${item.id}`}>
                   <div className="dr-main">
                     {editingId === item.id ? (
                       <div className="dr-edit-form">
@@ -369,20 +372,23 @@ export function DataRequests({ team, members, myRole, currentUser, onTeamUpdated
                           {(item.sheets || []).map(s => (
                             <span className="dr-tag" key={s}>{s}<button onClick={() => removeSheetTag(item, s)} title="Hapus dari sheet ini"><X size={9} /></button></span>
                           ))}
-                          {addingSheetId === item.id ? (
+                          {addingSheetId === item.id && addingInGroup === sheet ? (
                             <input
                               autoFocus
                               className="dr-add-sheet-input"
                               value={sheetDraft}
                               onChange={e => setSheetDraft(e.target.value)}
-                              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSheetToItem(item); } if (e.key === "Escape") setAddingSheetId(null); }}
-                              onBlur={() => { if (sheetDraft.trim()) addSheetToItem(item); else setAddingSheetId(null); }}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") { e.preventDefault(); addSheetToItem(item); }
+                                if (e.key === "Escape") closeAddSheet();
+                              }}
+                              onBlur={() => { if (sheetDraft.trim()) addSheetToItem(item); else closeAddSheet(); }}
                               placeholder="Nama sheet…"
                               list="dr-sheet-suggestions-row"
                               data-testid={`add-sheet-input-${item.id}`}
                             />
                           ) : (
-                            <button type="button" className="dr-tag add" onClick={() => { setAddingSheetId(item.id); setSheetDraft(""); }} title="Tambah sheet" data-testid={`add-sheet-${item.id}`}>+ sheet</button>
+                            <button type="button" className="dr-tag add" onClick={() => { setAddingSheetId(item.id); setAddingInGroup(sheet); setSheetDraft(""); }} title="Tambah sheet" data-testid={`add-sheet-${item.id}`}>+ sheet</button>
                           )}
                         </div>
                       </>
@@ -462,9 +468,13 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
     setSheetInput("");
   };
   const removeSheetTag = s => setSheets(sheets.filter(x => x !== s));
+  const resolvedSheets = () => {
+    const v = sheetInput.trim();
+    return v && !sheets.includes(v) ? [...sheets, v] : sheets;
+  };
 
   const attachToExisting = async existing => {
-    const merged = [...new Set([...(existing.sheets || []), ...sheets])];
+    const merged = [...new Set([...(existing.sheets || []), ...resolvedSheets()])];
     await client.patch(`/data-requests/${existing.id}`, { sheets: merged });
     onDone();
   };
@@ -473,6 +483,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
     e.preventDefault();
     const typed = name.trim();
     if (!typed) return;
+    const nextSheets = resolvedSheets();
     const existing = items.find(i =>
       normName(i.name) === normName(typed)
       && Number(i.year || year) === Number(year)
@@ -484,7 +495,7 @@ function AddForm({ team, items, catalog, year, wilayah, defaultSheet, onDone, on
     const canon = (catalog || []).find(c => c.key === normName(typed) || c.name_key === normName(typed));
     try {
       await client.post(`/teams/${team.id}/data-requests`, {
-        name: canon ? canon.name : typed, sheets, pic: pic.trim(),
+        name: canon ? canon.name : typed, sheets: nextSheets, pic: pic.trim(),
         year: Number(year),
         doc_year: parseDocYear(docYear, year),
         doc_type: docType.trim(),

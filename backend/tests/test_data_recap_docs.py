@@ -59,6 +59,24 @@ def test_pusat_does_not_inherit_team_wilayah(admin, team):
     assert fakfak[0]["doc_type"] == "LKPD"
 
 
+def test_item_can_have_more_than_two_sheets(admin, team):
+    created = admin.post(f"{API}/teams/{team['id']}/data-requests", json={
+        "name": "LKPD multi-sheet", "sheets": ["Keuangan", "Kepatuhan"],
+        "doc_year": 2024, "doc_type": "LKPD", "scope": "pemda", "year": 2026,
+    })
+    assert created.status_code == 200, created.text
+    item_id = created.json()["id"]
+    patched = admin.patch(f"{API}/data-requests/{item_id}", json={
+        "sheets": ["Keuangan", "Kepatuhan", "Kinerja"],
+    })
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["sheets"] == ["Keuangan", "Kepatuhan", "Kinerja"]
+    listed = admin.get(f"{API}/teams/{team['id']}/data-requests")
+    assert listed.status_code == 200, listed.text
+    match = next(i for i in listed.json() if i["id"] == item_id)
+    assert match["sheets"] == ["Keuangan", "Kepatuhan", "Kinerja"]
+
+
 def test_same_pusat_doc_merges_across_name_key(admin, team):
     for _ in range(2):
         r = admin.post(f"{API}/teams/{team['id']}/data-requests", json={
