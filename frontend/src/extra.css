@@ -4,7 +4,16 @@
 .comments-title span { color: var(--muted); font-weight: normal; }
 .comment { display: flex; gap: 9px; margin: 10px 0; }
 .comment p { font-size: 12.5px; color: var(--ink); line-height: 1.5; }
-.comment p b { display: block; color: var(--ink); font-size: 11px; }
+.comment p b { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 11px; }
+.comment.is-finding { background: var(--warning-tint); border-radius: 8px; padding: 8px; margin-left: -8px; margin-right: -8px; }
+.finding-badge {
+  display: inline-flex; align-items: center; font-size: 9px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: #8A5A00; background: #F8E6B8; border-radius: 999px; padding: 1px 7px;
+}
+html[data-theme="dark"] .finding-badge { color: #F8E6B8; background: #5A3E10; }
+.comment-finding-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ink); font-weight: 600;
+}
 .comment small, .member-row small { display: block; color: var(--muted); font-size: 10px; font-family: var(--font-mono); }
 
 .comment-compose { display: flex; gap: 7px; margin-top: 12px; }

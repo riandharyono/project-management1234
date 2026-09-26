@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, HelpCircle, Megaphone, Database } from "lucide-react";
+import { Search, ClipboardList, Users, FolderOpen, Plus, Inbox, LayoutGrid, CalendarClock, HelpCircle, Megaphone, Database, Flag } from "lucide-react";
 import { client } from "../lib/api";
 import { currentYear, teamYear } from "../lib/years";
 
@@ -7,13 +7,14 @@ const TABS = [
   { key: "overview", label: "Ringkasan", icon: LayoutGrid },
   { key: "tasks", label: "Papan", icon: ClipboardList },
   { key: "data-recap", label: "Rekap Data", icon: Database },
+  { key: "findings", label: "Temuan", icon: Flag },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Check-in", icon: HelpCircle },
   { key: "documents", label: "Dokumen", icon: FolderOpen },
 ];
 
-export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onOpenRecap, onTab, onOpenDocuments, canCreateTeam }) {
+export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpenTask, onCreateTeam, onCreateTask, onGoHQ, onOpenRecap, onOpenFindings, onTab, onOpenDocuments, canCreateTeam }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState({ tasks: [], documents: [], teams: [] });
   const [active, setActive] = useState(0);
@@ -43,6 +44,7 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
     const list = [
       { id: "act-hq", label: "Ke Dashboard", icon: Inbox, run: onGoHQ },
       { id: "act-recap", label: "Buka Rekap Data", icon: Database, run: onOpenRecap },
+      { id: "act-findings", label: "Buka Rekap Temuan", icon: Flag, run: onOpenFindings },
     ];
     if (canCreateTeam) list.push({ id: "act-new-team", label: "Buat tim baru", icon: Plus, run: onCreateTeam });
     if (team) {
@@ -55,7 +57,7 @@ export function CommandPalette({ open, onClose, teams, team, onSelectTeam, onOpe
     });
     if (!needle) return list.slice(0, 8);
     return list.filter(a => a.label.toLowerCase().includes(needle));
-  }, [q, team, teams, onGoHQ, onOpenRecap, onCreateTeam, onCreateTask, onTab, onSelectTeam, canCreateTeam]);
+  }, [q, team, teams, onGoHQ, onOpenRecap, onOpenFindings, onCreateTeam, onCreateTask, onTab, onSelectTeam, canCreateTeam]);
 
   const rows = useMemo(() => {
     const out = [];

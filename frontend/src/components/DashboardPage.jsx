@@ -36,7 +36,7 @@ const ATTENTION_ICON = {
 };
 
 export function DashboardPage({
-  user, onOpenTeam, onOpenTask, onOpenMention, onCreateTeam, onOpenRecap, onOpenMonitoring,
+  user, onOpenTeam, onOpenTask, onOpenMention, onCreateTeam, onOpenRecap, onOpenFindings, onOpenMonitoring,
 }) {
   const [year, setYear] = useState(currentYear());
   const [data, setData] = useState(null);
@@ -89,6 +89,7 @@ export function DashboardPage({
             <button className="secondary" onClick={onOpenMonitoring} data-testid="dashboard-open-monitoring">Monitoring</button>
           )}
           <button className="secondary" onClick={onOpenRecap} data-testid="dashboard-open-recap">Rekap data</button>
+          <button className="secondary" onClick={onOpenFindings} data-testid="dashboard-open-findings">Rekap temuan</button>
           {canCreateTeam(user) && (
             <button className="primary" onClick={onCreateTeam} data-testid="hq-create-team-button"><Plus size={16} /> Buat Tim</button>
           )}

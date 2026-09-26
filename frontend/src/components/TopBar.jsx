@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Database, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Database, Flag, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { applyTheme, readTheme } from "../lib/theme";
 import { currentYear, teamYear } from "../lib/years";
@@ -9,6 +9,7 @@ const TABS = [
   { key: "tasks", label: "Tugas", icon: ClipboardList },
   { key: "data-requests", label: "Permintaan Data", icon: ClipboardCheck },
   { key: "data-recap", label: "Rekap Data", icon: Database },
+  { key: "findings", label: "Temuan", icon: Flag },
   { key: "announcements", label: "Pengumuman", icon: Megaphone },
   { key: "schedule", label: "Jadwal", icon: CalendarClock },
   { key: "questions", label: "Check-in", icon: HelpCircle },

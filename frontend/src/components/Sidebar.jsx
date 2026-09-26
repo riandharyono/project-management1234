@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Plus, LayoutDashboard, Users, BarChart3, ChevronRight, Database } from "lucide-react";
+import { Search, Plus, LayoutDashboard, Users, BarChart3, ChevronRight, Database, Flag } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { BrandMark } from "./BrandMark";
 import { canCreateTeam, canViewAllTeams, isSuperAdmin } from "../lib/roles";
@@ -24,7 +24,7 @@ function TeamRow({ team, active, onSelect, onPrefetch }) {
   );
 }
 
-export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, monitoringOpen, onOpenMonitoring, recapOpen, onOpenRecap, onOpenProfile }) {
+export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefetchTeam, onCreateTeam, user, userAdminOpen, onOpenUserAdmin, monitoringOpen, onOpenMonitoring, recapOpen, onOpenRecap, findingsOpen, onOpenFindings, onOpenProfile }) {
   const [q, setQ] = useState("");
   const [openArchives, setOpenArchives] = useState(readOpenArchives);
   const searching = q.trim().length > 0;
@@ -63,11 +63,14 @@ export function Sidebar({ teams, activeTeamId, onSelectHQ, onSelectTeam, onPrefe
         )}
       </div>
       <nav className="ts-nav">
-        <a className={`ts-item ${!activeTeamId && !userAdminOpen && !monitoringOpen && !recapOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
+        <a className={`ts-item ${!activeTeamId && !userAdminOpen && !monitoringOpen && !recapOpen && !findingsOpen ? "active" : ""}`} onClick={onSelectHQ} data-testid="sidebar-hq-item">
           <LayoutDashboard size={16} /> <span>Dashboard</span>
         </a>
         <a className={`ts-item ${recapOpen ? "active" : ""}`} onClick={onOpenRecap} data-testid="sidebar-recap-item">
           <Database size={16} /> <span>Rekap Data</span>
+        </a>
+        <a className={`ts-item ${findingsOpen ? "active" : ""}`} onClick={onOpenFindings} data-testid="sidebar-findings-item">
+          <Flag size={16} /> <span>Rekap Temuan</span>
         </a>
         {canViewAllTeams(user) && (
           <a className={`ts-item ${monitoringOpen ? "active" : ""}`} onClick={onOpenMonitoring} data-testid="sidebar-monitoring-item">

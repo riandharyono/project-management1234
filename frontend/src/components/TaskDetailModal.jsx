@@ -42,6 +42,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [attachingItemId, setAttachingItemId] = useState(null);
   const [copyMoveMode, setCopyMoveMode] = useState(null);
   const [activityExpanded, setActivityExpanded] = useState(false);
+  const [asFinding, setAsFinding] = useState(false);
   const [linkName, setLinkName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [dataCatalog, setDataCatalog] = useState([]);
@@ -62,6 +63,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setEditingNotes(false);
     setPanel(null);
     setActivityExpanded(false);
+    setAsFinding(false);
   }, [initialTask.id]);
   useEffect(() => {
     client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)).catch(() => setComments([]));
@@ -251,8 +253,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   };
 
   const sendComment = async (body, mentions) => {
-    const r = await client.post(`/tasks/${task.id}/comments`, { body, mentions });
+    const r = await client.post(`/tasks/${task.id}/comments`, { body, mentions, is_finding: asFinding });
     setComments(c => [...c, r.data]);
+    setAsFinding(false);
     client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
   };
 
@@ -625,12 +628,31 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <div className="td-section td-comments" data-testid="task-comments">
               <div className="td-section-head"><MessageCircle size={15} /><span>Komentar & Aktifitas</span><small>{comments.length}</small></div>
               {comments.map(c => (
-                <div className="comment" key={c.id} data-testid={`comment-${c.id}`}>
+                <div className={`comment ${c.is_finding ? "is-finding" : ""}`} key={c.id} data-testid={`comment-${c.id}`}>
                   <Avatar id={c.author_id} name={c.author} photo={members.find(m => m.id === c.author_id)?.avatar} />
-                  <p><b>{c.author}</b><MentionText body={c.body} mentionIds={c.mentions} members={members} /><small>{timeAgo(c.created_at)}</small></p>
+                  <p>
+                    <b>
+                      {c.author}
+                      {c.is_finding ? <span className="finding-badge" data-testid={`comment-finding-badge-${c.id}`}>Temuan</span> : null}
+                    </b>
+                    <MentionText body={c.body} mentionIds={c.mentions} members={members} />
+                    <small>{timeAgo(c.created_at)}</small>
+                  </p>
                 </div>
               ))}
-              <MentionBox members={members} onSend={sendComment} placeholder="Tulis komentar, ketik @ untuk menandai anggota…" testId="comment-input" />
+              <div className="comment-finding-row">
+                <button
+                  type="button"
+                  className={`sf-switch ${asFinding ? "on" : ""}`}
+                  onClick={() => setAsFinding(v => !v)}
+                  aria-pressed={asFinding}
+                  data-testid="comment-finding-toggle"
+                >
+                  <i />
+                </button>
+                <span>Tandai sebagai temuan</span>
+              </div>
+              <MentionBox members={members} onSend={sendComment} placeholder={asFinding ? "Tulis temuan, ketik @ untuk menandai anggota…" : "Tulis komentar, ketik @ untuk menandai anggota…"} testId="comment-input" />
               {!!activity.length && (
                 <div className="td-activity" data-testid="task-activity">
                   {(activityExpanded ? activity : activity.slice(0, 3)).map(a => (

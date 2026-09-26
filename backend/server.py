@@ -167,7 +167,33 @@ async def log_activity(task_id, user, action, detail="", team_id=None):
 
 NOTIF_PUSH_TITLES = {"mention": "Anda Disebut", "announcement": "Pengumuman Baru", "answer": "Pertanyaan Dijawab",
                       "assignment": "Ditugaskan ke Anda", "deadline": "Tenggat Tugas", "question": "Pertanyaan Rutin",
-                      "data_status": "Status Data"}
+                      "data_status": "Status Data", "comment": "Komentar Tugas", "finding": "Temuan Baru"}
+
+async def notify_task_comment(task, actor, mentions, is_finding=False):
+    actor_id = actor["id"]
+    mentioned = {m for m in (mentions or []) if m and m != actor_id}
+    assignees = {a for a in (task.get("assignees") or []) if a and a != actor_id}
+    title = task.get("title") or ""
+    team_id = task.get("team_id")
+    task_id = task["id"]
+    notified = set()
+    if is_finding:
+        mention_text = f'{actor["name"]} menyebut Anda di temuan "{title}"'
+        assignee_text = f'{actor["name"]} menambahkan temuan di "{title}"'
+        mention_type = "finding"
+        assignee_type = "finding"
+    else:
+        mention_text = f'{actor["name"]} menyebut Anda di "{title}"'
+        assignee_text = f'{actor["name"]} mengomentari "{title}"'
+        mention_type = "mention"
+        assignee_type = "comment"
+    for uid in mentioned:
+        await notify(uid, mention_type, mention_text, team_id=team_id, task_id=task_id)
+        notified.add(uid)
+    for uid in assignees:
+        if uid in notified:
+            continue
+        await notify(uid, assignee_type, assignee_text, team_id=team_id, task_id=task_id)
 
 async def user_from_token(raw):
     if not raw: return None
@@ -301,6 +327,7 @@ class TaskUpdate(BaseModel):
 class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
+    is_finding: bool = False
 class LinkAttachmentInput(BaseModel):
     name: str = ""
     url: str = Field(min_length=1)
@@ -702,6 +729,7 @@ async def startup():
     await db.labels.create_index("team_id")
     await db.task_activity.create_index("task_id")
     await db.comments.create_index("task_id")
+    await db.comments.create_index([("is_finding", 1), ("task_id", 1)])
     await db.login_attempts.create_index("identifier")
     await db.team_members.create_index([("team_id", 1), ("user_id", 1)], unique=True)
     await db.team_members.create_index("user_id")
@@ -1581,17 +1609,117 @@ async def remove_attachment(task_id: str, file_id: str, user=Depends(current_use
 @api.get("/tasks/{task_id}/comments")
 async def comments(task_id: str, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)
-    return await db.comments.find({"task_id": task_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    rows = await db.comments.find({"task_id": task_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    for row in rows:
+        row["is_finding"] = bool(row.get("is_finding"))
+    return rows
 
 @api.post("/tasks/{task_id}/comments")
 async def add_comment(task_id: str, data: CommentInput, user=Depends(current_user)):
     task, role = await load_visible_task(task_id, user)
-    comment = {"id": str(uuid.uuid4()), "task_id": task_id, "body": data.body, "mentions": data.mentions, "author": user["name"], "author_id": user["id"], "created_at": now()}
+    is_finding = bool(data.is_finding)
+    comment = {
+        "id": str(uuid.uuid4()), "task_id": task_id, "body": data.body, "mentions": data.mentions,
+        "author": user["name"], "author_id": user["id"], "created_at": now(), "is_finding": is_finding,
+    }
     await db.comments.insert_one(comment); comment.pop("_id", None)
-    await log_activity(task_id, user, "comment", "menulis komentar", team_id=task["team_id"])
-    for m in data.mentions:
-        if m != user["id"]: await notify(m, "mention", f"{user['name']} menyebut Anda di \"{task['title']}\"", team_id=task["team_id"], task_id=task_id)
+    await log_activity(
+        task_id, user, "finding" if is_finding else "comment",
+        "menulis temuan" if is_finding else "menulis komentar",
+        team_id=task["team_id"],
+    )
+    await notify_task_comment(task, user, data.mentions, is_finding)
     return comment
+
+@api.get("/findings")
+async def list_findings(team_id: Optional[str] = None, q: str = "", year: Optional[int] = None, user=Depends(current_user)):
+    memberships = await db.team_members.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    role_by_team = {m["team_id"]: m["role"] for m in memberships}
+    if can_view_all_teams(user):
+        teams = await db.teams.find({}, {"_id": 0}).to_list(1000)
+    else:
+        if not memberships:
+            return {"count": 0, "team_count": 0, "teams": [], "years": [], "items": []}
+        teams = await db.teams.find({"id": {"$in": list(role_by_team.keys())}}, {"_id": 0}).to_list(500)
+    teams = [with_team_year(t) for t in teams]
+    team_map = {t["id"]: t for t in teams}
+    if team_id:
+        if team_id not in team_map:
+            raise HTTPException(403, "Anda tidak dapat melihat tim ini")
+        team_ids = [team_id]
+    else:
+        team_ids = list(team_map.keys())
+    if not team_ids:
+        return {"count": 0, "team_count": 0, "teams": [], "years": [], "items": []}
+
+    tasks = await db.tasks.find(
+        {"team_id": {"$in": team_ids}, "archived": {"$ne": True}},
+        {"_id": 0, "id": 1, "title": 1, "team_id": 1, "list_id": 1, "assignees": 1, "is_private": 1, "created_by": 1},
+    ).to_list(20000)
+    visible_tasks = []
+    for t in tasks:
+        role = role_by_team.get(t["team_id"])
+        if not role and can_view_all_teams(user):
+            role = "admin" if user.get("role") == ROLE_SUPER_ADMIN else "member"
+        if task_visible(t, user, role or "member"):
+            visible_tasks.append(t)
+    task_map = {t["id"]: t for t in visible_tasks}
+    years_all = sorted({t.get("year") for t in teams if t.get("year")}, reverse=True)
+    if not task_map:
+        return {"count": 0, "team_count": 0, "teams": [], "years": years_all, "items": []}
+
+    comments = await db.comments.find(
+        {"is_finding": True, "task_id": {"$in": list(task_map.keys())}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(5000)
+
+    list_ids = {t.get("list_id") for t in visible_tasks if t.get("list_id")}
+    lists = await db.lists.find({"id": {"$in": list(list_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(2000) if list_ids else []
+    list_map = {l["id"]: l.get("name") or "" for l in lists}
+
+    assignee_ids = {uid for t in visible_tasks for uid in (t.get("assignees") or [])}
+    users = await db.users.find({"id": {"$in": list(assignee_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(2000) if assignee_ids else []
+    user_map = {u["id"]: u.get("name") or "" for u in users}
+
+    needle = (q or "").strip().lower()
+    items = []
+    team_counts = {}
+    for c in comments:
+        task = task_map.get(c.get("task_id"))
+        if not task:
+            continue
+        team = team_map.get(task.get("team_id"))
+        if not team:
+            continue
+        ty = team.get("year")
+        if year is not None and ty != year:
+            continue
+        assignees = [{"id": uid, "name": user_map.get(uid) or ""} for uid in (task.get("assignees") or [])]
+        item = {
+            "id": c["id"], "body": c.get("body") or "", "author": c.get("author") or "",
+            "author_id": c.get("author_id"), "created_at": c.get("created_at"), "is_finding": True,
+            "task_id": task["id"], "task_title": task.get("title") or "",
+            "list_name": list_map.get(task.get("list_id")) or "",
+            "team_id": team["id"], "team_name": team.get("name") or "",
+            "team_color": team.get("color") or "", "team_year": ty,
+            "wilayah": team.get("wilayah") or "", "assignees": assignees,
+        }
+        if needle:
+            blob = " ".join([
+                item["body"], item["author"], item["task_title"], item["team_name"],
+                item["list_name"], item["wilayah"], " ".join(a["name"] for a in assignees),
+            ]).lower()
+            if needle not in blob:
+                continue
+        items.append(item)
+        team_counts[team["id"]] = team_counts.get(team["id"], 0) + 1
+
+    teams_out = [{
+        "id": tid, "name": team_map[tid].get("name"), "color": team_map[tid].get("color"),
+        "year": team_map[tid].get("year"), "count": cnt,
+    } for tid, cnt in team_counts.items()]
+    teams_out.sort(key=lambda t: (t.get("name") or "").lower())
+    return {"count": len(items), "team_count": len(teams_out), "teams": teams_out, "years": years_all, "items": items}
 
 # ---------- files ----------
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
