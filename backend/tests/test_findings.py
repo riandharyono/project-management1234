@@ -116,3 +116,29 @@ def test_finding_comment_appears_in_recap(admin, team, member):
     assert any(i["id"] == finding.json()["id"] for i in member_recap.json()["items"])
     notifs = member_s.get(f"{API}/notifications").json()["items"]
     assert any(n["task_id"] == task["id"] and n["type"] == "finding" for n in notifs)
+
+
+def test_existing_comment_can_be_marked_finding_and_deleted(admin, team, member):
+    member_s, member_u = member
+    lst = _first_list(admin, team)
+    created = admin.post(f"{API}/teams/{team['id']}/tasks", json={
+        "title": "TEST_finding_toggle_delete", "list_id": lst["id"], "assignees": [member_u["id"]],
+    })
+    task = created.json()
+    comment = admin.post(f"{API}/tasks/{task['id']}/comments", json={"body": "catatan lama"}).json()
+    assert comment["is_finding"] is False
+    marked = admin.patch(f"{API}/tasks/{task['id']}/comments/{comment['id']}", json={"is_finding": True})
+    assert marked.status_code == 200, marked.text
+    assert marked.json()["is_finding"] is True
+    recap = admin.get(f"{API}/findings", params={"team_id": team["id"]}).json()
+    assert any(i["id"] == comment["id"] for i in recap["items"])
+    unmarked = admin.patch(f"{API}/tasks/{task['id']}/comments/{comment['id']}", json={"is_finding": False})
+    assert unmarked.status_code == 200 and unmarked.json()["is_finding"] is False
+    recap2 = admin.get(f"{API}/findings", params={"team_id": team["id"]}).json()
+    assert not any(i["id"] == comment["id"] for i in recap2["items"])
+    denied = member_s.delete(f"{API}/tasks/{task['id']}/comments/{comment['id']}")
+    assert denied.status_code == 403
+    deleted = admin.delete(f"{API}/tasks/{task['id']}/comments/{comment['id']}")
+    assert deleted.status_code == 200, deleted.text
+    listed = admin.get(f"{API}/tasks/{task['id']}/comments").json()
+    assert comment["id"] not in [c["id"] for c in listed]

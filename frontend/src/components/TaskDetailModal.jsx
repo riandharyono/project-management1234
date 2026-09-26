@@ -258,6 +258,27 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setAsFinding(false);
     client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
   };
+  const toggleCommentFinding = async (comment) => {
+    try {
+      const r = await client.patch(`/tasks/${task.id}/comments/${comment.id}`, { is_finding: !comment.is_finding });
+      setComments(list => list.map(c => c.id === comment.id ? r.data : c));
+      client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
+    } catch (e) { setError(apiError(e)); }
+  };
+  const deleteComment = async (comment) => {
+    const ok = await confirm({
+      title: comment.is_finding ? "Hapus temuan ini?" : "Hapus komentar ini?",
+      body: "Komentar akan dihapus dari kartu ini dan dari rekap temuan.",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await client.delete(`/tasks/${task.id}/comments/${comment.id}`);
+      setComments(list => list.filter(c => c.id !== comment.id));
+      client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
+    } catch (e) { setError(apiError(e)); }
+  };
 
   const togglePrivate = () => patch({ is_private: !task.is_private });
   const archiveTask = async () => { await patch({ archived: true }); close(); };
@@ -627,7 +648,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
 
             <div className="td-section td-comments" data-testid="task-comments">
               <div className="td-section-head"><MessageCircle size={15} /><span>Komentar & Aktifitas</span><small>{comments.length}</small></div>
-              {comments.map(c => (
+              {comments.map(c => {
+                const canDelete = currentUser?.id === c.author_id || myRole === "admin";
+                return (
                 <div className={`comment ${c.is_finding ? "is-finding" : ""}`} key={c.id} data-testid={`comment-${c.id}`}>
                   <Avatar id={c.author_id} name={c.author} photo={members.find(m => m.id === c.author_id)?.avatar} />
                   <p>
@@ -637,9 +660,34 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                     </b>
                     <MentionText body={c.body} mentionIds={c.mentions} members={members} />
                     <small>{timeAgo(c.created_at)}</small>
+                    <span className="comment-actions">
+                      <button
+                        type="button"
+                        className={`sf-switch ${c.is_finding ? "on" : ""}`}
+                        onClick={() => toggleCommentFinding(c)}
+                        aria-pressed={!!c.is_finding}
+                        title={c.is_finding ? "Hapus tanda temuan" : "Tandai sebagai temuan"}
+                        data-testid={`comment-finding-toggle-${c.id}`}
+                      >
+                        <i />
+                      </button>
+                      <span>Temuan</span>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          className="comment-delete"
+                          onClick={() => deleteComment(c)}
+                          title="Hapus komentar"
+                          data-testid={`comment-delete-${c.id}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </span>
                   </p>
                 </div>
-              ))}
+                );
+              })}
               <div className="comment-finding-row">
                 <button
                   type="button"

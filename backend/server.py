@@ -328,6 +328,8 @@ class CommentInput(BaseModel):
     body: str = Field(min_length=1)
     mentions: List[str] = []
     is_finding: bool = False
+class CommentPatch(BaseModel):
+    is_finding: Optional[bool] = None
 class LinkAttachmentInput(BaseModel):
     name: str = ""
     url: str = Field(min_length=1)
@@ -1630,6 +1632,44 @@ async def add_comment(task_id: str, data: CommentInput, user=Depends(current_use
     )
     await notify_task_comment(task, user, data.mentions, is_finding)
     return comment
+
+async def load_task_comment(task_id, comment_id, user):
+    task, role = await load_visible_task(task_id, user)
+    comment = await db.comments.find_one({"id": comment_id, "task_id": task_id}, {"_id": 0})
+    if not comment:
+        raise HTTPException(404, "Komentar tidak ditemukan")
+    comment["is_finding"] = bool(comment.get("is_finding"))
+    return task, role, comment
+
+@api.patch("/tasks/{task_id}/comments/{comment_id}")
+async def patch_comment(task_id: str, comment_id: str, data: CommentPatch, user=Depends(current_user)):
+    task, role, comment = await load_task_comment(task_id, comment_id, user)
+    if data.is_finding is None:
+        raise HTTPException(400, "Tidak ada perubahan")
+    next_flag = bool(data.is_finding)
+    if comment["is_finding"] == next_flag:
+        return comment
+    await db.comments.update_one({"id": comment_id, "task_id": task_id}, {"$set": {"is_finding": next_flag}})
+    comment["is_finding"] = next_flag
+    if next_flag:
+        await log_activity(task_id, user, "finding", "menandai komentar sebagai temuan", team_id=task["team_id"])
+        await notify_task_comment(task, user, [], True)
+    else:
+        await log_activity(task_id, user, "comment", "menghapus tanda temuan", team_id=task["team_id"])
+    return comment
+
+@api.delete("/tasks/{task_id}/comments/{comment_id}")
+async def delete_comment(task_id: str, comment_id: str, user=Depends(current_user)):
+    task, role, comment = await load_task_comment(task_id, comment_id, user)
+    if comment.get("author_id") != user["id"] and role != "admin":
+        raise HTTPException(403, "Hanya penulis atau admin tim yang dapat menghapus komentar")
+    await db.comments.delete_one({"id": comment_id, "task_id": task_id})
+    await log_activity(
+        task_id, user, "comment",
+        "menghapus temuan" if comment.get("is_finding") else "menghapus komentar",
+        team_id=task["team_id"],
+    )
+    return {"ok": True}
 
 @api.get("/findings")
 async def list_findings(team_id: Optional[str] = None, q: str = "", year: Optional[int] = None, user=Depends(current_user)):
