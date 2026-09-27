@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Database, Flag, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun } from "lucide-react";
+import { Search, Bell, Settings, UserPlus, ShieldCheck, LayoutGrid, ClipboardList, ClipboardCheck, Database, Flag, Megaphone, CalendarClock, HelpCircle, FolderOpen, LogOut, User, Moon, Sun, ArrowLeft } from "lucide-react";
+import { BrandMark } from "./BrandMark";
 import { Avatar } from "./Avatar";
 import { applyTheme, readTheme } from "../lib/theme";
 import { currentYear, teamYear } from "../lib/years";
@@ -33,6 +34,22 @@ export function TopBar({ team, tab, onTabChange, onOpenHQ, members, myRole, onOp
   return (
     <div className="team-top">
       <div className="tt-row1">
+        <div className="m-top-head">
+          {team ? (
+            <button type="button" className="m-back" onClick={onOpenHQ} data-testid="mobile-back-home"><ArrowLeft size={20} /></button>
+          ) : (
+            <BrandMark size={28} />
+          )}
+          <div className="m-top-title">
+            <b>{team ? team.name : "FallenStar"}</b>
+            {team && <small>{activeTabLabel || "Ringkasan"}{teamYear(team) !== currentYear() ? ` · ${teamYear(team)}` : ""}</small>}
+          </div>
+          {team && myRole === "admin" ? (
+            <button type="button" className="icon-button" onClick={onOpenSettings} data-testid="mobile-team-settings"><Settings size={18} /></button>
+          ) : (
+            <button type="button" className="icon-button" onClick={onOpenProfile} data-testid="mobile-open-profile"><Avatar id={user.id} name={user.name} photo={user.avatar} /></button>
+          )}
+        </div>
         <div className="tt-crumb">
           <span onClick={onOpenHQ} data-testid="breadcrumb-home">Beranda</span>
           {team && <><b>›</b><span className="tt-current">{team.name}{teamYear(team) !== currentYear() ? ` · ${teamYear(team)}` : ""}</span></>}

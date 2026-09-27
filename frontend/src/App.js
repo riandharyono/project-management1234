@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import "@/App.css"; import "@/extra.css"; import "@/team.css";
+import "@/App.css"; import "@/extra.css"; import "@/team.css"; import "@/mobile.css";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { client, apiError } from "./lib/api";
-import { canCreateTeam } from "./lib/roles";
+import { canCreateTeam, canViewAllTeams, isSuperAdmin } from "./lib/roles";
 import { BrandMark } from "./components/BrandMark";
 import loginPhoto from "./assets/login-photo.jpg";
 import { Sidebar } from "./components/Sidebar";
@@ -26,6 +26,9 @@ import { NotificationsPanel } from "./components/NotificationsPanel";
 import { UserAdminPage } from "./components/UserAdminPage";
 import { DashboardPage } from "./components/DashboardPage";
 import { CommandPalette } from "./components/CommandPalette";
+import { MobileNav } from "./components/MobileNav";
+import { MobileMenu } from "./components/MobileMenu";
+import { applyTheme, readTheme } from "./lib/theme";
 
 const NOTIF_TITLES = { mention: "Anda Disebut", announcement: "Pengumuman Baru", answer: "Check-in dijawab", assignment: "Ditugaskan ke Anda", deadline: "Tenggat Tugas", question: "Check-in rutin", comment: "Komentar Tugas", finding: "Temuan Baru" };
 const ORIGINAL_TITLE = document.title;
@@ -150,6 +153,8 @@ function Workspace({ user, onLogout, onUserUpdate }) {
   const [findingsOpen, setFindingsOpen] = useState(urlParams.get("page") === "findings");
   const [profileOpen, setProfileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileTheme, setMobileTheme] = useState(readTheme);
   const [boardLoading, setBoardLoading] = useState(!!urlParams.get("team"));
   const skipUrl = useRef(false);
   const bootUrl = useRef(true);
@@ -383,6 +388,7 @@ function Workspace({ user, onLogout, onUserUpdate }) {
             onCreateTeam={() => canCreateTeam(user) && setCreateTeamOpen(true)}
             onOpenRecap={openRecap}
             onOpenFindings={openFindings}
+            onOpenPalette={() => setPaletteOpen(true)}
             onOpenMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); setRecapOpen(false); setFindingsOpen(false); }} />
         ) : tab === "overview" ? (
           <TeamOverview team={activeTeam} tasks={tasks.filter(t => !t.archived)} listsById={listsById} members={members} onNavigate={setTab}
@@ -448,6 +454,36 @@ function Workspace({ user, onLogout, onUserUpdate }) {
           onOpenDocuments={d => { if (d.team_id) { setActiveTeamId(d.team_id); setTab("documents"); } }}
         />
       </main>
+      <MobileNav
+        active={mobileMenuOpen ? "menu" : notifOpen ? "notif" : paletteOpen ? "search" : (activeTeam && tab === "tasks" ? "tasks" : "home")}
+        unread={notif.unread}
+        onHome={() => { setMobileMenuOpen(false); setNotifOpen(false); if (activeTeam) setTab("overview"); else goHQ(); }}
+        onNotif={() => { setMobileMenuOpen(false); setNotifOpen(o => !o); }}
+        onTasks={() => {
+          setMobileMenuOpen(false); setNotifOpen(false);
+          if (activeTeam) setTab("tasks");
+          else if (teams[0]) selectTeam(teams[0].id, "tasks");
+        }}
+        onSearch={() => { setMobileMenuOpen(false); setNotifOpen(false); setPaletteOpen(true); }}
+        onMenu={() => { setNotifOpen(false); setMobileMenuOpen(o => !o); }}
+      />
+      <MobileMenu
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        user={user}
+        canCreate={canCreateTeam(user)}
+        canMonitor={canViewAllTeams(user)}
+        isSuperAdmin={isSuperAdmin(user)}
+        theme={mobileTheme}
+        onTheme={() => setMobileTheme(applyTheme(mobileTheme === "dark" ? "light" : "dark"))}
+        onProfile={() => setProfileOpen(true)}
+        onRecap={openRecap}
+        onFindings={openFindings}
+        onMonitoring={() => { setActiveTeamId(null); setMonitoringOpen(true); setUserAdminOpen(false); setRecapOpen(false); setFindingsOpen(false); }}
+        onUsers={() => { setActiveTeamId(null); setUserAdminOpen(true); setMonitoringOpen(false); setRecapOpen(false); setFindingsOpen(false); }}
+        onCreateTeam={() => setCreateTeamOpen(true)}
+        onLogout={onLogout}
+      />
     </div>
   );
 }

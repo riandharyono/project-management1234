@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Database, LayoutDashboard, MessageCircle, Plus, UserX } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Database, LayoutDashboard, MessageCircle, Plus, Search, UserX } from "lucide-react";
 import { client, shortDate, timeAgo } from "../lib/api";
 import { canCreateTeam, canViewAllTeams } from "../lib/roles";
 import { EmptyState } from "./EmptyState";
@@ -36,7 +36,7 @@ const ATTENTION_ICON = {
 };
 
 export function DashboardPage({
-  user, onOpenTeam, onOpenTask, onOpenMention, onCreateTeam, onOpenRecap, onOpenFindings, onOpenMonitoring,
+  user, onOpenTeam, onOpenTask, onOpenMention, onCreateTeam, onOpenRecap, onOpenFindings, onOpenMonitoring, onOpenPalette,
 }) {
   const [year, setYear] = useState(currentYear());
   const [data, setData] = useState(null);
@@ -105,8 +105,39 @@ export function DashboardPage({
         <button type="button" className={year === "all" ? "active" : ""} onClick={() => setYear("all")} data-testid="dashboard-year-all">Semua tahun</button>
       </div>
 
+      <div className="m-hq" data-testid="mobile-hq">
+        <div className="m-hq-search">
+          <Search size={14} />
+          <input readOnly placeholder="Cari tim" onFocus={onOpenPalette} onClick={onOpenPalette} data-testid="mobile-hq-search" />
+        </div>
+        {data?.teams?.length ? (
+          Object.entries(data.teams.reduce((acc, t) => {
+            const key = t.wilayah || "Tim";
+            (acc[key] ||= []).push(t);
+            return acc;
+          }, {})).map(([group, list]) => (
+            <section key={group} className="m-hq-group">
+              <header>
+                <h2>{group}</h2>
+                {canCreateTeam(user) && <button type="button" className="m-hq-add" onClick={onCreateTeam} data-testid="mobile-create-team"><Plus size={16} /></button>}
+              </header>
+              <div className="m-hq-tiles">
+                {list.map(t => (
+                  <button key={t.team_id} type="button" className="m-hq-tile" onClick={() => onOpenTeam?.(t.team_id, "overview")} data-testid={`mobile-hq-team-${t.team_id}`}>
+                    <b>{t.team_name}</b>
+                    <i style={{ background: t.team_color || "var(--accent)" }} />
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))
+        ) : data ? (
+          <p className="muted">Belum ada tim.</p>
+        ) : <p className="muted">Memuat…</p>}
+      </div>
+
       {!data ? (
-        <p className="muted">Memuat dashboard…</p>
+        <p className="muted dash-desktop">Memuat dashboard…</p>
       ) : (
         <>
           <div className="dash-kpis" data-testid="dashboard-kpis">

@@ -1,12 +1,22 @@
-import { ClipboardList, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle, Link2 } from "lucide-react";
-import { shortDate, localISODate, safeHttpUrl } from "../lib/api";
+import { ClipboardList, Megaphone, CalendarClock, HelpCircle, FolderOpen, AlertCircle, Link2, ClipboardCheck, Flag } from "lucide-react";
+import { shortDate, localISODate, safeHttpUrl, isDueReached } from "../lib/api";
 import { currentYear, teamYear } from "../lib/years";
+import { Avatar } from "./Avatar";
 
 const CARDS = [
   { key: "announcements", label: "Pengumuman", icon: Megaphone, tone: "amber" },
   { key: "schedule", label: "Jadwal", icon: CalendarClock, tone: "violet" },
   { key: "questions", label: "Check-in", icon: HelpCircle, tone: "pink" },
   { key: "documents", label: "Dokumen", icon: FolderOpen, tone: "indigo" },
+];
+
+const MOBILE_TILES = [
+  { key: "data-requests", label: "Permintaan Data", icon: ClipboardCheck, tone: "blue" },
+  { key: "announcements", label: "Pengumuman", icon: Megaphone, tone: "amber" },
+  { key: "schedule", label: "Jadwal", icon: CalendarClock, tone: "violet" },
+  { key: "questions", label: "Check-in", icon: HelpCircle, tone: "pink" },
+  { key: "documents", label: "Dokumen & File", icon: FolderOpen, tone: "indigo" },
+  { key: "findings", label: "Temuan", icon: Flag, tone: "rose" },
 ];
 
 function deadlineTone(date, today) {
@@ -37,8 +47,34 @@ export function TeamOverview({ team, tasks, listsById, members, onNavigate, onOp
   const pct = total ? Math.round((progressSum / total) * 100) : 0;
   const overdue = open.filter(t => t.due_date && t.due_date < today);
   const dueToday = open.filter(t => t.due_date === today);
+  const preview = open.slice(0, 3);
   return (
     <div className="page overview-page">
+      <div className="m-overview" data-testid="mobile-overview-tiles">
+        <div className="m-tile m-tile-tasks" data-testid="mobile-overview-card-tasks">
+          <h3 onClick={() => onNavigate("tasks")}>Tugas</h3>
+          {preview.length ? preview.map(t => {
+            const list = listsById[t.list_id];
+            const overdue = isDueReached(t.due_date, { done: list?.is_done, cancelled: list?.is_cancelled });
+            const who = (members || []).find(m => (t.assignees || []).includes(m.id));
+            return (
+              <div key={t.id} className="m-tile-task" onClick={e => { e.stopPropagation(); onOpenTask?.(t); }}>
+                <b>{t.title}</b>
+                <span className="m-tile-task-meta">
+                  {t.due_date && <span className={`due ${overdue ? "overdue" : "upcoming"}`}>{shortDate(t.due_date)}</span>}
+                  {who && <Avatar id={who.id} name={who.name} photo={who.avatar} />}
+                </span>
+              </div>
+            );
+          }) : <p className="muted">Belum ada tugas berjalan.</p>}
+        </div>
+        {MOBILE_TILES.map(c => (
+          <button key={c.key} type="button" className={`m-tile m-tile-icon tone-${c.tone}`} onClick={() => onNavigate(c.key)} data-testid={`mobile-overview-card-${c.key}`}>
+            <h3>{c.label}</h3>
+            <span className="m-tile-art"><c.icon size={42} /></span>
+          </button>
+        ))}
+      </div>
       <div className="page-heading">
         <div>
           <h1>{team.name} <small className="year-badge">{teamYear(team)}{teamYear(team) < currentYear() ? " · arsip" : ""}{team.wilayah ? ` · ${team.wilayah}` : ""}</small></h1>

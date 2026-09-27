@@ -10,7 +10,7 @@ import { priorityLabel, priorityKey } from "../lib/priority";
 import { linkedDataSummary } from "../lib/dataDocs";
 import { TitleHtml } from "./TitleEditor";
 
-export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onReload, boardLoading }) {
+export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole, onOpenTask, onReload, boardLoading, onCreateTask }) {
   const [localTasks, setLocalTasks] = useState(tasks);
   const [localLists, setLocalLists] = useState(lists);
   const [view, setView] = useState(() => { try { return localStorage.getItem(`pmng_view_${team.id}`) || "kanban"; } catch (e) { return "kanban"; } });
@@ -416,6 +416,18 @@ export function KanbanBoard({ team, teams, lists, tasks, members, labels, myRole
         <TaskQuickMenu task={quickMenuTask} team={team} teams={teams} members={members} teamLabels={labels} myRole={myRole}
           onClose={() => setQuickMenuTask(null)} onReload={onReload} />
       )}
+      <button
+        type="button"
+        className="m-fab"
+        onClick={() => {
+          const first = visibleLists[0];
+          if (onCreateTask && first) onCreateTask(first.id);
+          else if (first) { setAddingList(first.id); setNewTitle(""); setAddAssignees([]); }
+        }}
+        data-testid="mobile-fab-add-task"
+      >
+        <Plus size={26} />
+      </button>
     </div>
   );
 }
