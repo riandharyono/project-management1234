@@ -142,3 +142,42 @@ def test_existing_comment_can_be_marked_finding_and_deleted(admin, team, member)
     assert deleted.status_code == 200, deleted.text
     listed = admin.get(f"{API}/tasks/{task['id']}/comments").json()
     assert comment["id"] not in [c["id"] for c in listed]
+
+
+def test_comment_body_can_be_edited(admin, team, member):
+    member_s, member_u = member
+    lst = _first_list(admin, team)
+    created = admin.post(f"{API}/teams/{team['id']}/tasks", json={
+        "title": "TEST_comment_edit", "list_id": lst["id"], "assignees": [member_u["id"]],
+    })
+    task = created.json()
+    comment = admin.post(f"{API}/tasks/{task['id']}/comments", json={"body": "versi awal"}).json()
+    denied = member_s.patch(f"{API}/tasks/{task['id']}/comments/{comment['id']}", json={"body": "diubah member"})
+    assert denied.status_code == 403
+    edited = admin.patch(f"{API}/tasks/{task['id']}/comments/{comment['id']}", json={"body": "versi baru"})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["body"] == "versi baru"
+    assert edited.json().get("edited_at")
+
+
+def test_answer_and_schedule_can_be_updated(admin, team, member):
+    member_s, member_u = member
+    q = admin.post(f"{API}/teams/{team['id']}/questions", json={"title": "TEST_q", "body": "tanya"}).json()
+    ans = member_s.post(f"{API}/questions/{q['id']}/answers", json={"body": "jawab awal"}).json()
+    edited = member_s.patch(f"{API}/questions/{q['id']}/answers/{ans['id']}", json={"body": "jawab diedit"})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["body"] == "jawab diedit"
+    denied = admin.patch(f"{API}/questions/{q['id']}/answers/{ans['id']}", json={"body": "admin ubah"})
+    assert denied.status_code == 200
+    deleted = member_s.delete(f"{API}/questions/{q['id']}/answers/{ans['id']}")
+    assert deleted.status_code == 200
+    listed = admin.get(f"{API}/teams/{team['id']}/questions").json()
+    got = next(x for x in listed if x["id"] == q["id"])
+    assert ans["id"] not in [a["id"] for a in got.get("answers") or []]
+    sched = admin.post(f"{API}/teams/{team['id']}/question-schedules", json={
+        "title": "TEST_sched", "body": "rutin", "days": [0, 2], "time": "09:00", "recipients": [member_u["id"]], "secret": False,
+    }).json()
+    patched = admin.patch(f"{API}/question-schedules/{sched['id']}", json={"time": "14:30", "days": [1, 3]})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["time"] == "14:30"
+    assert patched.json()["days"] == [1, 3]

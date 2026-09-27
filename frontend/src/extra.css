@@ -20,11 +20,19 @@ html[data-theme="dark"] .finding-badge { color: #F8E6B8; background: #5A3E10; }
 .comment-actions .sf-switch { width: 32px; height: 18px; }
 .comment-actions .sf-switch i { width: 14px; height: 14px; }
 .comment-actions .sf-switch.on i { left: 16px; }
-.comment-delete {
+.comment-delete, .comment-edit-btn {
   margin-left: auto; border: 0; background: none; color: var(--muted); padding: 4px; border-radius: 6px; cursor: pointer;
   display: inline-flex; align-items: center;
 }
+.comment-edit-btn { margin-left: 4px; }
+.comment-edit-btn:hover { color: var(--accent); background: var(--accent-tint); }
 .comment-delete:hover { color: var(--danger); background: var(--danger-tint); }
+.comment-edit { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.comment-edit textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  font: inherit; font-size: 13px; background: var(--surface); resize: vertical; min-height: 64px;
+}
+.comment-edit-actions { display: flex; gap: 8px; }
 .comment small, .member-row small { display: block; color: var(--muted); font-size: 10px; font-family: var(--font-mono); }
 
 .comment-compose { display: flex; gap: 7px; margin-top: 12px; }

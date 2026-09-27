@@ -19,6 +19,9 @@ export function Questions({ team, members, currentUser, myRole }) {
   const [answerText, setAnswerText] = useState("");
   const [editingQId, setEditingQId] = useState(null);
   const [editQForm, setEditQForm] = useState({ title: "", body: "", mentions: [] });
+  const [editingAnswerId, setEditingAnswerId] = useState(null);
+  const [editAnswerText, setEditAnswerText] = useState("");
+  const [editingSchedId, setEditingSchedId] = useState(null);
   const [error, setError] = useState("");
   const confirm = useConfirm();
 
@@ -36,15 +39,53 @@ export function Questions({ team, members, currentUser, myRole }) {
   const submitSchedule = async e => {
     e.preventDefault();
     try {
-      await client.post(`/teams/${team.id}/question-schedules`, schedForm);
+      if (editingSchedId) {
+        await client.patch(`/question-schedules/${editingSchedId}`, schedForm);
+        setEditingSchedId(null);
+      } else {
+        await client.post(`/teams/${team.id}/question-schedules`, schedForm);
+      }
       setSchedForm({ title: "", body: "", days: [0], time: "09:00", recipients: [], secret: false });
       setMode(null); loadSchedules();
     } catch (x) { setError(apiError(x)); }
   };
-  const removeSchedule = async id => { await client.delete(`/question-schedules/${id}`); loadSchedules(); };
+  const startEditSchedule = s => {
+    setEditingSchedId(s.id);
+    setSchedForm({
+      title: s.title || "", body: s.body || "", days: s.days || [0],
+      time: s.time || "09:00", recipients: s.recipients || [], secret: !!s.secret,
+    });
+    setMode("schedule");
+  };
+  const cancelScheduleForm = () => {
+    setMode(null);
+    setEditingSchedId(null);
+    setSchedForm({ title: "", body: "", days: [0], time: "09:00", recipients: [], secret: false });
+  };
+  const removeSchedule = async id => {
+    const ok = await confirm({ title: "Hapus jadwal check-in ini?", body: "Jadwal tidak akan terkirim lagi.", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
+    await client.delete(`/question-schedules/${id}`);
+    if (editingSchedId === id) cancelScheduleForm();
+    loadSchedules();
+  };
   const toggleDay = d => setSchedForm(f => ({ ...f, days: f.days.includes(d) ? f.days.filter(x => x !== d) : [...f.days, d].sort() }));
   const toggleRecipient = id => setSchedForm(f => ({ ...f, recipients: f.recipients.includes(id) ? f.recipients.filter(x => x !== id) : [...f.recipients, id] }));
   const answer = async id => { if (!answerText.trim()) return; await client.post(`/questions/${id}/answers`, { body: answerText }); setAnswerText(""); load(); };
+  const startEditAnswer = a => { setEditingAnswerId(a.id); setEditAnswerText(a.body || ""); };
+  const saveEditAnswer = async (questionId, answerId) => {
+    if (!editAnswerText.trim()) return;
+    try {
+      await client.patch(`/questions/${questionId}/answers/${answerId}`, { body: editAnswerText.trim() });
+      setEditingAnswerId(null); load();
+    } catch (x) { setError(apiError(x)); }
+  };
+  const removeAnswer = async (questionId, answerId) => {
+    const ok = await confirm({ title: "Hapus jawaban ini?", confirmLabel: "Hapus", danger: true });
+    if (!ok) return;
+    try { await client.delete(`/questions/${questionId}/answers/${answerId}`); load(); }
+    catch (x) { setError(apiError(x)); }
+  };
   const startEditQuestion = q => { setEditingQId(q.id); setEditQForm({ title: q.title, body: q.body, mentions: q.mentions || [] }); setExpanded(q.id); };
   const saveEditQuestion = async () => {
     try { await client.patch(`/questions/${editingQId}`, editQForm); setEditingQId(null); load(); }
@@ -62,7 +103,7 @@ export function Questions({ team, members, currentUser, myRole }) {
       <div className="page-heading">
         <div><p className="eyebrow">CHECK-IN</p><h1>Check-in tim</h1><p className="muted">Ajukan check-in dan dapatkan jawaban dari anggota tim.</p></div>
         <div className="kb-toolbar-actions">
-          <button className="secondary" onClick={() => setMode(mode === "schedule" ? null : "schedule")} data-testid="schedule-question-button"><Clock size={14} /> Jadwalkan</button>
+          <button className="secondary" onClick={() => mode === "schedule" ? cancelScheduleForm() : setMode("schedule")} data-testid="schedule-question-button"><Clock size={14} /> Jadwalkan</button>
           <button className="primary" onClick={() => setMode(mode === "once" ? null : "once")} data-testid="create-question-button"><Plus size={16} /> Ajukan Check-in</button>
         </div>
       </div>
@@ -109,7 +150,10 @@ export function Questions({ team, members, currentUser, myRole }) {
           </label>
 
           {error && <div className="error">{error}</div>}
-          <div><button className="primary" data-testid="publish-schedule-button">Publikasikan</button><button type="button" className="danger-link" onClick={() => setMode(null)}>Batal</button></div>
+          <div>
+            <button className="primary" data-testid="publish-schedule-button">{editingSchedId ? "Simpan jadwal" : "Publikasikan"}</button>
+            <button type="button" className="danger-link" onClick={cancelScheduleForm}>Batal</button>
+          </div>
         </form>
       )}
 
@@ -119,7 +163,12 @@ export function Questions({ team, members, currentUser, myRole }) {
             <div className="schedule-row" key={s.id} data-testid={`question-schedule-${s.id}`}>
               <Clock size={14} />
               <div><b>{s.title}</b><small>{s.days.map(d => DAYS[d]).join(", ")} · {s.time} · {s.recipients.length} penerima{s.secret ? " · rahasia" : ""}</small></div>
-              <button className="danger-link" onClick={() => removeSchedule(s.id)} data-testid={`delete-schedule-${s.id}`}><Trash2 size={13} /></button>
+              {(s.created_by === currentUser.id || myRole === "admin") && (
+                <>
+                  <button className="icon-button" onClick={() => startEditSchedule(s)} data-testid={`edit-schedule-${s.id}`}><Pencil size={13} /></button>
+                  <button className="danger-link" onClick={() => removeSchedule(s.id)} data-testid={`delete-schedule-${s.id}`}><Trash2 size={13} /></button>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -149,9 +198,34 @@ export function Questions({ team, members, currentUser, myRole }) {
                     <div><button className="primary" onClick={saveEditQuestion} data-testid={`save-question-${q.id}`}>Simpan</button><button type="button" className="secondary" onClick={() => setEditingQId(null)} data-testid={`cancel-edit-question-${q.id}`}>Batal</button></div>
                   </div>
                 ) : <p><MentionText body={q.body} mentionIds={q.mentions} members={members} /></p>}
-                {q.answers.map(a => (
-                  <div className="comment" key={a.id}><Avatar id={a.author_id} name={a.author} photo={members.find(m => m.id === a.author_id)?.avatar} /><p><b>{a.author}</b>{a.body}<small>{timeAgo(a.created_at)}</small></p></div>
-                ))}
+                {q.answers.map(a => {
+                  const canModifyAnswer = a.author_id === currentUser.id || myRole === "admin";
+                  return (
+                    <div className="comment" key={a.id} data-testid={`answer-${a.id}`}>
+                      <Avatar id={a.author_id} name={a.author} photo={members.find(m => m.id === a.author_id)?.avatar} />
+                      {editingAnswerId === a.id ? (
+                        <div className="comment-edit">
+                          <textarea value={editAnswerText} onChange={e => setEditAnswerText(e.target.value)} data-testid={`answer-edit-input-${a.id}`} />
+                          <div className="comment-edit-actions">
+                            <button type="button" className="primary" onClick={() => saveEditAnswer(q.id, a.id)} data-testid={`answer-edit-save-${a.id}`}>Simpan</button>
+                            <button type="button" className="secondary" onClick={() => setEditingAnswerId(null)}>Batal</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p>
+                          <b>{a.author}</b>{a.body}
+                          <small>{timeAgo(a.created_at)}{a.edited_at ? " · diedit" : ""}</small>
+                          {canModifyAnswer && (
+                            <span className="comment-actions">
+                              <button type="button" className="comment-edit-btn" onClick={() => startEditAnswer(a)} data-testid={`answer-edit-${a.id}`}><Pencil size={13} /></button>
+                              <button type="button" className="comment-delete" onClick={() => removeAnswer(q.id, a.id)} data-testid={`answer-delete-${a.id}`}><Trash2 size={13} /></button>
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="comment-compose"><input value={answerText} onChange={e => setAnswerText(e.target.value)} placeholder="Tulis jawaban…" data-testid={`answer-input-${q.id}`} /><button className="primary" onClick={() => answer(q.id)} data-testid={`answer-submit-${q.id}`}>Kirim</button></div>
               </div>
             )}

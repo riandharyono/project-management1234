@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileOutput, Flag, Search } from "lucide-react";
-import { client, timeAgo } from "../lib/api";
+import { Download, FileOutput, Flag, Search, Trash2 } from "lucide-react";
+import { client, timeAgo, apiError } from "../lib/api";
 import { EmptyState } from "./EmptyState";
+import { useConfirm } from "./ConfirmDialog";
 import { downloadFindingsCsv, downloadFindingsPdf } from "../lib/exportFindings";
 
 export function FindingsRecapPage({ teamId, onOpenTask, onOpenTeam }) {
@@ -9,6 +10,8 @@ export function FindingsRecapPage({ teamId, onOpenTask, onOpenTeam }) {
   const [q, setQ] = useState("");
   const [teamFilter, setTeamFilter] = useState(teamId || "all");
   const [year, setYear] = useState("all");
+  const [error, setError] = useState("");
+  const confirm = useConfirm();
 
   useEffect(() => {
     setTeamFilter(teamId || "all");
@@ -56,6 +59,26 @@ export function FindingsRecapPage({ teamId, onOpenTask, onOpenTeam }) {
     }
   };
 
+  const unmarkFinding = async (it) => {
+    try {
+      await client.patch(`/tasks/${it.task_id}/comments/${it.id}`, { is_finding: false });
+      setData(prev => prev ? { ...prev, items: (prev.items || []).filter(x => x.id !== it.id), count: Math.max(0, (prev.count || 1) - 1) } : prev);
+    } catch (e) { setError(apiError(e)); }
+  };
+  const deleteFinding = async (it) => {
+    const ok = await confirm({
+      title: "Hapus temuan ini?",
+      body: "Komentar akan dihapus dari kartu tugas dan dari rekap ini.",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await client.delete(`/tasks/${it.task_id}/comments/${it.id}`);
+      setData(prev => prev ? { ...prev, items: (prev.items || []).filter(x => x.id !== it.id), count: Math.max(0, (prev.count || 1) - 1) } : prev);
+    } catch (e) { setError(apiError(e)); }
+  };
+
   return (
     <div className="page recap-page findings-page" data-testid="findings-recap-page">
       <div className="page-heading">
@@ -89,6 +112,7 @@ export function FindingsRecapPage({ teamId, onOpenTask, onOpenTeam }) {
             <div className="dr-stat ok"><b>{new Set(filtered.map(i => i.task_id)).size}</b><span>Tugas</span></div>
           </div>
 
+          {error && <div className="error">{error}</div>}
           <div className="recap-filters" data-testid="findings-filters">
             <label className="recap-search">
               <Search size={14} />
@@ -135,10 +159,18 @@ export function FindingsRecapPage({ teamId, onOpenTask, onOpenTeam }) {
                   </button>
                   <p className="finding-body">{it.body}</p>
                   <footer>
-                    <span>Oleh {it.author}</span>
+                    <span>Oleh {it.author}{it.edited_at ? " · diedit" : ""}</span>
                     {!!(it.assignees || []).length && (
                       <span>Ditugasi {(it.assignees || []).map(a => a.name).filter(Boolean).join(", ")}</span>
                     )}
+                    <span className="finding-card-actions">
+                      <button type="button" className="secondary" onClick={() => unmarkFinding(it)} data-testid={`finding-unmark-${it.id}`}>Lepas temuan</button>
+                      {it.can_delete && (
+                        <button type="button" className="comment-delete" onClick={() => deleteFinding(it)} title="Hapus" data-testid={`finding-delete-${it.id}`}>
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </span>
                   </footer>
                 </article>
               ))}

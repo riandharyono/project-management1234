@@ -3,6 +3,7 @@ import { X, Plus, Paperclip, CheckSquare, Tag, CalendarClock, Repeat, Image as I
 import { client, apiError, fileUrl, formatSize, timeAgo, shortDate, LABEL_COLORS, isDueReached, attachmentHref } from "../lib/api";
 import { Avatar } from "./Avatar";
 import { MentionBox } from "./MentionBox";
+import { MentionTextarea } from "./MentionTextarea";
 import { MentionText } from "./MentionText";
 import { RichTextEditor, sanitizeNotesHtml } from "./RichTextEditor";
 import { CopyMoveModal } from "./CopyMoveModal";
@@ -43,6 +44,9 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
   const [copyMoveMode, setCopyMoveMode] = useState(null);
   const [activityExpanded, setActivityExpanded] = useState(false);
   const [asFinding, setAsFinding] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentBody, setEditCommentBody] = useState("");
+  const [editCommentMentions, setEditCommentMentions] = useState([]);
   const [linkName, setLinkName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [dataCatalog, setDataCatalog] = useState([]);
@@ -64,6 +68,7 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     setPanel(null);
     setActivityExpanded(false);
     setAsFinding(false);
+    setEditingCommentId(null);
   }, [initialTask.id]);
   useEffect(() => {
     client.get(`/tasks/${task.id}/comments`).then(r => setComments(r.data)).catch(() => setComments([]));
@@ -262,6 +267,22 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
     try {
       const r = await client.patch(`/tasks/${task.id}/comments/${comment.id}`, { is_finding: !comment.is_finding });
       setComments(list => list.map(c => c.id === comment.id ? r.data : c));
+      client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
+    } catch (e) { setError(apiError(e)); }
+  };
+  const startEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentBody(comment.body || "");
+    setEditCommentMentions(comment.mentions || []);
+  };
+  const saveEditComment = async (comment) => {
+    if (!editCommentBody.trim()) return;
+    try {
+      const r = await client.patch(`/tasks/${task.id}/comments/${comment.id}`, {
+        body: editCommentBody.trim(), mentions: editCommentMentions,
+      });
+      setComments(list => list.map(c => c.id === comment.id ? r.data : c));
+      setEditingCommentId(null);
       client.get(`/tasks/${task.id}/activity`).then(x => setActivity(x.data || [])).catch(() => {});
     } catch (e) { setError(apiError(e)); }
   };
@@ -649,17 +670,32 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
             <div className="td-section td-comments" data-testid="task-comments">
               <div className="td-section-head"><MessageCircle size={15} /><span>Komentar & Aktifitas</span><small>{comments.length}</small></div>
               {comments.map(c => {
-                const canDelete = currentUser?.id === c.author_id || myRole === "admin";
+                const canModify = currentUser?.id === c.author_id || myRole === "admin";
                 return (
                 <div className={`comment ${c.is_finding ? "is-finding" : ""}`} key={c.id} data-testid={`comment-${c.id}`}>
                   <Avatar id={c.author_id} name={c.author} photo={members.find(m => m.id === c.author_id)?.avatar} />
+                  {editingCommentId === c.id ? (
+                    <div className="comment-edit" data-testid={`comment-edit-form-${c.id}`}>
+                      <MentionTextarea
+                        members={members}
+                        value={editCommentBody}
+                        onChange={(body, mentions) => { setEditCommentBody(body); setEditCommentMentions(mentions); }}
+                        testId={`comment-edit-input-${c.id}`}
+                        autoFocus
+                      />
+                      <div className="comment-edit-actions">
+                        <button type="button" className="primary" onClick={() => saveEditComment(c)} data-testid={`comment-edit-save-${c.id}`}>Simpan</button>
+                        <button type="button" className="secondary" onClick={() => setEditingCommentId(null)} data-testid={`comment-edit-cancel-${c.id}`}>Batal</button>
+                      </div>
+                    </div>
+                  ) : (
                   <p>
                     <b>
                       {c.author}
                       {c.is_finding ? <span className="finding-badge" data-testid={`comment-finding-badge-${c.id}`}>Temuan</span> : null}
                     </b>
                     <MentionText body={c.body} mentionIds={c.mentions} members={members} />
-                    <small>{timeAgo(c.created_at)}</small>
+                    <small>{timeAgo(c.created_at)}{c.edited_at ? " · diedit" : ""}</small>
                     <span className="comment-actions">
                       <button
                         type="button"
@@ -672,19 +708,19 @@ export function TaskDetailModal({ task: initialTask, team, teams, lists, members
                         <i />
                       </button>
                       <span>Temuan</span>
-                      {canDelete && (
-                        <button
-                          type="button"
-                          className="comment-delete"
-                          onClick={() => deleteComment(c)}
-                          title="Hapus komentar"
-                          data-testid={`comment-delete-${c.id}`}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                      {canModify && (
+                        <>
+                          <button type="button" className="comment-edit-btn" onClick={() => startEditComment(c)} title="Edit komentar" data-testid={`comment-edit-${c.id}`}>
+                            <Pencil size={13} />
+                          </button>
+                          <button type="button" className="comment-delete" onClick={() => deleteComment(c)} title="Hapus komentar" data-testid={`comment-delete-${c.id}`}>
+                            <Trash2 size={13} />
+                          </button>
+                        </>
                       )}
                     </span>
                   </p>
+                  )}
                 </div>
                 );
               })}

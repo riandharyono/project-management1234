@@ -330,6 +330,8 @@ class CommentInput(BaseModel):
     is_finding: bool = False
 class CommentPatch(BaseModel):
     is_finding: Optional[bool] = None
+    body: Optional[str] = None
+    mentions: Optional[List[str]] = None
 class LinkAttachmentInput(BaseModel):
     name: str = ""
     url: str = Field(min_length=1)
@@ -359,6 +361,7 @@ class QuestionPatch(BaseModel):
     body: Optional[str] = None
     mentions: Optional[List[str]] = None
 class AnswerInput(BaseModel): body: str = Field(min_length=1)
+class AnswerPatch(BaseModel): body: str = Field(min_length=1)
 class QuestionScheduleInput(BaseModel):
     title: str = Field(min_length=1)
     body: str = ""
@@ -366,6 +369,13 @@ class QuestionScheduleInput(BaseModel):
     time: str = Field(pattern=r"^\d{2}:\d{2}$")
     recipients: List[str] = []
     secret: bool = False
+class QuestionSchedulePatch(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    days: Optional[List[int]] = None
+    time: Optional[str] = None
+    recipients: Optional[List[str]] = None
+    secret: Optional[bool] = None
 class LabelInput(BaseModel):
     name: str = Field(min_length=1)
     color: str = "#2879ed"
@@ -1644,18 +1654,36 @@ async def load_task_comment(task_id, comment_id, user):
 @api.patch("/tasks/{task_id}/comments/{comment_id}")
 async def patch_comment(task_id: str, comment_id: str, data: CommentPatch, user=Depends(current_user)):
     task, role, comment = await load_task_comment(task_id, comment_id, user)
-    if data.is_finding is None:
-        raise HTTPException(400, "Tidak ada perubahan")
-    next_flag = bool(data.is_finding)
-    if comment["is_finding"] == next_flag:
+    updates = {}
+    if data.body is not None or data.mentions is not None:
+        if comment.get("author_id") != user["id"] and role != "admin":
+            raise HTTPException(403, "Hanya penulis atau admin tim yang dapat mengubah komentar")
+        if data.body is not None:
+            body = data.body.strip()
+            if not body:
+                raise HTTPException(400, "Komentar tidak boleh kosong")
+            if body != (comment.get("body") or ""):
+                updates["body"] = body
+        if data.mentions is not None:
+            updates["mentions"] = data.mentions
+        if updates:
+            updates["edited_at"] = now()
+    if data.is_finding is not None:
+        next_flag = bool(data.is_finding)
+        if next_flag != comment["is_finding"]:
+            updates["is_finding"] = next_flag
+    if not updates:
         return comment
-    await db.comments.update_one({"id": comment_id, "task_id": task_id}, {"$set": {"is_finding": next_flag}})
-    comment["is_finding"] = next_flag
-    if next_flag:
+    await db.comments.update_one({"id": comment_id, "task_id": task_id}, {"$set": updates})
+    comment.update(updates)
+    comment["is_finding"] = bool(comment.get("is_finding"))
+    if updates.get("is_finding") is True:
         await log_activity(task_id, user, "finding", "menandai komentar sebagai temuan", team_id=task["team_id"])
         await notify_task_comment(task, user, [], True)
-    else:
+    elif updates.get("is_finding") is False:
         await log_activity(task_id, user, "comment", "menghapus tanda temuan", team_id=task["team_id"])
+    if "body" in updates or ("mentions" in updates and data.body is None):
+        await log_activity(task_id, user, "comment", "mengubah komentar", team_id=task["team_id"])
     return comment
 
 @api.delete("/tasks/{task_id}/comments/{comment_id}")
@@ -1735,14 +1763,19 @@ async def list_findings(team_id: Optional[str] = None, q: str = "", year: Option
         if year is not None and ty != year:
             continue
         assignees = [{"id": uid, "name": user_map.get(uid) or ""} for uid in (task.get("assignees") or [])]
+        role = role_by_team.get(task.get("team_id"))
+        if not role and can_view_all_teams(user):
+            role = "admin" if user.get("role") == ROLE_SUPER_ADMIN else "member"
         item = {
             "id": c["id"], "body": c.get("body") or "", "author": c.get("author") or "",
-            "author_id": c.get("author_id"), "created_at": c.get("created_at"), "is_finding": True,
+            "author_id": c.get("author_id"), "created_at": c.get("created_at"),
+            "edited_at": c.get("edited_at"), "is_finding": True,
             "task_id": task["id"], "task_title": task.get("title") or "",
             "list_name": list_map.get(task.get("list_id")) or "",
             "team_id": team["id"], "team_name": team.get("name") or "",
             "team_color": team.get("color") or "", "team_year": ty,
             "wilayah": team.get("wilayah") or "", "assignees": assignees,
+            "can_delete": c.get("author_id") == user["id"] or role == "admin",
         }
         if needle:
             blob = " ".join([
@@ -2431,6 +2464,41 @@ async def post_answer(question_id: str, data: AnswerInput, user=Depends(current_
     if q["author_id"] != user["id"]: await notify(q["author_id"], "answer", f"{user['name']} menjawab pertanyaan \"{q['title']}\"", team_id=q["team_id"])
     return answer
 
+def _question_answer(q, answer_id):
+    return next((a for a in (q.get("answers") or []) if a.get("id") == answer_id), None)
+
+@api.patch("/questions/{question_id}/answers/{answer_id}")
+async def patch_answer(question_id: str, answer_id: str, data: AnswerPatch, user=Depends(current_user)):
+    q = await db.questions.find_one({"id": question_id}, {"_id": 0})
+    if not q: raise HTTPException(404, "Pertanyaan tidak ditemukan")
+    role = await require_member(q["team_id"], user)
+    answer = _question_answer(q, answer_id)
+    if not answer: raise HTTPException(404, "Jawaban tidak ditemukan")
+    if answer.get("author_id") != user["id"] and role != "admin":
+        raise HTTPException(403, "Hanya penulis atau admin tim yang dapat mengubah jawaban")
+    body = data.body.strip()
+    if not body: raise HTTPException(400, "Jawaban tidak boleh kosong")
+    edited_at = now()
+    await db.questions.update_one(
+        {"id": question_id, "answers.id": answer_id},
+        {"$set": {"answers.$.body": body, "answers.$.edited_at": edited_at}},
+    )
+    answer["body"] = body
+    answer["edited_at"] = edited_at
+    return answer
+
+@api.delete("/questions/{question_id}/answers/{answer_id}")
+async def delete_answer(question_id: str, answer_id: str, user=Depends(current_user)):
+    q = await db.questions.find_one({"id": question_id}, {"_id": 0})
+    if not q: raise HTTPException(404, "Pertanyaan tidak ditemukan")
+    role = await require_member(q["team_id"], user)
+    answer = _question_answer(q, answer_id)
+    if not answer: raise HTTPException(404, "Jawaban tidak ditemukan")
+    if answer.get("author_id") != user["id"] and role != "admin":
+        raise HTTPException(403, "Hanya penulis atau admin tim yang dapat menghapus jawaban")
+    await db.questions.update_one({"id": question_id}, {"$pull": {"answers": {"id": answer_id}}})
+    return {"ok": True}
+
 @api.get("/teams/{team_id}/question-schedules")
 async def get_question_schedules(team_id: str, user=Depends(current_user)):
     await require_member(team_id, user)
@@ -2443,6 +2511,28 @@ async def create_question_schedule(team_id: str, data: QuestionScheduleInput, us
             "time": data.time, "recipients": data.recipients, "secret": data.secret, "created_by": user["id"],
             "created_by_name": user["name"], "last_fired_date": None, "created_at": now()}
     await db.question_schedules.insert_one(item); item.pop("_id", None); return item
+
+@api.patch("/question-schedules/{schedule_id}")
+async def update_question_schedule(schedule_id: str, data: QuestionSchedulePatch, user=Depends(current_user)):
+    item = await db.question_schedules.find_one({"id": schedule_id}, {"_id": 0})
+    if not item: raise HTTPException(404, "Jadwal tidak ditemukan")
+    role = await require_member(item["team_id"], user)
+    if item.get("created_by") != user["id"] and role != "admin":
+        raise HTTPException(403, "Hanya pembuat atau admin tim yang dapat mengubah jadwal")
+    updates = data.model_dump(exclude_unset=True)
+    if "title" in updates:
+        title = (updates["title"] or "").strip()
+        if not title: raise HTTPException(400, "Judul tidak boleh kosong")
+        updates["title"] = title
+    if "days" in updates:
+        days = [d for d in (updates["days"] or []) if isinstance(d, int) and 0 <= d <= 6]
+        if not days: raise HTTPException(400, "Pilih minimal satu hari")
+        updates["days"] = days
+    if "time" in updates and not re.match(r"^\d{2}:\d{2}$", updates["time"] or ""):
+        raise HTTPException(400, "Jam tidak valid")
+    if updates:
+        await db.question_schedules.update_one({"id": schedule_id}, {"$set": updates})
+    return await db.question_schedules.find_one({"id": schedule_id}, {"_id": 0})
 
 @api.delete("/question-schedules/{schedule_id}")
 async def delete_question_schedule(schedule_id: str, user=Depends(current_user)):
