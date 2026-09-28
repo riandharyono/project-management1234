@@ -64,7 +64,7 @@ export const shortDate = iso => {
 
 export const LABEL_COLORS = ["#2879ed", "#20a76a", "#ec9a2b", "#dc6863", "#8b5cf6", "#0ea5a3", "#f2617a"];
 
-export const MIN_NEW_PASSWORD_LENGTH = 12;
+export const MIN_NEW_PASSWORD_LENGTH = 6;
 
 export const safeHttpUrl = value => {
   const s = String(value || "").trim();
